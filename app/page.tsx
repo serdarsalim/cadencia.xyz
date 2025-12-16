@@ -38,6 +38,91 @@ const PRODUCTIVITY_SCALE = [
   { value: 3, label: ">75%", color: "bg-[#66bd63]" },
 ];
 
+type WeekMeta = {
+  weekNumber: number;
+  months: number[];
+  dayKeys: string[];
+  primaryMonth: number;
+  rangeLabel: string;
+};
+
+const getWeekStart = (date: Date) => {
+  const start = new Date(date);
+  const day = start.getDay();
+  const diff = (day + 6) % 7;
+  start.setDate(start.getDate() - diff);
+  start.setHours(0, 0, 0, 0);
+  return start;
+};
+
+const formatRangeLabel = (start: Date, end: Date) => {
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  const startLabel = `${start.toLocaleString(undefined, {
+    month: "short",
+  })} ${start.getDate()}`;
+  const endLabel = `${end.toLocaleString(undefined, {
+    month: "short",
+  })} ${end.getDate()}`;
+  return sameMonth ? `${startLabel}–${end.getDate()}` : `${startLabel} – ${endLabel}`;
+};
+
+const buildWeeksForYear = (year: number): WeekMeta[] => {
+  const weeks: WeekMeta[] = [];
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year, 11, 31);
+  let currentStart = getWeekStart(yearStart);
+  let weekCounter = 1;
+
+  while (currentStart <= yearEnd) {
+    const weekStart = new Date(currentStart);
+    const dayKeys: string[] = [];
+    const monthSet = new Set<number>();
+    const inYearDays: Date[] = [];
+    for (let i = 0; i < 7; i += 1) {
+      const day = new Date(weekStart);
+      day.setDate(weekStart.getDate() + i);
+      if (day.getFullYear() !== year) {
+        continue;
+      }
+      const monthIndex = day.getMonth();
+      monthSet.add(monthIndex);
+      dayKeys.push(`${year}-${monthIndex + 1}-${day.getDate()}`);
+      inYearDays.push(new Date(day));
+    }
+
+    if (dayKeys.length > 0) {
+      const monthCounts: Record<number, number> = {};
+      dayKeys.forEach((key) => {
+        const [, monthPart] = key.split("-");
+        const monthIndex = Number(monthPart) - 1;
+        if (!Number.isFinite(monthIndex)) {
+          return;
+        }
+        monthCounts[monthIndex] = (monthCounts[monthIndex] ?? 0) + 1;
+      });
+      const primaryMonth =
+        Object.entries(monthCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
+      const rangeLabel =
+        inYearDays.length > 0
+          ? formatRangeLabel(inYearDays[0]!, inYearDays[inYearDays.length - 1]!)
+          : "";
+      weeks.push({
+        weekNumber: weekCounter,
+        months: Array.from(monthSet.values()).sort((a, b) => a - b),
+        dayKeys,
+        primaryMonth: Number(primaryMonth),
+        rangeLabel,
+      });
+      weekCounter += 1;
+    }
+
+    currentStart = new Date(weekStart);
+    currentStart.setDate(weekStart.getDate() + 7);
+  }
+
+  return weeks;
+};
+
 export default function Home() {
   const [dateOfBirth, setDateOfBirth] = useState<string>("");
   const [personName, setPersonName] = useState<string>("");
@@ -62,6 +147,8 @@ export default function Home() {
   const [productivityGoals, setProductivityGoals] = useState<
     Record<number, string>
   >({});
+  const [productivityMode, setProductivityMode] =
+    useState<"day" | "week">("day");
 
   useEffect(() => {
     const autoTheme = determineTheme();
@@ -594,7 +681,33 @@ export default function Home() {
                   />
                   <span>Productivity tracker</span>
                 </div>
-                <ProductivityLegend className="mb-6" />
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                  <ProductivityLegend className="flex-1" />
+                  <div className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_5%,transparent)] p-1 text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                    <button
+                      type="button"
+                      onClick={() => setProductivityMode("day")}
+                      className={`rounded-full px-4 py-1 transition ${
+                        productivityMode === "day"
+                          ? "bg-[var(--foreground)] text-[var(--background)]"
+                          : ""
+                      }`}
+                    >
+                      Day
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProductivityMode("week")}
+                      className={`rounded-full px-4 py-1 transition ${
+                        productivityMode === "week"
+                          ? "bg-[var(--foreground)] text-[var(--background)]"
+                          : ""
+                      }`}
+                    >
+                      Week
+                    </button>
+                  </div>
+                </div>
                 <div className="flex-1">
                   <TinyEditor
                     key={`productivity-goal-${productivityYear}`}
@@ -626,6 +739,7 @@ export default function Home() {
                   year={productivityYear}
                   ratings={productivityRatings}
                   setRatings={setProductivityRatings}
+                  mode={productivityMode}
                 />
               </div>
             </section>
@@ -827,20 +941,50 @@ const ProductivityLegend = ({ className }: ProductivityLegendProps = {}) => (
 
 type ProductivityGridProps = {
   year: number;
-  ratings: Record<string, number>;
-  setRatings: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  ratings: Record<string, number | null>;
+  setRatings: React.Dispatch<React.SetStateAction<Record<string, number | null>>>;
+  mode: "day" | "week";
 };
 
 const ProductivityGrid = ({
   year,
   ratings,
   setRatings,
+  mode,
 }: ProductivityGridProps) => {
   const days = Array.from({ length: 31 }, (_, idx) => idx + 1);
   const months = Array.from({ length: 12 }, (_, idx) => idx);
+  const weeks = useMemo(() => buildWeeksForYear(year), [year]);
+  const weeksByMonth = useMemo(() => {
+    const grouped = Array.from({ length: 12 }, () => [] as WeekMeta[]);
+    weeks.forEach((week) => {
+      const bucket = Math.min(Math.max(week.primaryMonth, 0), 11);
+      grouped[bucket]!.push(week);
+    });
+    return grouped.map((monthWeeks) =>
+      monthWeeks.sort((a, b) => a.weekNumber - b.weekNumber)
+    );
+  }, [weeks]);
 
   const handleCycle = (monthIndex: number, day: number) => {
     const key = `${year}-${monthIndex + 1}-${day}`;
+    setRatings((prev) => {
+      const current = prev[key];
+      let next: number | null;
+      if (current === undefined || current === null) {
+        next = 0;
+      } else if (current >= PRODUCTIVITY_SCALE.length - 1) {
+        next = null;
+      } else {
+        next = (current + 1) as number;
+      }
+
+      return { ...prev, [key]: next };
+    });
+  };
+
+  const handleWeekCycle = (weekNumber: number) => {
+    const key = `week-${year}-${weekNumber}`;
     setRatings((prev) => {
       const current = prev[key];
       let next: number | null;
@@ -860,10 +1004,10 @@ const ProductivityGrid = ({
     return new Date(targetYear, monthIndex + 1, 0).getDate();
   };
 
-  return (
+  const renderDayGrid = () => (
     <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6">
       <div className="grid grid-cols-13 gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-        <span className="text-right uppercase tracking-[0.2em]">Day</span>
+        <span />
         {months.map((monthIndex) => {
           const monthName = new Date(2020, monthIndex).toLocaleString(
             undefined,
@@ -944,4 +1088,101 @@ const ProductivityGrid = ({
       </div>
     </div>
   );
+
+  const renderWeekGrid = () => {
+    return (
+      <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6">
+        <div className="grid grid-cols-12 gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+          {months.map((monthIndex) => {
+            const monthName = new Date(2020, monthIndex).toLocaleString(
+              undefined,
+              { month: "short" }
+            );
+            const quarterColor =
+              Math.floor(monthIndex / 3) % 2 === 0
+                ? "text-[#5B8FF9]"
+                : "text-[#F6BD16]";
+            return (
+              <span
+                key={`week-month-${monthIndex}`}
+                className={`text-center font-medium ${quarterColor}`}
+              >
+                {monthName}
+              </span>
+            );
+          })}
+        </div>
+        <div className="mt-4 grid grid-cols-12 gap-3">
+          {months.map((monthIndex) => (
+            <div key={`month-col-${monthIndex}`} className="space-y-2">
+              {weeksByMonth[monthIndex]!.map((week) => {
+                const dayScores = week.dayKeys
+                  .map((key) =>
+                    ratings[key] !== null && ratings[key] !== undefined
+                      ? (ratings[key] as number)
+                      : null
+                  )
+                  .filter((value): value is number => value !== null);
+                const hasDayScores = dayScores.length > 0;
+                const dayAverage = hasDayScores
+                  ? Number(
+                      (
+                        dayScores.reduce((sum, value) => sum + value, 0) /
+                        dayScores.length
+                      ).toFixed(1)
+                    )
+                  : null;
+                const manualWeekKey = `week-${year}-${week.weekNumber}`;
+                const manualScoreRaw = ratings[manualWeekKey];
+                const manualScore =
+                  manualScoreRaw !== null && manualScoreRaw !== undefined
+                    ? (manualScoreRaw as number)
+                    : null;
+                const displayValue = hasDayScores
+                  ? dayAverage
+                  : manualScore ?? "";
+                const colorIndex = hasDayScores
+                  ? Math.max(
+                      0,
+                      Math.min(
+                        PRODUCTIVITY_SCALE.length - 1,
+                        Math.round(dayAverage ?? 0)
+                      )
+                    )
+                  : manualScore;
+                const scaleClass =
+                  colorIndex !== null && colorIndex !== undefined
+                    ? PRODUCTIVITY_SCALE[colorIndex].color
+                    : "bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]";
+                return (
+                  <div key={`week-card-${week.weekNumber}`}>
+                    <button
+                      type="button"
+                      onClick={() => handleWeekCycle(week.weekNumber)}
+                      disabled={hasDayScores}
+                      className={`h-4 w-full rounded-[4px] border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${
+                        hasDayScores
+                          ? "cursor-not-allowed opacity-80"
+                          : "hover:opacity-90"
+                      } ${scaleClass} border-[color-mix(in_srgb,var(--foreground)_12%,transparent)]`}
+                      title={`${week.rangeLabel}`}
+                      aria-label={
+                        hasDayScores
+                          ? `Week ${week.weekNumber} ${week.rangeLabel}, averaged score ${dayAverage}`
+                          : `Week ${week.weekNumber} ${week.rangeLabel}, current score ${manualScore ?? "unset"}`
+                      }
+                    >
+                      {displayValue}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  return mode === "day" ? renderDayGrid() : renderWeekGrid();
 };
