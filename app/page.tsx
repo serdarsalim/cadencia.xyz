@@ -22,6 +22,18 @@ type ScheduleEntry = {
   repeatUntil?: string | null;
 };
 
+type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+const WEEK_START_OPTIONS: { value: WeekdayIndex; label: string }[] = [
+  { value: 0, label: "Sunday" },
+  { value: 1, label: "Monday" },
+  { value: 2, label: "Tuesday" },
+  { value: 3, label: "Wednesday" },
+  { value: 4, label: "Thursday" },
+  { value: 5, label: "Friday" },
+  { value: 6, label: "Saturday" },
+];
+
 type EntryMeta = {
   originalDayKey?: string;
   originalEntryIndex?: number;
@@ -47,11 +59,6 @@ const defaultFocusAreas: FocusArea[] = [
   { id: "work", name: "Work", hours: "8" },
 ];
 
-const determineTheme = (): Theme => {
-  const hour = new Date().getHours();
-  return hour >= 7 && hour < 19 ? "light" : "dark";
-};
-
 type ViewMode = "life" | "time-spent" | "productivity";
 
 const TinyEditor = dynamic(
@@ -75,10 +82,10 @@ type WeekMeta = {
   rangeLabel: string;
 };
 
-const getWeekStart = (date: Date) => {
+const getWeekStart = (date: Date, weekStartDay: WeekdayIndex = 1) => {
   const start = new Date(date);
   const day = start.getDay();
-  const diff = (day + 6) % 7;
+  const diff = (day - weekStartDay + 7) % 7;
   start.setDate(start.getDate() - diff);
   start.setHours(0, 0, 0, 0);
   return start;
@@ -215,12 +222,7 @@ export default function Home() {
   const [scheduleEntries, setScheduleEntries] = useState<
     Record<string, ScheduleEntry[]>
   >({});
-
-  useEffect(() => {
-    const autoTheme = determineTheme();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTheme((current) => (current === autoTheme ? current : autoTheme));
-  }, []);
+  const [weekStartDay, setWeekStartDay] = useState<WeekdayIndex>(1);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -313,6 +315,18 @@ export default function Home() {
       if (storedView === "life" || storedView === "time-spent" || storedView === "productivity") {
         setView(storedView);
       }
+
+      const storedWeekStart = window.localStorage.getItem("timespent-week-start");
+      if (storedWeekStart) {
+        const parsedWeekStart = Number.parseInt(storedWeekStart, 10);
+        if (
+          Number.isFinite(parsedWeekStart) &&
+          parsedWeekStart >= 0 &&
+          parsedWeekStart <= 6
+        ) {
+          setWeekStartDay(parsedWeekStart as WeekdayIndex);
+        }
+      }
       setIsHydrated(true);
     } catch (error) {
       console.error("Failed to load settings from cache", error);
@@ -399,9 +413,20 @@ export default function Home() {
     }
   }, [scheduleEntries]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "timespent-week-start",
+        String(weekStartDay)
+      );
+    } catch (error) {
+      console.error("Failed to cache week start preference", error);
+    }
+  }, [weekStartDay]);
+
 
   const isProfileComplete = Boolean(personName && dateOfBirth && email);
-  const isProfileEditorVisible = isEditingProfile || !isProfileComplete;
+  const isProfileEditorVisible = isEditingProfile;
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
@@ -595,10 +620,6 @@ export default function Home() {
           <button
             type="button"
             onClick={() => {
-              if (!isProfileComplete) {
-                setIsEditingProfile(true);
-                return;
-              }
               setIsEditingProfile((prev) => !prev);
             }}
             className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
@@ -630,6 +651,7 @@ export default function Home() {
               <WeeklySchedule
                 scheduleEntries={scheduleEntries}
                 setScheduleEntries={setScheduleEntries}
+                weekStartDay={weekStartDay}
               />
             </section>
           )}
@@ -854,6 +876,85 @@ export default function Home() {
           )}
         </div>
       </main>
+
+      {isProfileEditorVisible && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+          onClick={() => setIsEditingProfile(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[var(--background)] p-6 text-left shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                  Profile & preferences
+                </p>
+                <p className="text-base text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
+                  Customize schedule defaults
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingProfile(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                Full name
+                <input
+                  type="text"
+                  value={personName}
+                  onChange={(event) => setPersonName(event.target.value)}
+                  placeholder="Your name"
+                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                />
+              </label>
+              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                Date of birth
+                <input
+                  type="date"
+                  value={dateOfBirth}
+                  onChange={(event) => setDateOfBirth(event.target.value)}
+                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                />
+              </label>
+              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                Email
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                />
+              </label>
+              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                First day of week
+                <select
+                  value={weekStartDay}
+                  onChange={(event) =>
+                    setWeekStartDay(Number(event.target.value) as WeekdayIndex)
+                  }
+                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                >
+                  {WEEK_START_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedMonth && hasValidBirthdate && (
         <div
@@ -1461,14 +1562,22 @@ type WeeklyScheduleProps = {
   setScheduleEntries: React.Dispatch<
     React.SetStateAction<Record<string, ScheduleEntry[]>>
   >;
+  weekStartDay: WeekdayIndex;
 };
 
 const WeeklySchedule = ({
   scheduleEntries,
   setScheduleEntries,
+  weekStartDay,
 }: WeeklyScheduleProps) => {
-  const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStart(new Date()));
+  const [currentWeekStart, setCurrentWeekStart] = useState(() =>
+    getWeekStart(new Date(), weekStartDay)
+  );
   const [activeEntry, setActiveEntry] = useState<EditingEntryState | null>(null);
+
+  useEffect(() => {
+    setCurrentWeekStart((prev) => getWeekStart(prev, weekStartDay));
+  }, [weekStartDay]);
 
   const weekDays = useMemo(() => {
     return Array.from({ length: 7 }, (_, idx) => {
@@ -1480,19 +1589,13 @@ const WeeklySchedule = ({
 
   const weekRangeLabel = useMemo(() => {
     const weekStart = weekDays[0];
-    const weekEnd = weekDays[weekDays.length - 1];
-    if (!weekStart || !weekEnd) {
+    if (!weekStart) {
       return "";
     }
-    const startLabel = weekStart.toLocaleDateString(undefined, {
+    return weekStart.toLocaleDateString(undefined, {
       month: "long",
-      day: "numeric",
+      year: "numeric",
     });
-    const endLabel = weekEnd.toLocaleDateString(undefined, {
-      month: weekStart.getMonth() === weekEnd.getMonth() ? undefined : "long",
-      day: "numeric",
-    });
-    return `${startLabel} – ${endLabel} ${weekEnd.getFullYear()}`;
   }, [weekDays]);
 
   const weekInputValue = useMemo(
@@ -1501,7 +1604,15 @@ const WeeklySchedule = ({
   );
 
   const goToWeek = (date: Date) => {
-    setCurrentWeekStart(getWeekStart(date));
+    setCurrentWeekStart(getWeekStart(date, weekStartDay));
+  };
+
+  const handleWeekNavigation = (direction: -1 | 1) => {
+    setCurrentWeekStart((prev) => {
+      const next = new Date(prev);
+      next.setDate(prev.getDate() + direction * 7);
+      return getWeekStart(next, weekStartDay);
+    });
   };
 
   const handleWeekPickerChange = (
@@ -1513,7 +1624,7 @@ const WeeklySchedule = ({
     }
     const parsed = parseISOWeekInputValue(value);
     if (parsed) {
-      setCurrentWeekStart(parsed);
+      setCurrentWeekStart(getWeekStart(parsed, weekStartDay));
     }
   };
   const formatDayKey = (date: Date) => {
@@ -1716,8 +1827,6 @@ const WeeklySchedule = ({
     setActiveEntry(null);
   };
 
-  const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
   const isToday = (date: Date) => {
     const today = new Date();
     return (
@@ -1888,21 +1997,42 @@ const WeeklySchedule = ({
               className="w-40 rounded-full border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => goToWeek(new Date())}
-            className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-sm transition hover:border-[var(--foreground)]"
-          >
-            This Week
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleWeekNavigation(-1)}
+              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-3 py-2 text-sm transition hover:border-[var(--foreground)]"
+              aria-label="Previous week"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={() => goToWeek(new Date())}
+              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-sm transition hover:border-[var(--foreground)]"
+            >
+              This Week
+            </button>
+            <button
+              type="button"
+              onClick={() => handleWeekNavigation(1)}
+              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-3 py-2 text-sm transition hover:border-[var(--foreground)]"
+              aria-label="Next week"
+            >
+              ›
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-7">
-        {weekDays.map((date, idx) => {
+        {weekDays.map((date) => {
           const dayKey = formatDayKey(date);
           const entries = getEntriesForDay(date);
           const today = isToday(date);
+          const dayLabel = date.toLocaleDateString(undefined, {
+            weekday: "short",
+          });
 
           return (
             <div
@@ -1922,7 +2052,7 @@ const WeeklySchedule = ({
                         : "text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
                     }`}
                   >
-                    {dayNames[idx]}
+                    {dayLabel}
                   </p>
                   <p
                     className={`mt-1 text-lg font-semibold ${
