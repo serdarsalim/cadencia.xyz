@@ -23,7 +23,7 @@ const determineTheme = (): Theme => {
   return hour >= 7 && hour < 19 ? "light" : "dark";
 };
 
-type ViewMode = "life" | "time-spent";
+type ViewMode = "life" | "time-spent" | "productivity";
 
 const TinyEditor = dynamic(
   () => import("@tinymce/tinymce-react").then((mod) => mod.Editor),
@@ -31,6 +31,12 @@ const TinyEditor = dynamic(
 );
 const TINYMCE_CDN =
   "https://cdnjs.cloudflare.com/ajax/libs/tinymce/8.1.2/tinymce.min.js";
+const PRODUCTIVITY_SCALE = [
+  { value: 0, label: "<25%", color: "bg-[#fefae6]" },
+  { value: 1, label: "25-50%", color: "bg-[#d9f0a3]" },
+  { value: 2, label: "50-75%", color: "bg-[#a6d96a]" },
+  { value: 3, label: ">75%", color: "bg-[#66bd63]" },
+];
 
 export default function Home() {
   const [dateOfBirth, setDateOfBirth] = useState<string>("");
@@ -47,6 +53,15 @@ export default function Home() {
     year: number;
     month: number;
   } | null>(null);
+  const [productivityYear, setProductivityYear] = useState(() =>
+    new Date().getFullYear()
+  );
+  const [productivityRatings, setProductivityRatings] = useState<
+    Record<string, number>
+  >({});
+  const [productivityGoals, setProductivityGoals] = useState<
+    Record<number, string>
+  >({});
 
   useEffect(() => {
     const autoTheme = determineTheme();
@@ -102,6 +117,31 @@ export default function Home() {
           setMonthEntries(parsedEntries);
         }
       }
+
+      const storedProductivityRatings = window.localStorage.getItem(
+        "timespent-productivity-ratings"
+      );
+      if (storedProductivityRatings) {
+        const parsedRatings = JSON.parse(
+          storedProductivityRatings
+        ) as Record<string, number>;
+        if (parsedRatings && typeof parsedRatings === "object") {
+          setProductivityRatings(parsedRatings);
+        }
+      }
+
+      const storedProductivityGoal = window.localStorage.getItem(
+        "timespent-productivity-goals"
+      );
+      if (storedProductivityGoal) {
+        const parsedGoals = JSON.parse(storedProductivityGoal) as Record<
+          number,
+          string
+        >;
+        if (parsedGoals && typeof parsedGoals === "object") {
+          setProductivityGoals(parsedGoals);
+        }
+      }
     } catch (error) {
       console.error("Failed to load settings from cache", error);
     }
@@ -144,6 +184,28 @@ export default function Home() {
       console.error("Failed to cache month entries", error);
     }
   }, [monthEntries]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "timespent-productivity-ratings",
+        JSON.stringify(productivityRatings)
+      );
+    } catch (error) {
+      console.error("Failed to cache productivity ratings", error);
+    }
+  }, [productivityRatings]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "timespent-productivity-goals",
+        JSON.stringify(productivityGoals)
+      );
+    } catch (error) {
+      console.error("Failed to cache productivity goals", error);
+    }
+  }, [productivityGoals]);
 
   const isProfileComplete = Boolean(personName && dateOfBirth && email);
   const isProfileEditorVisible = isEditingProfile || !isProfileComplete;
@@ -223,6 +285,8 @@ export default function Home() {
   const selectedMonthContent = selectedMonthKey
     ? monthEntries[selectedMonthKey] ?? ""
     : "";
+  const currentProductivityGoal =
+    productivityGoals[productivityYear] ?? "";
 
   const selectedMonthLabel = useMemo(() => {
     if (!selectedMonth || !dateOfBirth) {
@@ -271,6 +335,17 @@ export default function Home() {
             }`}
           >
             My life
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("productivity")}
+            className={`rounded-full border px-5 py-2 transition ${
+              view === "productivity"
+                ? "border-[var(--foreground)] text-[var(--foreground)]"
+                : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)]"
+            }`}
+          >
+            Productivity
           </button>
           <button
             type="button"
@@ -495,6 +570,70 @@ export default function Home() {
               )}
             </section>
           )}
+
+          {view === "productivity" && (
+            <section className="mt-8 space-y-6 text-left">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-3xl font-light">Weekly momentum</h2>
+                </div>
+                <label className="flex items-center gap-3 text-sm uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                  Year
+                  <input
+                    type="number"
+                    value={productivityYear}
+                    onChange={(event) =>
+                      setProductivityYear(
+                        Number.parseInt(event.target.value, 10) || 0
+                      )
+                    }
+                    className="w-24 rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent px-4 py-2 text-base font-medium text-[var(--foreground)] outline-none transition focus:border-[var(--foreground)] caret-[var(--foreground)]"
+                  />
+                </label>
+              </div>
+
+              <ProductivityGrid
+                year={productivityYear}
+                ratings={productivityRatings}
+                setRatings={setProductivityRatings}
+              />
+
+              <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_3%,transparent)] p-6">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]">
+                      Theme & goals
+                    </p>
+                    <p className="text-xl font-light">{productivityYear}</p>
+                  </div>
+                </div>
+                <TinyEditor
+                  key={`productivity-goal-${productivityYear}`}
+                  tinymceScriptSrc={TINYMCE_CDN}
+                  value={currentProductivityGoal}
+                  init={{
+                    menubar: false,
+                    statusbar: false,
+                    height: 240,
+                    license_key: "gpl",
+                    skin: theme === "dark" ? "oxide-dark" : "oxide",
+                    content_css: theme === "dark" ? "dark" : "default",
+                    toolbar:
+                      "bold italic underline | bullist numlist | link removeformat",
+                    branding: false,
+                  }}
+                  onEditorChange={(content) =>
+                    setProductivityGoals((prev) => ({
+                      ...prev,
+                      [productivityYear]: content,
+                    }))
+                  }
+                />
+              </div>
+
+              <ProductivityLegend className="mt-3" />
+            </section>
+          )}
         </div>
       </main>
 
@@ -665,6 +804,121 @@ const YearRow = ({
           />
         );
       })}
+    </div>
+  );
+};
+
+type ProductivityLegendProps = {
+  className?: string;
+};
+
+const ProductivityLegend = ({ className }: ProductivityLegendProps = {}) => (
+  <div
+    className={`flex flex-wrap gap-3 rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-4 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${className ?? ""}`}
+  >
+    {PRODUCTIVITY_SCALE.map((scale) => (
+      <div key={scale.value} className="flex items-center gap-2">
+        <span
+          className={`h-4 w-4 rounded ${scale.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]`}
+          aria-hidden="true"
+        />
+        <span>{scale.value}</span>
+        <span>{scale.label}</span>
+      </div>
+    ))}
+  </div>
+);
+
+type ProductivityGridProps = {
+  year: number;
+  ratings: Record<string, number>;
+  setRatings: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+};
+
+const ProductivityGrid = ({
+  year,
+  ratings,
+  setRatings,
+}: ProductivityGridProps) => {
+  const days = Array.from({ length: 31 }, (_, idx) => idx + 1);
+  const months = Array.from({ length: 12 }, (_, idx) => idx);
+
+  const handleCycle = (monthIndex: number, day: number) => {
+    const key = `${year}-${monthIndex + 1}-${day}`;
+    setRatings((prev) => {
+      const current = prev[key] ?? 0;
+      const next = (current + 1) % PRODUCTIVITY_SCALE.length;
+      return { ...prev, [key]: next };
+    });
+  };
+
+  const daysInMonth = (targetYear: number, monthIndex: number) => {
+    return new Date(targetYear, monthIndex + 1, 0).getDate();
+  };
+
+  const quarterLabels = ["Q1", "Q2", "Q3", "Q4"];
+
+  return (
+    <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6">
+      <div className="grid grid-cols-13 gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+        <span />
+        {quarterLabels.map((quarter) => (
+          <span key={`quarter-${quarter}`} className="col-span-3 text-center">
+            {quarter}
+          </span>
+        ))}
+        <span />
+      </div>
+      <div className="grid grid-cols-13 gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+        <span className="text-right uppercase tracking-[0.2em]">Day</span>
+        {months.map((monthIndex) => (
+          <span key={`month-${monthIndex}`} className="text-center">
+            {new Date(2020, monthIndex).toLocaleString(undefined, {
+              month: "short",
+            })}
+          </span>
+        ))}
+      </div>
+      <div className="mt-3 space-y-1.5">
+        {days.map((dayOfMonth) => (
+          <div key={`row-${dayOfMonth}`} className="grid grid-cols-13 gap-2">
+            <span className="text-right text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+              {dayOfMonth}
+            </span>
+            {months.map((monthIndex) => {
+              const key = `${year}-${monthIndex + 1}-${dayOfMonth}`;
+              const currentValue = ratings[key] ?? 0;
+              const scale = PRODUCTIVITY_SCALE[currentValue];
+              const validDay =
+                dayOfMonth <= daysInMonth(year, monthIndex);
+
+              if (!validDay) {
+                return (
+                  <span
+                    key={`${key}-empty`}
+                    className="h-6 rounded-lg border border-dashed border-[color-mix(in_srgb,var(--foreground)_5%,transparent)]"
+                    aria-hidden="true"
+                  />
+                );
+              }
+
+              return (
+                <button
+                  type="button"
+                  key={key}
+                  onClick={() => handleCycle(monthIndex, dayOfMonth)}
+                  className={`h-6 rounded-lg border border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] text-xs font-semibold text-transparent transition hover:shadow focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${scale.color}`}
+                  aria-label={`Day ${dayOfMonth} of ${new Date(2020, monthIndex).toLocaleString(undefined, {
+                    month: "long",
+                  })}, rating ${scale.label}`}
+                >
+                  {currentValue}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
