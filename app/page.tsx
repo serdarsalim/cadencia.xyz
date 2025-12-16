@@ -681,32 +681,8 @@ export default function Home() {
                   />
                   <span>Productivity tracker</span>
                 </div>
-                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-                  <ProductivityLegend className="flex-1" />
-                  <div className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_5%,transparent)] p-1 text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                    <button
-                      type="button"
-                      onClick={() => setProductivityMode("day")}
-                      className={`rounded-full px-4 py-1 transition ${
-                        productivityMode === "day"
-                          ? "bg-[var(--foreground)] text-[var(--background)]"
-                          : ""
-                      }`}
-                    >
-                      Day
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setProductivityMode("week")}
-                      className={`rounded-full px-4 py-1 transition ${
-                        productivityMode === "week"
-                          ? "bg-[var(--foreground)] text-[var(--background)]"
-                          : ""
-                      }`}
-                    >
-                      Week
-                    </button>
-                  </div>
+                <div className="mb-6">
+                  <ProductivityLegend />
                 </div>
                 <div className="flex-1">
                   <TinyEditor
@@ -740,6 +716,9 @@ export default function Home() {
                   ratings={productivityRatings}
                   setRatings={setProductivityRatings}
                   mode={productivityMode}
+                  onToggleMode={() =>
+                    setProductivityMode((prev) => (prev === "day" ? "week" : "day"))
+                  }
                 />
               </div>
             </section>
@@ -944,6 +923,7 @@ type ProductivityGridProps = {
   ratings: Record<string, number | null>;
   setRatings: React.Dispatch<React.SetStateAction<Record<string, number | null>>>;
   mode: "day" | "week";
+  onToggleMode: () => void;
 };
 
 const ProductivityGrid = ({
@@ -951,6 +931,7 @@ const ProductivityGrid = ({
   ratings,
   setRatings,
   mode,
+  onToggleMode,
 }: ProductivityGridProps) => {
   const days = Array.from({ length: 31 }, (_, idx) => idx + 1);
   const months = Array.from({ length: 12 }, (_, idx) => idx);
@@ -965,6 +946,20 @@ const ProductivityGrid = ({
       monthWeeks.sort((a, b) => a.weekNumber - b.weekNumber)
     );
   }, [weeks]);
+  const toggleLabel = mode === "week" ? "Week" : "Day";
+  const dayColumnWidth = "minmax(44px,max-content)";
+  const toggleButton = (
+    <div className="flex justify-end">
+      <button
+        type="button"
+        onClick={onToggleMode}
+        className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-2 py-0.5 text-[9px] uppercase text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-[var(--foreground)]"
+        aria-label={`Switch to ${mode === "week" ? "day" : "week"} view`}
+      >
+        {toggleLabel}
+      </button>
+    </div>
+  );
 
   const handleCycle = (monthIndex: number, day: number) => {
     const key = `${year}-${monthIndex + 1}-${day}`;
@@ -1006,24 +1001,23 @@ const ProductivityGrid = ({
 
   const renderDayGrid = () => (
     <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6">
-      <div className="grid grid-cols-13 gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-        <span />
+      <div
+        className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
+        style={{
+          gridTemplateColumns: `${dayColumnWidth} repeat(12, minmax(0, 1fr))`,
+        }}
+      >
+        {toggleButton}
         {months.map((monthIndex) => {
-          const monthName = new Date(2020, monthIndex).toLocaleString(
-            undefined,
-            {
-              month: "short",
-            }
-          );
+          const monthName = new Date(2020, monthIndex).toLocaleString(undefined, {
+            month: "short",
+          });
           const quarterColor =
             Math.floor(monthIndex / 3) % 2 === 0
               ? "text-[#5B8FF9]"
               : "text-[#F6BD16]";
           return (
-            <span
-              key={`month-${monthIndex}`}
-              className={`text-center font-medium ${quarterColor}`}
-            >
+            <span key={`month-${monthIndex}`} className={`text-center font-medium ${quarterColor}`}>
               {monthName}
             </span>
           );
@@ -1031,7 +1025,13 @@ const ProductivityGrid = ({
       </div>
       <div className="mt-2 space-y-1">
         {days.map((dayOfMonth) => (
-          <div key={`row-${dayOfMonth}`} className="grid grid-cols-13 gap-2">
+          <div
+            key={`row-${dayOfMonth}`}
+            className="grid items-center gap-2"
+            style={{
+              gridTemplateColumns: `${dayColumnWidth} repeat(12, minmax(0, 1fr))`,
+            }}
+          >
             <span className="text-right text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
               {dayOfMonth}
             </span>
@@ -1092,27 +1092,35 @@ const ProductivityGrid = ({
   const renderWeekGrid = () => {
     return (
       <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6">
-        <div className="grid grid-cols-12 gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+        <div
+          className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
+          style={{
+            gridTemplateColumns: `${dayColumnWidth} repeat(12, minmax(0, 1fr))`,
+          }}
+        >
+          {toggleButton}
           {months.map((monthIndex) => {
-            const monthName = new Date(2020, monthIndex).toLocaleString(
-              undefined,
-              { month: "short" }
-            );
+            const monthName = new Date(2020, monthIndex).toLocaleString(undefined, {
+              month: "short",
+            });
             const quarterColor =
               Math.floor(monthIndex / 3) % 2 === 0
                 ? "text-[#5B8FF9]"
                 : "text-[#F6BD16]";
             return (
-              <span
-                key={`week-month-${monthIndex}`}
-                className={`text-center font-medium ${quarterColor}`}
-              >
+              <span key={`week-month-${monthIndex}`} className={`text-center font-medium ${quarterColor}`}>
                 {monthName}
               </span>
             );
           })}
         </div>
-        <div className="mt-4 grid grid-cols-12 gap-3">
+        <div
+          className="mt-4 grid gap-3"
+          style={{
+            gridTemplateColumns: `${dayColumnWidth} repeat(12, minmax(0, 1fr))`,
+          }}
+        >
+          <div aria-hidden="true" />
           {months.map((monthIndex) => (
             <div key={`month-col-${monthIndex}`} className="space-y-2">
               {weeksByMonth[monthIndex]!.map((week) => {
