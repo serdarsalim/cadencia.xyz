@@ -57,7 +57,7 @@ export default function Home() {
     new Date().getFullYear()
   );
   const [productivityRatings, setProductivityRatings] = useState<
-    Record<string, number>
+    Record<string, number | null>
   >({});
   const [productivityGoals, setProductivityGoals] = useState<
     Record<number, string>
@@ -124,7 +124,7 @@ export default function Home() {
       if (storedProductivityRatings) {
         const parsedRatings = JSON.parse(
           storedProductivityRatings
-        ) as Record<string, number>;
+        ) as Record<string, number | null>;
         if (parsedRatings && typeof parsedRatings === "object") {
           setProductivityRatings(parsedRatings);
         }
@@ -141,6 +141,11 @@ export default function Home() {
         if (parsedGoals && typeof parsedGoals === "object") {
           setProductivityGoals(parsedGoals);
         }
+      }
+      const storedView =
+        window.localStorage.getItem("timespent-active-view");
+      if (storedView === "life" || storedView === "time-spent" || storedView === "productivity") {
+        setView(storedView);
       }
     } catch (error) {
       console.error("Failed to load settings from cache", error);
@@ -206,6 +211,7 @@ export default function Home() {
       console.error("Failed to cache productivity goals", error);
     }
   }, [productivityGoals]);
+
 
   const isProfileComplete = Boolean(personName && dateOfBirth && email);
   const isProfileEditorVisible = isEditingProfile || !isProfileComplete;
@@ -573,8 +579,8 @@ export default function Home() {
           )}
 
           {view === "productivity" && (
-            <section className="mt-8 grid gap-8 text-left lg:grid-cols-2">
-              <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_3%,transparent)] p-6">
+            <section className="mt-8 grid gap-8 text-left lg:grid-cols-[1.2fr_1fr]">
+              <div className="flex flex-col rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] p-6">
                 <div className="mb-6 flex flex-wrap items-center justify-center gap-3 text-3xl font-light">
                   <input
                     type="number"
@@ -589,28 +595,30 @@ export default function Home() {
                   <span>Productivity tracker</span>
                 </div>
                 <ProductivityLegend className="mb-6" />
-                <TinyEditor
-                  key={`productivity-goal-${productivityYear}`}
-                  tinymceScriptSrc={TINYMCE_CDN}
-                  value={currentProductivityGoal}
-                  init={{
-                    menubar: false,
-                    statusbar: false,
-                    height: 320,
-                    license_key: "gpl",
-                    skin: theme === "dark" ? "oxide-dark" : "oxide",
-                    content_css: theme === "dark" ? "dark" : "default",
-                    toolbar:
-                      "bold italic underline | bullist numlist | link removeformat",
-                    branding: false,
-                  }}
-                  onEditorChange={(content) =>
-                    setProductivityGoals((prev) => ({
-                      ...prev,
-                      [productivityYear]: content,
-                    }))
-                  }
-                />
+                <div className="flex-1">
+                  <TinyEditor
+                    key={`productivity-goal-${productivityYear}`}
+                    tinymceScriptSrc={TINYMCE_CDN}
+                    value={currentProductivityGoal}
+                    init={{
+                      menubar: false,
+                      statusbar: false,
+                      height: 420,
+                      license_key: "gpl",
+                    plugins: "lists",
+                      skin: theme === "dark" ? "oxide-dark" : "oxide",
+                      content_css: theme === "dark" ? "dark" : "default",
+                    toolbar: "bold italic underline | bullist numlist | link removeformat",
+                      branding: false,
+                    }}
+                    onEditorChange={(content) =>
+                      setProductivityGoals((prev) => ({
+                        ...prev,
+                        [productivityYear]: content,
+                      }))
+                    }
+                  />
+                </div>
               </div>
 
               <div className="space-y-6">
@@ -670,7 +678,7 @@ export default function Home() {
         </div>
       )}
 
-      <footer className="border-t border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] px-6 py-4 text-sm">
+      <footer className="mt-24 border-t border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] px-6 py-4 text-sm">
         <p>TimeSpent</p>
       </footer>
     </div>
@@ -834,8 +842,16 @@ const ProductivityGrid = ({
   const handleCycle = (monthIndex: number, day: number) => {
     const key = `${year}-${monthIndex + 1}-${day}`;
     setRatings((prev) => {
-      const current = prev[key] ?? 0;
-      const next = (current + 1) % PRODUCTIVITY_SCALE.length;
+      const current = prev[key];
+      let next: number | null;
+      if (current === undefined || current === null) {
+        next = 0;
+      } else if (current >= PRODUCTIVITY_SCALE.length - 1) {
+        next = null;
+      } else {
+        next = (current + 1) as number;
+      }
+
       return { ...prev, [key]: next };
     });
   };
@@ -877,11 +893,10 @@ const ProductivityGrid = ({
             </span>
             {months.map((monthIndex) => {
               const key = `${year}-${monthIndex + 1}-${dayOfMonth}`;
-              const hasValue = Object.prototype.hasOwnProperty.call(
-                ratings,
-                key
-              );
-              const currentValue = hasValue ? ratings[key] ?? 0 : 0;
+              const storedValue = ratings[key];
+              const hasValue =
+                storedValue !== null && storedValue !== undefined;
+              const currentValue = hasValue ? storedValue! : 0;
               const scale = PRODUCTIVITY_SCALE[currentValue];
               const validDay =
                 dayOfMonth <= daysInMonth(year, monthIndex);
@@ -896,21 +911,31 @@ const ProductivityGrid = ({
                 );
               }
 
+              const today = new Date();
+              const isToday =
+                today.getFullYear() === year &&
+                today.getMonth() === monthIndex &&
+                today.getDate() === dayOfMonth;
+
               return (
                 <button
                   type="button"
                   key={key}
                   onClick={() => handleCycle(monthIndex, dayOfMonth)}
-                  className={`h-4 w-full rounded-[4px] border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${
+                  className={`h-4 w-full rounded-[4px] border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${
                     hasValue
                       ? scale.color
                       : "bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
+                  } ${
+                    isToday
+                      ? "border-[color-mix(in_srgb,var(--foreground)_40%,transparent)] shadow-[0_0_10px_rgba(0,0,0,0.2)]"
+                      : "border-[color-mix(in_srgb,var(--foreground)_12%,transparent)]"
                   }`}
                   aria-label={`Day ${dayOfMonth} of ${new Date(2020, monthIndex).toLocaleString(undefined, {
                     month: "long",
                   })}, rating ${scale.label}`}
                 >
-                  {currentValue}
+                  {hasValue ? currentValue : ""}
                 </button>
               );
             })}
