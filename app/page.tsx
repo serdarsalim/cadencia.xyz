@@ -324,15 +324,15 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--background)] text-[var(--foreground)] transition-colors">
-      <header className="flex items-center justify-between border-b border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] px-6 py-4 text-sm">
-        <nav className="flex gap-3 text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+      <header className="flex items-center justify-between border-b border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] px-4 py-2 text-sm">
+        <nav className="flex gap-2 text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
           <button
             type="button"
             onClick={() => setView("life")}
-            className={`rounded-full border px-5 py-2 transition ${
+            className={`rounded-full px-4 py-1 transition ${
               view === "life"
-                ? "border-[var(--foreground)] text-[var(--foreground)]"
-                : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)]"
+                ? "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-[var(--foreground)]"
+                : "text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]"
             }`}
           >
             My life
@@ -340,10 +340,10 @@ export default function Home() {
           <button
             type="button"
             onClick={() => setView("productivity")}
-            className={`rounded-full border px-5 py-2 transition ${
+            className={`rounded-full px-4 py-1 transition ${
               view === "productivity"
-                ? "border-[var(--foreground)] text-[var(--foreground)]"
-                : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)]"
+                ? "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-[var(--foreground)]"
+                : "text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]"
             }`}
           >
             Productivity
@@ -351,10 +351,10 @@ export default function Home() {
           <button
             type="button"
             onClick={() => setView("time-spent")}
-            className={`rounded-full border px-5 py-2 transition ${
+            className={`rounded-full px-4 py-1 transition ${
               view === "time-spent"
-                ? "border-[var(--foreground)] text-[var(--foreground)]"
-                : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)]"
+                ? "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-[var(--foreground)]"
+                : "text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]"
             }`}
           >
             Time spent
@@ -393,7 +393,7 @@ export default function Home() {
         </div>
       </header>
       <main className="flex flex-1 items-start justify-center px-4">
-        <div className="w-full max-w-5xl py-6 text-center">
+        <div className="w-full max-w-5xl py-2 text-center">
           {view === "life" && (
             <section className="mt-4 space-y-4">
               {isProfileComplete && (
@@ -573,61 +573,52 @@ export default function Home() {
           )}
 
           {view === "productivity" && (
-            <section className="mt-8 space-y-6 text-left">
-              <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:justify-center sm:gap-6">
-                <h2 className="text-3xl font-light">Productivity tracker</h2>
-                <input
-                  type="number"
-                  value={productivityYear}
-                  onChange={(event) =>
-                    setProductivityYear(
-                      Number.parseInt(event.target.value, 10) || 0
-                    )
+            <section className="mt-8 grid gap-8 text-left lg:grid-cols-2">
+              <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_3%,transparent)] p-6">
+                <div className="mb-6 flex flex-wrap items-center justify-center gap-3 text-3xl font-light">
+                  <input
+                    type="number"
+                    value={productivityYear}
+                    onChange={(event) =>
+                      setProductivityYear(
+                        Number.parseInt(event.target.value, 10) || 0
+                      )
+                    }
+                    className="w-28 border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent px-3 text-3xl text-[var(--foreground)] outline-none focus:border-[var(--foreground)] caret-[var(--foreground)] text-center"
+                  />
+                  <span>Productivity tracker</span>
+                </div>
+                <ProductivityLegend className="mb-6" />
+                <TinyEditor
+                  key={`productivity-goal-${productivityYear}`}
+                  tinymceScriptSrc={TINYMCE_CDN}
+                  value={currentProductivityGoal}
+                  init={{
+                    menubar: false,
+                    statusbar: false,
+                    height: 320,
+                    license_key: "gpl",
+                    skin: theme === "dark" ? "oxide-dark" : "oxide",
+                    content_css: theme === "dark" ? "dark" : "default",
+                    toolbar:
+                      "bold italic underline | bullist numlist | link removeformat",
+                    branding: false,
+                  }}
+                  onEditorChange={(content) =>
+                    setProductivityGoals((prev) => ({
+                      ...prev,
+                      [productivityYear]: content,
+                    }))
                   }
-                  className="w-32 border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent pb-1 text-4xl font-light text-[var(--foreground)] outline-none focus:border-[var(--foreground)] caret-[var(--foreground)] text-center"
                 />
               </div>
 
-              <div className="grid gap-8 lg:grid-cols-2">
-                <div className="space-y-6">
-                  <ProductivityGrid
-                    year={productivityYear}
-                    ratings={productivityRatings}
-                    setRatings={setProductivityRatings}
-                  />
-
-                  <ProductivityLegend className="mt-3" />
-                </div>
-
-                <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_3%,transparent)] p-6">
-                  <div className="mb-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]">
-                      Theme & goals
-                    </p>
-                  </div>
-                  <TinyEditor
-                    key={`productivity-goal-${productivityYear}`}
-                    tinymceScriptSrc={TINYMCE_CDN}
-                    value={currentProductivityGoal}
-                    init={{
-                      menubar: false,
-                      statusbar: false,
-                      height: 320,
-                      license_key: "gpl",
-                      skin: theme === "dark" ? "oxide-dark" : "oxide",
-                      content_css: theme === "dark" ? "dark" : "default",
-                      toolbar:
-                        "bold italic underline | bullist numlist | link removeformat",
-                      branding: false,
-                    }}
-                    onEditorChange={(content) =>
-                      setProductivityGoals((prev) => ({
-                        ...prev,
-                        [productivityYear]: content,
-                      }))
-                    }
-                  />
-                </div>
+              <div className="space-y-6">
+                <ProductivityGrid
+                  year={productivityYear}
+                  ratings={productivityRatings}
+                  setRatings={setProductivityRatings}
+                />
               </div>
             </section>
           )}
@@ -811,10 +802,10 @@ type ProductivityLegendProps = {
 
 const ProductivityLegend = ({ className }: ProductivityLegendProps = {}) => (
   <div
-    className={`flex flex-wrap gap-3 rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-4 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${className ?? ""}`}
+    className={`flex flex-wrap gap-3 rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-4 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:flex-nowrap ${className ?? ""}`}
   >
     {PRODUCTIVITY_SCALE.map((scale) => (
-      <div key={scale.value} className="flex items-center gap-2">
+      <div key={scale.value} className="flex items-center gap-2 whitespace-nowrap">
         <span
           className={`h-4 w-4 rounded ${scale.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]`}
           aria-hidden="true"
@@ -878,7 +869,7 @@ const ProductivityGrid = ({
           );
         })}
       </div>
-      <div className="mt-2 space-y-1.5">
+      <div className="mt-2 space-y-1">
         {days.map((dayOfMonth) => (
           <div key={`row-${dayOfMonth}`} className="grid grid-cols-13 gap-2">
             <span className="text-right text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
@@ -899,7 +890,7 @@ const ProductivityGrid = ({
                 return (
                   <span
                     key={`${key}-empty`}
-                    className="h-4 w-full rounded-[4px] border border-dashed border-[color-mix(in_srgb,var(--foreground)_5%,transparent)]"
+                    className="h-4 w-full rounded-[4px] border border-dashed border-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
                     aria-hidden="true"
                   />
                 );
@@ -910,7 +901,7 @@ const ProductivityGrid = ({
                   type="button"
                   key={key}
                   onClick={() => handleCycle(monthIndex, dayOfMonth)}
-                  className={`h-4 w-full rounded-[4px] border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${
+                  className={`h-4 w-full rounded-[4px] border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${
                     hasValue
                       ? scale.color
                       : "bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
