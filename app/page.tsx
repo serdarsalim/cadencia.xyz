@@ -11,6 +11,35 @@ type FocusArea = {
   hours: string;
 };
 
+type RepeatFrequency = "none" | "daily" | "weekly" | "biweekly" | "monthly";
+
+type ScheduleEntry = {
+  time: string;
+  endTime?: string;
+  title: string;
+  color?: string;
+  repeat?: RepeatFrequency;
+  repeatUntil?: string | null;
+};
+
+type EntryMeta = {
+  originalDayKey?: string;
+  originalEntryIndex?: number;
+};
+
+type EntryResolution = {
+  entries: Record<string, ScheduleEntry[]>;
+  targetDayKey: string;
+  targetIndex: number | null;
+};
+
+type EditingEntryState = {
+  dayKey: string;
+  index: number;
+  meta: EntryMeta;
+  data: ScheduleEntry;
+};
+
 const defaultFocusAreas: FocusArea[] = [
   { id: "sleep", name: "Sleep", hours: "8" },
   { id: "eating", name: "Eating", hours: "2" },
@@ -52,6 +81,39 @@ const getWeekStart = (date: Date) => {
   const diff = (day + 6) % 7;
   start.setDate(start.getDate() - diff);
   start.setHours(0, 0, 0, 0);
+  return start;
+};
+
+const formatISOWeekInputValue = (date: Date) => {
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  target.setDate(target.getDate() + 3 - ((target.getDay() + 6) % 7));
+  const firstThursday = new Date(target.getFullYear(), 0, 4);
+  const weekNumber =
+    1 +
+    Math.round(
+      ((target.getTime() - firstThursday.getTime()) / 86400000 -
+        3 +
+        ((firstThursday.getDay() + 6) % 7)) /
+        7
+    );
+  return `${target.getFullYear()}-W${String(weekNumber).padStart(2, "0")}`;
+};
+
+const parseISOWeekInputValue = (value: string) => {
+  const match = /^(\d{4})-W(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+  const [, yearStr, weekStr] = match;
+  const year = Number(yearStr);
+  const week = Number(weekStr);
+  if (!Number.isFinite(year) || !Number.isFinite(week) || week < 1 || week > 53) {
+    return null;
+  }
+  const reference = new Date(year, 0, 4);
+  const start = getWeekStart(reference);
+  start.setDate(start.getDate() + (week - 1) * 7);
   return start;
 };
 
@@ -150,6 +212,9 @@ export default function Home() {
   >({});
   const [productivityMode, setProductivityMode] =
     useState<"day" | "week">("day");
+  const [scheduleEntries, setScheduleEntries] = useState<
+    Record<string, ScheduleEntry[]>
+  >({});
 
   useEffect(() => {
     const autoTheme = determineTheme();
@@ -231,6 +296,19 @@ export default function Home() {
         }
       }
 
+      const storedSchedule = window.localStorage.getItem(
+        "timespent-schedule-entries"
+      );
+      if (storedSchedule) {
+        const parsedSchedule = JSON.parse(storedSchedule) as Record<
+          string,
+          ScheduleEntry[]
+        >;
+        if (parsedSchedule && typeof parsedSchedule === "object") {
+          setScheduleEntries(parsedSchedule);
+        }
+      }
+
       const storedView = window.localStorage.getItem("timespent-active-view");
       if (storedView === "life" || storedView === "time-spent" || storedView === "productivity") {
         setView(storedView);
@@ -309,6 +387,17 @@ export default function Home() {
       console.error("Failed to cache productivity goals", error);
     }
   }, [productivityGoals]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "timespent-schedule-entries",
+        JSON.stringify(scheduleEntries)
+      );
+    } catch (error) {
+      console.error("Failed to cache schedule entries", error);
+    }
+  }, [scheduleEntries]);
 
 
   const isProfileComplete = Boolean(personName && dateOfBirth && email);
@@ -465,7 +554,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--background)] text-[var(--foreground)] transition-colors">
+    <div className="flex min-h-screen flex-col bg-background text-foreground transition-colors">
       <header className="flex items-center justify-between border-b border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] px-4 py-2 text-sm">
         <nav className="flex gap-2 text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
           <button
@@ -473,11 +562,11 @@ export default function Home() {
             onClick={() => setView("life")}
             className={`rounded-full px-4 py-1 transition ${
               view === "life"
-                ? "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-[var(--foreground)]"
+                ? "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-foreground"
                 : "text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]"
             }`}
           >
-            My life
+            Schedule
           </button>
           <button
             type="button"
@@ -499,7 +588,7 @@ export default function Home() {
                 : "text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]"
             }`}
           >
-            Time spent
+            Time
           </button>
         </nav>
         <div className="flex items-center gap-3">
@@ -535,99 +624,20 @@ export default function Home() {
         </div>
       </header>
       <main className="flex flex-1 items-start justify-center px-4">
-        <div className="w-full max-w-5xl py-2 text-center">
+        <div className="w-full py-2 text-center">
           {view === "life" && (
-            <section className="mt-4 space-y-4">
-              {isProfileComplete && (
-                <p className="text-2xl font-light leading-tight sm:text-4xl">
-                  {personName.trim()}
-                  {"'"}s journey
-                </p>
-              )}
-
-              {isProfileEditorVisible && (
-                <div className="mx-auto max-w-2xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_3%,transparent)] p-6 text-left">
-                  <div className="mb-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]">
-                      Profile
-                    </p>
-                    <p className="text-2xl font-light text-[var(--foreground)]">
-                      {personName || "Your name"}
-                    </p>
-                  </div>
-                  <dl className="space-y-3 text-sm text-[color-mix(in_srgb,var(--foreground)_75%,transparent)]">
-                    <div className="flex justify-between">
-                      <dt>Name</dt>
-                      <dd>{personName || "Not set"}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt>Date of birth</dt>
-                      <dd>
-                        {dateOfBirth
-                          ? new Date(dateOfBirth).toLocaleDateString()
-                          : "Not set"}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt>Email</dt>
-                      <dd>{email || "Not set"}</dd>
-                    </div>
-                  </dl>
-                  <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                    <label className="flex flex-col text-xs uppercase tracking-[0.25em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-                      Name
-                      <input
-                        type="text"
-                        value={personName}
-                        onChange={(event) =>
-                          setPersonName(event.target.value.slice(0, 32))
-                        }
-                        className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_40%,transparent)] bg-transparent px-4 py-2 text-base font-light text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
-                        placeholder="Your name"
-                      />
-                    </label>
-                    <label className="flex flex-col text-xs uppercase tracking-[0.25em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-                      Date of birth
-                      <input
-                        type="date"
-                        value={dateOfBirth}
-                        onChange={(event) => setDateOfBirth(event.target.value)}
-                        className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_40%,transparent)] bg-transparent px-4 py-2 text-base font-light text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
-                      />
-                    </label>
-                    <label className="flex flex-col text-xs uppercase tracking-[0.25em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-                      Email
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_40%,transparent)] bg-transparent px-4 py-2 text-base font-light text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
-                        placeholder="name@email.com"
-                      />
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              {hasValidBirthdate && (
-                <div className="mt-4 flex justify-center">
-                  <AgeGrid
-                    totalMonthsLived={monthsLived}
-                    maxYears={90}
-                    onSelectMonth={handleMonthSelect}
-                    selectedMonth={selectedMonth}
-                    entries={monthEntries}
-                  />
-                </div>
-              )}
-
+            <section className="mt-8 space-y-6">
+              <WeeklySchedule
+                scheduleEntries={scheduleEntries}
+                setScheduleEntries={setScheduleEntries}
+              />
             </section>
           )}
 
           {view === "time-spent" && (
             <section className="mt-12">
               <p className="text-3xl font-light leading-tight sm:text-4xl">
-                How I spent the last{" "}
+                Where time goes over{" "}
                 <input
                   type="number"
                   min="1"
@@ -639,7 +649,7 @@ export default function Home() {
                   className="mx-3 w-24 border-b border-[color-mix(in_srgb,var(--foreground)_60%,transparent)] bg-transparent text-center text-4xl font-semibold text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
                   aria-label="Enter the number of years to analyze"
                 />{" "}
-                years of my life
+                years
               </p>
 
               <div className="mt-10 grid grid-cols-2 gap-3 text-base sm:flex sm:flex-wrap sm:items-center sm:justify-center">
@@ -805,17 +815,20 @@ export default function Home() {
                     key={`productivity-goal-${productivityYear}`}
                     tinymceScriptSrc={TINYMCE_CDN}
                     value={currentProductivityGoal}
-                    init={{
-                      menubar: false,
-                      statusbar: false,
-                      height: 420,
-                      license_key: "gpl",
-                    plugins: "lists",
-                      skin: theme === "dark" ? "oxide-dark" : "oxide",
-                      content_css: theme === "dark" ? "dark" : "default",
-                    toolbar: "bold italic underline | bullist numlist | link removeformat",
-                      branding: false,
-                    }}
+                    init={
+                      {
+                        menubar: false,
+                        statusbar: false,
+                        height: 420,
+                        license_key: "gpl",
+                        plugins: "lists",
+                        skin: theme === "dark" ? "oxide-dark" : "oxide",
+                        content_css: theme === "dark" ? "dark" : "default",
+                        toolbar:
+                          "bold italic underline | bullist numlist | link removeformat",
+                        branding: false,
+                      } as Record<string, unknown>
+                    }
                     onEditorChange={(content) =>
                       setProductivityGoals((prev) => ({
                         ...prev,
@@ -875,17 +888,19 @@ export default function Home() {
               key={selectedMonthKey ?? "editor"}
               tinymceScriptSrc={TINYMCE_CDN}
               value={selectedMonthContent}
-              init={{
-                menubar: false,
-                statusbar: false,
-                height: 320,
-                license_key: "gpl",
-                skin: theme === "dark" ? "oxide-dark" : "oxide",
-                content_css: theme === "dark" ? "dark" : "default",
-                toolbar:
-                  "bold italic underline | bullist numlist | link removeformat",
-                branding: false,
-              }}
+              init={
+                {
+                  menubar: false,
+                  statusbar: false,
+                  height: 320,
+                  license_key: "gpl",
+                  skin: theme === "dark" ? "oxide-dark" : "oxide",
+                  content_css: theme === "dark" ? "dark" : "default",
+                  toolbar:
+                    "bold italic underline | bullist numlist | link removeformat",
+                  branding: false,
+                } as Record<string, unknown>
+              }
               onEditorChange={handleEntryChange}
             />
           </div>
@@ -919,42 +934,22 @@ const AgeGrid = ({
     0,
     Math.min(totalMonthsLived, totalYears * 12)
   );
-  const decades = Array.from(
-    { length: Math.ceil(totalYears / 10) },
-    (_, idx) => idx
-  );
+
+  const allYears = Array.from({ length: totalYears }, (_, idx) => idx + 1);
 
   return (
     <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
-      {decades.map((decadeIndex) => {
-        const startYear = decadeIndex * 10 + 1;
-        const endYear = Math.min(startYear + 9, totalYears);
-        const years = Array.from(
-          { length: endYear - startYear + 1 },
-          (_, idx) => startYear + idx
-        );
-
-        return (
-          <section key={`decade-${startYear}`} className="space-y-1.5">
-            <p className="text-left text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]">
-              {startYear}-{endYear} yrs
-            </p>
-            <div className="space-y-2">
-              {years.map((yearNumber) => (
-                <YearRow
-                  key={`year-${yearNumber}`}
-                  yearNumber={yearNumber}
-                  yearIndex={yearNumber - 1}
-                  totalMonthsLived={clampedMonths}
-                  onSelectMonth={onSelectMonth}
-                  selectedMonth={selectedMonth}
-                  entries={entries}
-                />
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      {allYears.map((yearNumber) => (
+        <YearRow
+          key={`year-${yearNumber}`}
+          yearNumber={yearNumber}
+          yearIndex={yearNumber - 1}
+          totalMonthsLived={clampedMonths}
+          onSelectMonth={onSelectMonth}
+          selectedMonth={selectedMonth}
+          entries={entries}
+        />
+      ))}
     </div>
   );
 };
@@ -985,8 +980,6 @@ const YearRow = ({
         const isSelected =
           selectedMonth?.year === yearNumber &&
           selectedMonth?.month === displayMonth;
-        const monthsBeforeCell = yearIndex * 12 + displayMonth;
-        const isLived = monthsBeforeCell <= totalMonthsLived;
         const baseClasses =
           "h-3 w-3 rounded-[2px] transition sm:h-4 sm:w-4 focus:outline-none";
 
@@ -1000,9 +993,7 @@ const YearRow = ({
                 ? "bg-[var(--foreground)] ring-2 ring-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
                 : hasEntry
                   ? "bg-[#f6ad55] hover:bg-[#f28c28]"
-                  : isLived
-                    ? "bg-[color-mix(in_srgb,var(--foreground)_45%,transparent)] hover:bg-[color-mix(in_srgb,var(--foreground)_65%,transparent)]"
-                    : "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] opacity-70 hover:opacity-100"
+                  : "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] hover:bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]"
             }`}
             aria-label={`Year ${yearNumber}, month ${displayMonth}`}
             aria-pressed={isSelected}
@@ -1463,4 +1454,684 @@ const ProductivityGrid = ({
   };
 
   return mode === "day" ? renderDayGrid() : renderWeekGrid();
+};
+
+type WeeklyScheduleProps = {
+  scheduleEntries: Record<string, ScheduleEntry[]>;
+  setScheduleEntries: React.Dispatch<
+    React.SetStateAction<Record<string, ScheduleEntry[]>>
+  >;
+};
+
+const WeeklySchedule = ({
+  scheduleEntries,
+  setScheduleEntries,
+}: WeeklyScheduleProps) => {
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStart(new Date()));
+  const [activeEntry, setActiveEntry] = useState<EditingEntryState | null>(null);
+
+  const weekDays = useMemo(() => {
+    return Array.from({ length: 7 }, (_, idx) => {
+      const day = new Date(currentWeekStart);
+      day.setDate(currentWeekStart.getDate() + idx);
+      return day;
+    });
+  }, [currentWeekStart]);
+
+  const weekRangeLabel = useMemo(() => {
+    const weekStart = weekDays[0];
+    const weekEnd = weekDays[weekDays.length - 1];
+    if (!weekStart || !weekEnd) {
+      return "";
+    }
+    const startLabel = weekStart.toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+    });
+    const endLabel = weekEnd.toLocaleDateString(undefined, {
+      month: weekStart.getMonth() === weekEnd.getMonth() ? undefined : "long",
+      day: "numeric",
+    });
+    return `${startLabel} – ${endLabel} ${weekEnd.getFullYear()}`;
+  }, [weekDays]);
+
+  const weekInputValue = useMemo(
+    () => formatISOWeekInputValue(currentWeekStart),
+    [currentWeekStart]
+  );
+
+  const goToWeek = (date: Date) => {
+    setCurrentWeekStart(getWeekStart(date));
+  };
+
+  const handleWeekPickerChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { value } = event.target;
+    if (!value) {
+      return;
+    }
+    const parsed = parseISOWeekInputValue(value);
+    if (parsed) {
+      setCurrentWeekStart(parsed);
+    }
+  };
+  const formatDayKey = (date: Date) => {
+    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  };
+
+  const parseDayKey = (key: string) => {
+    const [yearStr, monthStr, dayStr] = key.split("-").map(Number);
+    if (
+      !Number.isFinite(yearStr) ||
+      !Number.isFinite(monthStr) ||
+      !Number.isFinite(dayStr)
+    ) {
+      return null;
+    }
+    const parsed = new Date(yearStr, monthStr - 1, dayStr);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    return parsed;
+  };
+
+  const getPreviousDayKey = (key: string) => {
+    const parsed = parseDayKey(key);
+    if (!parsed) {
+      return null;
+    }
+    parsed.setDate(parsed.getDate() - 1);
+    return formatDayKey(parsed);
+  };
+
+  const addEntry = (dayKey: string) => {
+    setScheduleEntries((prev) => ({
+      ...prev,
+      [dayKey]: [
+        ...(prev[dayKey] || []),
+        { time: "09:00", endTime: "10:00", title: "New task" },
+      ],
+    }));
+  };
+
+  const removeEntry = (
+    dayKey: string,
+    index: number,
+    meta?: EntryMeta
+  ): EntryResolution | null => {
+    let latestResolution: EntryResolution | null = null;
+    setScheduleEntries((prev) => {
+      const resolution = prepareEntriesForMutation(prev, dayKey, index, meta);
+      latestResolution = resolution;
+      if (resolution.targetIndex === null) {
+        return prev;
+      }
+      const updated = { ...resolution.entries };
+      const entries = [...(updated[resolution.targetDayKey] || [])];
+      entries.splice(resolution.targetIndex, 1);
+      if (entries.length === 0) {
+        delete updated[resolution.targetDayKey];
+      } else {
+        updated[resolution.targetDayKey] = entries;
+      }
+      return updated;
+    });
+    return latestResolution;
+  };
+
+  const updateEntry = (
+    dayKey: string,
+    index: number,
+    field: "time" | "endTime" | "title" | "color" | "repeat",
+    value: string,
+    meta?: EntryMeta
+  ): EntryResolution | null => {
+    let latestResolution: EntryResolution | null = null;
+    setScheduleEntries((prev) => {
+      const resolution = prepareEntriesForMutation(prev, dayKey, index, meta);
+      latestResolution = resolution;
+      if (resolution.targetIndex === null) {
+        return prev;
+      }
+      const updated = { ...resolution.entries };
+      const entries = [...(updated[resolution.targetDayKey] || [])];
+      const currentEntry = { ...entries[resolution.targetIndex]! };
+
+      if (field === "repeat") {
+        if (value === "none") {
+          currentEntry.repeat = undefined;
+          currentEntry.repeatUntil = null;
+        } else {
+          currentEntry.repeat = value as RepeatFrequency;
+        }
+      } else if (field === "time") {
+        currentEntry.time = value;
+      } else if (field === "endTime") {
+        currentEntry.endTime = value;
+      } else if (field === "title") {
+        currentEntry.title = value;
+      } else if (field === "color") {
+        currentEntry.color = value;
+      }
+
+      entries[resolution.targetIndex] = currentEntry;
+      updated[resolution.targetDayKey] = entries;
+      return updated;
+    });
+    return latestResolution;
+  };
+
+  const openEntryEditor = (
+    dayKey: string,
+    index: number,
+    meta: EntryMeta,
+    entryData: ScheduleEntry
+  ) => {
+    setActiveEntry({
+      dayKey,
+      index,
+      meta,
+      data: {
+        time: entryData.time ?? "",
+        endTime: entryData.endTime ?? "",
+        title: entryData.title ?? "",
+        color: entryData.color,
+        repeat: entryData.repeat,
+        repeatUntil: entryData.repeatUntil ?? null,
+      },
+    });
+  };
+
+  const closeEntryEditor = () => setActiveEntry(null);
+
+  const handleActiveFieldChange = (
+    field: "time" | "endTime" | "title" | "color",
+    value: string
+  ) => {
+    setActiveEntry((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const resolution = updateEntry(
+        prev.dayKey,
+        prev.index,
+        field,
+        value,
+        prev.meta
+      );
+      const nextEntryData = { ...prev.data, [field]: value };
+      const nextState: EditingEntryState = {
+        ...prev,
+        data: nextEntryData,
+      };
+      if (resolution && resolution.targetIndex !== null) {
+        nextState.dayKey = resolution.targetDayKey;
+        nextState.index = resolution.targetIndex;
+        nextState.meta = {
+          originalDayKey: resolution.targetDayKey,
+          originalEntryIndex: resolution.targetIndex,
+        };
+      }
+      return nextState;
+    });
+  };
+
+  const handleActiveRepeatChange = (value: RepeatFrequency) => {
+    setActiveEntry((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const resolution = updateEntry(
+        prev.dayKey,
+        prev.index,
+        "repeat",
+        value,
+        prev.meta
+      );
+      const nextState: EditingEntryState = {
+        ...prev,
+        data: {
+          ...prev.data,
+          repeat: value === "none" ? undefined : value,
+        },
+      };
+      if (resolution && resolution.targetIndex !== null) {
+        nextState.dayKey = resolution.targetDayKey;
+        nextState.index = resolution.targetIndex;
+        nextState.meta = {
+          originalDayKey: resolution.targetDayKey,
+          originalEntryIndex: resolution.targetIndex,
+        };
+      }
+      return nextState;
+    });
+  };
+
+  const handleDeleteActiveEntry = () => {
+    if (!activeEntry) {
+      return;
+    }
+    removeEntry(activeEntry.dayKey, activeEntry.index, activeEntry.meta);
+    setActiveEntry(null);
+  };
+
+  const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return (
+      date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear()
+    );
+  };
+
+  const getRepeatColor = (title: string, time: string, fallback?: string) => {
+    if (fallback) {
+      return fallback;
+    }
+    // Generate a consistent color based on task title and time
+    const str = `${title}-${time}`;
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const colors = [
+      "#8E7DBE", "#F29E4C", "#5DA9E9", "#80CFA9", "#F7B267", "#B8F2E6"
+    ];
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  const getEntriesForDay = (date: Date) => {
+    const dayKey = formatDayKey(date);
+    type EntryWithMeta = ScheduleEntry & {
+      repeatColor?: string;
+      originalDayKey: string;
+      originalEntryIndex: number;
+      isRepeated?: boolean;
+    };
+    const directEntries: EntryWithMeta[] = (scheduleEntries[dayKey] || []).map(
+      (entry, entryIndex) => {
+        const base: EntryWithMeta = {
+          ...entry,
+          originalDayKey: dayKey,
+          originalEntryIndex: entryIndex,
+        };
+
+        return {
+          ...base,
+          repeatColor: getRepeatColor(entry.title, entry.time, entry.color),
+        };
+      }
+    );
+    const repeatedEntries: EntryWithMeta[] = [];
+
+    // Check all stored entries for repeating tasks
+    Object.entries(scheduleEntries).forEach(([storedDayKey, entries]) => {
+      if (storedDayKey === dayKey) return; // Skip direct entries, already included
+
+      entries.forEach((entry, entryIdx) => {
+        if (!entry.repeat || entry.repeat === "none") return;
+
+        const originalDate = parseDayKey(storedDayKey);
+        if (!originalDate) {
+          return;
+        }
+        const repeatEnd = entry.repeatUntil ? parseDayKey(entry.repeatUntil) : null;
+
+        let shouldShow = false;
+
+        const daysDiff = Math.floor(
+          (date.getTime() - originalDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        const isAfterStart = daysDiff >= 0;
+
+        if (!isAfterStart) {
+          shouldShow = false;
+        } else if (entry.repeat === "daily") {
+          shouldShow = true;
+        } else if (entry.repeat === "weekly") {
+          shouldShow = daysDiff % 7 === 0;
+        } else if (entry.repeat === "biweekly") {
+          shouldShow = daysDiff % 14 === 0;
+        } else if (entry.repeat === "monthly") {
+          shouldShow = date.getDate() === originalDate.getDate();
+        }
+
+        if (repeatEnd && date > repeatEnd) {
+          shouldShow = false;
+        }
+
+        if (shouldShow) {
+          repeatedEntries.push({
+            ...entry,
+            isRepeated: true,
+            repeatColor: getRepeatColor(entry.title, entry.time, entry.color),
+            originalDayKey: storedDayKey,
+            originalEntryIndex: entryIdx,
+          } as EntryWithMeta);
+        }
+      });
+    });
+
+    return [...directEntries, ...repeatedEntries];
+  };
+
+  const prepareEntriesForMutation = (
+    baseEntries: Record<string, ScheduleEntry[]>,
+    occurrenceDayKey: string,
+    fallbackIndex: number,
+    meta?: EntryMeta
+  ): EntryResolution => {
+    const originalDayKey = meta?.originalDayKey ?? occurrenceDayKey;
+    const originalEntryIndex =
+      meta?.originalEntryIndex ?? fallbackIndex;
+    const sourceEntries = baseEntries[originalDayKey];
+    const sourceEntry = sourceEntries?.[originalEntryIndex];
+
+    if (!sourceEntry) {
+      return {
+        entries: baseEntries,
+        targetDayKey: originalDayKey,
+        targetIndex: null as number | null,
+      };
+    }
+
+    if (originalDayKey === occurrenceDayKey) {
+      return {
+        entries: baseEntries,
+        targetDayKey: originalDayKey,
+        targetIndex: originalEntryIndex,
+      };
+    }
+
+    const updatedEntries = { ...baseEntries };
+    const updatedSourceEntries = [...(sourceEntries ?? [])];
+    const previousDayKey = getPreviousDayKey(occurrenceDayKey);
+    updatedSourceEntries[originalEntryIndex] = {
+      ...sourceEntry,
+      repeatUntil: previousDayKey ?? sourceEntry.repeatUntil ?? null,
+    };
+    updatedEntries[originalDayKey] = updatedSourceEntries;
+
+    const clonedEntry: ScheduleEntry = { ...sourceEntry };
+    const dayEntries = [...(updatedEntries[occurrenceDayKey] ?? [])];
+    dayEntries.push(clonedEntry);
+    const newIndex = dayEntries.length - 1;
+    updatedEntries[occurrenceDayKey] = dayEntries;
+
+    return {
+      entries: updatedEntries,
+      targetDayKey: occurrenceDayKey,
+      targetIndex: newIndex,
+    };
+  };
+
+  const activeEntryDate = activeEntry ? parseDayKey(activeEntry.dayKey) : null;
+  const activeEntryRepeatValue: RepeatFrequency =
+    activeEntry?.data.repeat ?? "none";
+
+  return (
+    <div className="mx-auto w-full text-left">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="text-3xl font-light text-[var(--foreground)]">{weekRangeLabel}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col">
+            <input
+              type="week"
+              value={weekInputValue}
+              onChange={handleWeekPickerChange}
+              aria-label="Select week"
+              className="w-40 rounded-full border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => goToWeek(new Date())}
+            className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-sm transition hover:border-[var(--foreground)]"
+          >
+            This Week
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-7">
+        {weekDays.map((date, idx) => {
+          const dayKey = formatDayKey(date);
+          const entries = getEntriesForDay(date);
+          const today = isToday(date);
+
+          return (
+            <div
+              key={dayKey}
+              className={`rounded-2xl border py-4 transition ${
+                today
+                  ? "border-[#60a5fa] bg-transparent shadow-[0_8px_24px_rgba(96,165,250,0.25)]"
+                  : "border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-transparent"
+              }`}
+            >
+              <div className="mb-3 flex items-center justify-between px-4">
+                <div>
+                  <p
+                    className={`text-xs uppercase tracking-[0.2em] font-semibold ${
+                      today
+                        ? "text-[#1d4ed8]"
+                        : "text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
+                    }`}
+                  >
+                    {dayNames[idx]}
+                  </p>
+                  <p
+                    className={`mt-1 text-lg font-semibold ${
+                      today
+                        ? "text-[#1d4ed8]"
+                        : "text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
+                    }`}
+                  >
+                    {date.getDate()}
+                  </p>
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => addEntry(dayKey)}
+                    className="flex h-6 w-6 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-xs transition hover:border-[var(--foreground)]"
+                    aria-label="Add task"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2 px-2">
+                {entries
+                  .sort((a, b) => a.time.localeCompare(b.time))
+                  .map((entry, entryIdx) => {
+                    const repeatColor = "repeatColor" in entry ? entry.repeatColor : null;
+                    const originalDayKey =
+                      "originalDayKey" in entry ? (entry.originalDayKey as string) : dayKey;
+                    const originalEntryIndex =
+                      "originalEntryIndex" in entry ? (entry.originalEntryIndex as number) : entryIdx;
+                    const meta: EntryMeta = {
+                      originalDayKey,
+                      originalEntryIndex,
+                    };
+
+                    return (
+                      <div
+                        key={`${dayKey}-${entryIdx}`}
+                        className="group rounded-lg py-1"
+                        style={{
+                          backgroundColor: repeatColor
+                            ? `color-mix(in srgb, ${repeatColor} 12%, transparent)`
+                            : "color-mix(in srgb, var(--foreground) 3%, transparent)",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => openEntryEditor(dayKey, entryIdx, meta, entry)}
+                          className="w-full rounded-md px-2 py-1 text-left transition hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] focus:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] focus:outline-none"
+                        >
+                          <div className="mb-1 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
+                            {entry.time || "—"}
+                            {entry.endTime
+                              ? ` – ${entry.endTime}`
+                              : ""}
+                          </div>
+                          <p className="text-sm font-medium text-[var(--foreground)]">
+                            {entry.title || "Untitled task"}
+                          </p>
+                        </button>
+                        <div className="flex justify-end px-2">
+                          <button
+                            type="button"
+                            onClick={() => removeEntry(dayKey, entryIdx, meta)}
+                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] opacity-0 transition group-hover:opacity-100 hover:text-[var(--foreground)]"
+                            aria-label="Delete task"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {entries.length === 0 && (
+                <p className="px-4 text-center text-xs text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]">
+                  No tasks
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {activeEntry && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          onClick={closeEntryEditor}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[var(--background)] p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]">
+                  Edit task
+                </p>
+                <p className="text-lg font-light text-[var(--foreground)]">
+                  {activeEntryDate
+                    ? activeEntryDate.toLocaleDateString(undefined, {
+                        weekday: "short",
+                        month: "long",
+                        day: "numeric",
+                      })
+                    : activeEntry.dayKey}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeEntryEditor}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                  Start
+                  <input
+                    type="text"
+                    value={activeEntry.data.time}
+                    onChange={(event) =>
+                      handleActiveFieldChange("time", event.target.value)
+                    }
+                    placeholder="09:00"
+                    className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                  />
+                </label>
+                <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                  End
+                  <input
+                    type="text"
+                    value={activeEntry.data.endTime ?? ""}
+                    onChange={(event) =>
+                      handleActiveFieldChange("endTime", event.target.value)
+                    }
+                    placeholder="10:00"
+                    className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                  />
+                </label>
+              </div>
+              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                Title
+                <input
+                  type="text"
+                  value={activeEntry.data.title}
+                  onChange={(event) =>
+                    handleActiveFieldChange("title", event.target.value)
+                  }
+                  placeholder="Task title"
+                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                />
+              </label>
+              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                Accent color
+                <input
+                  type="color"
+                  value={activeEntry.data.color ?? "#8E7DBE"}
+                  onChange={(event) =>
+                    handleActiveFieldChange("color", event.target.value)
+                  }
+                  className="mt-1 h-10 w-full cursor-pointer rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-3 py-1.5"
+                />
+              </label>
+              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                Repeat
+                <select
+                  value={activeEntryRepeatValue}
+                  onChange={(event) =>
+                    handleActiveRepeatChange(event.target.value as RepeatFrequency)
+                  }
+                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                >
+                  <option value="none">Does not repeat</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="biweekly">Every 2 weeks</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-6 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleDeleteActiveEntry}
+                className="text-sm text-[#f87171] transition hover:text-[#ef4444]"
+              >
+                Delete task
+              </button>
+              <button
+                type="button"
+                onClick={closeEntryEditor}
+                className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-sm transition hover:border-[var(--foreground)]"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
