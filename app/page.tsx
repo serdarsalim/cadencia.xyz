@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 
 type Theme = "light" | "dark";
 
@@ -77,7 +77,24 @@ const defaultFocusAreas: FocusArea[] = [
   { id: "work", name: "Work", hours: "8" },
 ];
 
-type ViewMode = "life" | "time-spent" | "productivity";
+type ViewMode = "life" | "time-spent" | "productivity" | "goals";
+
+type KeyResultStatus = "started" | "pending" | "on-hold" | "completed";
+
+type KeyResult = {
+  id: string;
+  title: string;
+  status: KeyResultStatus;
+};
+
+type Goal = {
+  id: string;
+  title: string;
+  timeframe: string;
+  description?: string;
+  keyResults: KeyResult[];
+  statusOverride?: KeyResultStatus;
+};
 
 const TinyEditor = dynamic(
   () => import("@tinymce/tinymce-react").then((mod) => mod.Editor),
@@ -241,6 +258,27 @@ export default function Home() {
     Record<string, ScheduleEntry[]>
   >({});
   const [weekStartDay, setWeekStartDay] = useState<WeekdayIndex>(1);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [newGoalTitle, setNewGoalTitle] = useState("");
+  const [newGoalTimeframe, setNewGoalTimeframe] = useState("");
+  const [krDrafts, setKrDrafts] = useState<Record<string, { title: string }>>({});
+  const [activeKrDraftGoalId, setActiveKrDraftGoalId] = useState<string | null>(null);
+  const [isAddingGoal, setIsAddingGoal] = useState(false);
+  const [goalFieldDrafts, setGoalFieldDrafts] = useState<
+    Record<string, { title?: string; timeframe?: string }>
+  >({});
+  const [activeGoalFieldEdit, setActiveGoalFieldEdit] = useState<{
+    goalId: string;
+    field: "title" | "timeframe";
+  } | null>(null);
+  const [krFieldDrafts, setKrFieldDrafts] = useState<
+    Record<string, { title?: string }>
+  >({});
+  const [activeKrFieldEdit, setActiveKrFieldEdit] = useState<{
+    goalId: string;
+    krId: string;
+    field: "title" | "target";
+  } | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -327,6 +365,14 @@ export default function Home() {
         >;
         if (parsedSchedule && typeof parsedSchedule === "object") {
           setScheduleEntries(parsedSchedule);
+        }
+      }
+
+      const storedGoals = window.localStorage.getItem("timespent-goals");
+      if (storedGoals) {
+        const parsedGoals = JSON.parse(storedGoals) as Goal[];
+        if (Array.isArray(parsedGoals)) {
+          setGoals(parsedGoals);
         }
       }
 
@@ -458,6 +504,17 @@ export default function Home() {
   useEffect(() => {
     try {
       window.localStorage.setItem(
+        "timespent-goals",
+        JSON.stringify(goals)
+      );
+    } catch (error) {
+      console.error("Failed to cache goals", error);
+    }
+  }, [goals]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
         "timespent-week-start",
         String(weekStartDay)
       );
@@ -499,6 +556,456 @@ export default function Home() {
         hours: "1",
       },
     ]);
+  };
+
+  const generateId = () =>
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const handleAddGoal = () => {
+    const title = newGoalTitle.trim();
+    if (!title) {
+      return;
+    }
+    const timeframe = newGoalTimeframe.trim() || "This quarter";
+    const nextGoal: Goal = {
+      id: generateId(),
+      title,
+      timeframe,
+      keyResults: [],
+    };
+    setGoals((prev) => [...prev, nextGoal]);
+    setNewGoalTitle("");
+    setNewGoalTimeframe("");
+    setIsAddingGoal(false);
+  };
+
+  const handleRemoveGoal = (goalId: string) => {
+    setGoals((prev) => prev.filter((goal) => goal.id !== goalId));
+    setKrDrafts((prev) => {
+      if (!(goalId in prev)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[goalId];
+      return next;
+    });
+  };
+
+const handleKrDraftChange = (goalId: string, value: string) => {
+  setKrDrafts((prev) => ({
+    ...prev,
+    [goalId]: {
+      title: value,
+    },
+  }));
+};
+
+  const startKeyResultDraft = (goalId: string) => {
+    setActiveKrDraftGoalId(goalId);
+    setKrDrafts((prev) => ({
+      ...prev,
+      [goalId]: prev[goalId] ?? { title: "" },
+    }));
+  };
+
+  const cancelKeyResultDraft = (goalId: string) => {
+    setActiveKrDraftGoalId((prev) => (prev === goalId ? null : prev));
+    setKrDrafts((prev) => {
+      if (!(goalId in prev)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[goalId];
+      return next;
+    });
+  };
+
+  const startGoalDraft = () => {
+    setIsAddingGoal(true);
+  };
+
+  const cancelGoalDraft = () => {
+    setIsAddingGoal(false);
+    setNewGoalTitle("");
+    setNewGoalTimeframe("");
+  };
+
+  const beginGoalFieldEdit = (goal: Goal, field: "title" | "timeframe") => {
+    const currentValue = field === "title" ? goal.title : goal.timeframe;
+    setActiveGoalFieldEdit({ goalId: goal.id, field });
+    setGoalFieldDrafts((prev) => ({
+      ...prev,
+      [goal.id]: {
+        ...prev[goal.id],
+        [field]: prev[goal.id]?.[field] ?? currentValue,
+      },
+    }));
+  };
+
+  const handleGoalFieldDraftChange = (
+    goalId: string,
+    field: "title" | "timeframe",
+    value: string
+  ) => {
+    setGoalFieldDrafts((prev) => ({
+      ...prev,
+      [goalId]: {
+        ...prev[goalId],
+        [field]: value,
+      },
+    }));
+  };
+
+  const clearGoalFieldDraft = (goalId: string, field: "title" | "timeframe") => {
+    setGoalFieldDrafts((prev) => {
+      const existing = prev[goalId];
+      if (!existing) {
+        return prev;
+      }
+      const nextFieldState = { ...existing };
+      delete nextFieldState[field];
+      if (Object.keys(nextFieldState).length === 0) {
+        const next = { ...prev };
+        delete next[goalId];
+        return next;
+      }
+      return {
+        ...prev,
+        [goalId]: nextFieldState,
+      };
+    });
+  };
+
+  const commitGoalFieldEdit = (
+    goalId: string,
+    field: "title" | "timeframe"
+  ) => {
+    const draftValue = goalFieldDrafts[goalId]?.[field];
+    const trimmed = draftValue?.trim();
+    if (!trimmed) {
+      cancelGoalFieldEdit(goalId, field);
+      return;
+    }
+    setGoals((prev) =>
+      prev.map((goal) =>
+        goal.id === goalId
+          ? {
+              ...goal,
+              ...(field === "title"
+                ? { title: trimmed }
+                : { timeframe: trimmed }),
+            }
+          : goal
+      )
+    );
+    if (
+      activeGoalFieldEdit?.goalId === goalId &&
+      activeGoalFieldEdit.field === field
+    ) {
+      setActiveGoalFieldEdit(null);
+    }
+    clearGoalFieldDraft(goalId, field);
+  };
+
+  const cancelGoalFieldEdit = (
+    goalId: string,
+    field: "title" | "timeframe"
+  ) => {
+    if (
+      activeGoalFieldEdit?.goalId === goalId &&
+      activeGoalFieldEdit.field === field
+    ) {
+      setActiveGoalFieldEdit(null);
+    }
+    clearGoalFieldDraft(goalId, field);
+  };
+
+  const krFieldKey = (goalId: string, krId: string) => `${goalId}-${krId}`;
+
+const beginKrFieldEdit = (
+  goalId: string,
+  kr: KeyResult,
+  field: "title"
+) => {
+  const currentValue = kr.title;
+  setActiveKrFieldEdit({ goalId, krId: kr.id, field });
+  const key = krFieldKey(goalId, kr.id);
+  setKrFieldDrafts((prev) => ({
+    ...prev,
+    [key]: {
+      title: prev[key]?.title ?? currentValue,
+    },
+  }));
+};
+
+  const handleKrFieldDraftChange = (
+    goalId: string,
+    krId: string,
+    value: string
+  ) => {
+    const key = krFieldKey(goalId, krId);
+    setKrFieldDrafts((prev) => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        title: value,
+      },
+    }));
+  };
+
+  const clearKrFieldDraft = (
+    goalId: string,
+    krId: string,
+    field: "title"
+  ) => {
+    const key = krFieldKey(goalId, krId);
+    setKrFieldDrafts((prev) => {
+      const existing = prev[key];
+      if (!existing) {
+        return prev;
+      }
+      const nextFieldState = { ...existing };
+      delete nextFieldState[field];
+      if (Object.keys(nextFieldState).length === 0) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return {
+        ...prev,
+        [key]: nextFieldState,
+      };
+    });
+  };
+
+  const commitKrFieldEdit = (
+    goalId: string,
+    krId: string,
+    field: "title"
+  ) => {
+    const key = krFieldKey(goalId, krId);
+    const draftValue = krFieldDrafts[key]?.title;
+    const trimmed = draftValue?.trim();
+    if (!trimmed) {
+      cancelKrFieldEdit(goalId, krId, field);
+      return;
+    }
+    setGoals((prev) =>
+      prev.map((goal) =>
+      goal.id === goalId
+        ? {
+            ...goal,
+            keyResults: goal.keyResults.map((kr) =>
+              kr.id === krId
+                ? {
+                    ...kr,
+                    title: trimmed,
+                  }
+                : kr
+            ),
+          }
+        : goal
+      )
+    );
+    if (
+      activeKrFieldEdit?.goalId === goalId &&
+      activeKrFieldEdit.krId === krId &&
+      activeKrFieldEdit.field === field
+    ) {
+      setActiveKrFieldEdit(null);
+    }
+    clearKrFieldDraft(goalId, krId, field);
+  };
+
+  const cancelKrFieldEdit = (
+    goalId: string,
+    krId: string,
+    field: "title" | "target"
+  ) => {
+    if (
+      activeKrFieldEdit?.goalId === goalId &&
+      activeKrFieldEdit.krId === krId &&
+      activeKrFieldEdit.field === field
+    ) {
+      setActiveKrFieldEdit(null);
+    }
+    clearKrFieldDraft(goalId, krId, field);
+  };
+
+  const handleGoalFieldKeyDown = (
+    event: KeyboardEvent<HTMLInputElement>,
+    goalId: string,
+    field: "title" | "timeframe"
+  ) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitGoalFieldEdit(goalId, field);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      cancelGoalFieldEdit(goalId, field);
+    }
+  };
+
+  const handleKeyResultFieldKeyDown = (
+    event: KeyboardEvent<HTMLInputElement>,
+    goalId: string,
+    krId: string,
+    field: "title"
+  ) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitKrFieldEdit(goalId, krId, field);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      cancelKrFieldEdit(goalId, krId, field);
+    }
+  };
+
+  const handleAddKeyResult = (goalId: string) => {
+    const draft = krDrafts[goalId];
+    const title = draft?.title?.trim() ?? "";
+    if (!title) {
+      return;
+    }
+    const newKr: KeyResult = {
+      id: generateId(),
+      title,
+      status: "started",
+    };
+    setGoals((prev) =>
+      prev.map((goal) =>
+        goal.id === goalId
+          ? { ...goal, keyResults: [...goal.keyResults, newKr] }
+          : goal
+      )
+    );
+    setKrDrafts((prev) => {
+      const next = { ...prev };
+      delete next[goalId];
+      return next;
+    });
+    setActiveKrDraftGoalId((prev) => (prev === goalId ? null : prev));
+  };
+
+  const handleRemoveKeyResult = (goalId: string, krId: string) => {
+    setGoals((prev) =>
+      prev.map((goal) =>
+        goal.id === goalId
+          ? {
+              ...goal,
+              keyResults: goal.keyResults.filter((kr) => kr.id !== krId),
+            }
+          : goal
+      )
+    );
+  };
+
+  const updateKeyResultProgress = (
+    goalId: string,
+    krId: string,
+    progress: number
+  ) => {
+    setGoals((prev) =>
+      prev.map((goal) =>
+        goal.id === goalId
+          ? {
+              ...goal,
+              keyResults: goal.keyResults.map((kr) =>
+                kr.id === krId ? { ...kr, progress } : kr
+              ),
+            }
+          : goal
+      )
+    );
+  };
+
+  const cycleKeyResultStatus = (goalId: string, krId: string) => {
+    const order: KeyResultStatus[] = ["started", "pending", "on-hold", "completed"];
+    setGoals((prev) =>
+      prev.map((goal) =>
+        goal.id === goalId
+          ? {
+              ...goal,
+              keyResults: goal.keyResults.map((kr) => {
+                if (kr.id !== krId) {
+                  return kr;
+                }
+                const currentIndex = order.indexOf(kr.status);
+                const nextStatus = order[(currentIndex + 1) % order.length];
+                return { ...kr, status: nextStatus };
+              }),
+            }
+          : goal
+      )
+    );
+  };
+
+const goalStatusBadge = (status: KeyResultStatus) => {
+  switch (status) {
+    case "started":
+      return "bg-[#dbeafe] text-[#1d4ed8]";
+    case "pending":
+      return "bg-[#fef3c7] text-[#b45309]";
+    case "on-hold":
+      return "bg-[#fef9c3] text-[#92400e]";
+    case "completed":
+      return "bg-[#dcfce7] text-[#15803d]";
+    default:
+      return "bg-[color-mix(in_srgb,var(--foreground)_12%,transparent)] text-[var(--foreground)]";
+  }
+};
+
+  const cycleGoalStatusOverride = (goalId: string) => {
+    const order: KeyResultStatus[] = ["started", "pending", "on-hold", "completed"];
+    setGoals((prev) =>
+      prev.map((goal) => {
+        if (goal.id !== goalId) {
+          return goal;
+        }
+        const current =
+          goal.statusOverride ?? deriveGoalStatusFromKeyResults(goal);
+        const currentIndex = order.indexOf(current);
+        const isOverrideActive = Boolean(goal.statusOverride);
+        const shouldClear =
+          isOverrideActive && currentIndex === order.length - 1;
+        if (shouldClear) {
+          return {
+            ...goal,
+            statusOverride: undefined,
+          };
+        }
+        const nextStatus = order[(currentIndex + 1) % order.length];
+        return {
+          ...goal,
+          statusOverride: nextStatus,
+        };
+      })
+    );
+  };
+
+  const computeGoalProgress = (goal: Goal) => {
+    if (goal.keyResults.length === 0) {
+      return 0;
+    }
+    const total = goal.keyResults.reduce((sum, kr) => sum + kr.progress, 0);
+    return Math.round(total / goal.keyResults.length);
+  };
+
+  const deriveGoalStatusFromKeyResults = (goal: Goal): KeyResultStatus => {
+    if (goal.keyResults.some((kr) => kr.status === "off-track")) {
+      return "off-track";
+    }
+    if (goal.keyResults.some((kr) => kr.status === "at-risk")) {
+      return "at-risk";
+    }
+    return "on-track";
+  };
+
+  const deriveGoalStatus = (goal: Goal): KeyResultStatus => {
+    if (goal.statusOverride) {
+      return goal.statusOverride;
+    }
+    return deriveGoalStatusFromKeyResults(goal);
   };
 
   const { monthsLived, hasValidBirthdate } = useMemo(() => {
@@ -657,6 +1164,17 @@ export default function Home() {
           >
             Time
           </button>
+          <button
+            type="button"
+            onClick={() => setView("goals")}
+            className={`rounded-full px-4 py-1 transition ${
+              view === "goals"
+                ? "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-[var(--foreground)]"
+                : "text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]"
+            }`}
+          >
+            Goals
+          </button>
         </nav>
         <div className="flex items-center gap-3">
           <button
@@ -777,11 +1295,6 @@ export default function Home() {
                   ⚙️
                 </button>
               </div>
-              <datalist id="time-select-options">
-                {TIME_OPTIONS.map((time) => (
-                  <option key={`time-option-${time}`} value={time} />
-                ))}
-              </datalist>
 
               {isEditingFocus && (
                 <div className="mx-auto mt-6 max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_3%,transparent)] p-6 text-left backdrop-blur">
@@ -860,6 +1373,281 @@ export default function Home() {
             </section>
           )}
 
+          {view === "goals" && (
+            <section className="mx-auto mt-10 flex max-w-5xl flex-col gap-6 text-left">
+              <div className="space-y-4">
+                {goals.length === 0 && (
+                  <p className="text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                    No goals yet. Define your first objective above to start tracking OKRs.
+                  </p>
+                )}
+                {goals.map((goal) => {
+                  const progress = computeGoalProgress(goal);
+                  const status = deriveGoalStatus(goal);
+                  const draft = krDrafts[goal.id] ?? { title: "", target: "" };
+                  return (
+                    <div
+                      key={goal.id}
+                      className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex flex-1 flex-col">
+                          {activeGoalFieldEdit?.goalId === goal.id &&
+                          activeGoalFieldEdit.field === "title" ? (
+                            <input
+                              type="text"
+                              value={goalFieldDrafts[goal.id]?.title ?? goal.title}
+                              onChange={(event) =>
+                                handleGoalFieldDraftChange(
+                                  goal.id,
+                                  "title",
+                                  event.target.value
+                                )
+                              }
+                              onBlur={() => commitGoalFieldEdit(goal.id, "title")}
+                              onKeyDown={(event) =>
+                                handleGoalFieldKeyDown(event, goal.id, "title")
+                              }
+                              autoFocus
+                              className="w-full border-b border-transparent bg-transparent text-2xl font-light text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => beginGoalFieldEdit(goal, "title")}
+                              className="text-left text-2xl font-light text-[var(--foreground)] transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
+                            >
+                              {goal.title}
+                            </button>
+                          )}
+                          {activeGoalFieldEdit?.goalId === goal.id &&
+                          activeGoalFieldEdit.field === "timeframe" ? (
+                            <input
+                              type="text"
+                              value={
+                                goalFieldDrafts[goal.id]?.timeframe ?? goal.timeframe
+                              }
+                              onChange={(event) =>
+                                handleGoalFieldDraftChange(
+                                  goal.id,
+                                  "timeframe",
+                                  event.target.value
+                                )
+                              }
+                              onBlur={() => commitGoalFieldEdit(goal.id, "timeframe")}
+                              onKeyDown={(event) =>
+                                handleGoalFieldKeyDown(event, goal.id, "timeframe")
+                              }
+                              autoFocus
+                              className="mt-1 w-full border-b border-transparent bg-transparent text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] outline-none focus:border-[var(--foreground)]"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => beginGoalFieldEdit(goal, "timeframe")}
+                              className="mt-1 text-left text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:text-[var(--foreground)]"
+                            >
+                              {goal.timeframe}
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveGoal(goal.id)}
+                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-[var(--foreground)]"
+                            aria-label="Remove goal"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-4" />
+
+                      <div className="mt-5 space-y-3">
+                        {goal.keyResults.map((kr) => {
+                          const krKey = krFieldKey(goal.id, kr.id);
+                          const isEditingKrTitle =
+                            activeKrFieldEdit?.goalId === goal.id &&
+                            activeKrFieldEdit.krId === kr.id &&
+                            activeKrFieldEdit.field === "title";
+                          return (
+                            <div
+                              key={kr.id}
+                              className="rounded-2xl bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)] p-4"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex-1 space-y-1">
+                                  {isEditingKrTitle ? (
+                                    <input
+                                      type="text"
+                                      value={
+                                        krFieldDrafts[krKey]?.title ?? kr.title
+                                      }
+                                      onChange={(event) =>
+                                        handleKrFieldDraftChange(
+                                          goal.id,
+                                          kr.id,
+                                          event.target.value
+                                        )
+                                      }
+                                      onBlur={() =>
+                                        commitKrFieldEdit(goal.id, kr.id)
+                                      }
+                                      onKeyDown={(event) =>
+                                        handleKeyResultFieldKeyDown(
+                                          event,
+                                          goal.id,
+                                          kr.id,
+                                          )
+                                        }
+                                      autoFocus
+                                      className="w-full border-b border-transparent bg-transparent text-sm font-medium text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                                    />
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        beginKrFieldEdit(goal.id, kr, "title")
+                                      }
+                                      className="text-left text-sm font-medium text-[var(--foreground)] transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
+                                    >
+                                      {kr.title || "Untitled key result"}
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      cycleKeyResultStatus(goal.id, kr.id)
+                                    }
+                                    className={`rounded-full px-3 py-1 text-xs uppercase tracking-[0.2em] ${goalStatusBadge(
+                                      kr.status
+                                    )}`}
+                                  >
+                                {kr.status === "started"
+                                  ? "Started"
+                                  : kr.status === "pending"
+                                  ? "Pending"
+                                  : kr.status === "on-hold"
+                                  ? "On hold"
+                                  : "Completed"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleRemoveKeyResult(goal.id, kr.id)
+                                    }
+                                    className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-[var(--foreground)]"
+                                    aria-label="Remove key result"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="mt-3" />
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {activeKrDraftGoalId === goal.id ? (
+                        <div className="mt-5 rounded-2xl border border-dashed border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] p-4">
+                          <div className="mt-3">
+                            <input
+                              type="text"
+                              value={draft.title}
+                              onChange={(event) =>
+                                handleKrDraftChange(goal.id, event.target.value)
+                              }
+                              placeholder="Key result"
+                              className="w-full border-b border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent pb-1 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                            />
+                          </div>
+                          <div className="mt-4 flex items-center justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => cancelKeyResultDraft(goal.id)}
+                              className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAddKeyResult(goal.id)}
+                              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-1.5 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-[var(--foreground)]"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-4 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => startKeyResultDraft(goal.id)}
+                            className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-1.5 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-[var(--foreground)]"
+                          >
+                            + Add KR
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 flex justify-center">
+                {!isAddingGoal ? (
+                  <button
+                    type="button"
+                    onClick={startGoalDraft}
+                    className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-[var(--foreground)]"
+                  >
+                    + Add OKR
+                  </button>
+                ) : (
+                  <div className="w-full max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)] p-6">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <input
+                        type="text"
+                        value={newGoalTitle}
+                        onChange={(event) => setNewGoalTitle(event.target.value)}
+                        placeholder="Objective title"
+                        className="border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent pb-1 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                      />
+                      <input
+                        type="text"
+                        value={newGoalTimeframe}
+                        onChange={(event) => setNewGoalTimeframe(event.target.value)}
+                        placeholder="Timeframe (e.g., Q2 2025)"
+                        className="border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent pb-1 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                      />
+                    </div>
+                    <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={cancelGoalDraft}
+                        className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAddGoal}
+                        className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-[var(--foreground)]"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
           {view === "productivity" && (
             <section className="mt-8 grid gap-8 text-left lg:grid-cols-[1.2fr_1fr]">
               <div className="flex flex-col rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] p-6">
@@ -921,6 +1709,12 @@ export default function Home() {
               </div>
             </section>
           )}
+
+          <datalist id="time-select-options">
+            {TIME_OPTIONS.map((time) => (
+              <option key={`time-option-${time}`} value={time} />
+            ))}
+          </datalist>
         </div>
       </main>
 
