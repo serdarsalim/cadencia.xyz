@@ -1988,40 +1988,40 @@ const WeeklySchedule = ({
           <p className="text-3xl font-light text-[var(--foreground)]">{weekRangeLabel}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-col">
-            <input
-              type="week"
-              value={weekInputValue}
-              onChange={handleWeekPickerChange}
-              aria-label="Select week"
-              className="w-40 rounded-full border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
-            />
-          </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 text-2xl font-light">
             <button
               type="button"
               onClick={() => handleWeekNavigation(-1)}
-              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-3 py-2 text-sm transition hover:border-[var(--foreground)]"
+              className="rounded-full px-2 py-1 text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-[var(--foreground)]"
               aria-label="Previous week"
             >
               ‹
             </button>
-            <button
-              type="button"
-              onClick={() => goToWeek(new Date())}
-              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-sm transition hover:border-[var(--foreground)]"
-            >
-              This Week
-            </button>
+            <div className="flex flex-col">
+              <input
+                type="week"
+                value={weekInputValue}
+                onChange={handleWeekPickerChange}
+                aria-label="Select week"
+                className="w-40 rounded-full border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+              />
+            </div>
             <button
               type="button"
               onClick={() => handleWeekNavigation(1)}
-              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-3 py-2 text-sm transition hover:border-[var(--foreground)]"
+              className="rounded-full px-2 py-1 text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-[var(--foreground)]"
               aria-label="Next week"
             >
               ›
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => goToWeek(new Date())}
+            className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-sm transition hover:border-[var(--foreground)]"
+          >
+            Today
+          </button>
         </div>
       </div>
 
