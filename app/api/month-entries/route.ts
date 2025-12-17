@@ -42,21 +42,24 @@ export async function POST(request: NextRequest) {
 
     const { monthEntries } = await request.json()
 
-    // Delete existing month entries for this user
-    await prisma.monthEntry.deleteMany({
-      where: { userId: user.id }
-    })
-
-    // Create new month entries
-    if (monthEntries && monthEntries.length > 0) {
-      await prisma.monthEntry.createMany({
-        data: monthEntries.map((entry: any) => ({
-          userId: user.id,
-          monthKey: entry.monthKey,
-          content: entry.content,
-        }))
+    // Use a transaction to delete and recreate all entries atomically
+    await prisma.$transaction(async (tx) => {
+      // Delete existing month entries for this user
+      await tx.monthEntry.deleteMany({
+        where: { userId: user.id }
       })
-    }
+
+      // Create new month entries
+      if (monthEntries && monthEntries.length > 0) {
+        await tx.monthEntry.createMany({
+          data: monthEntries.map((entry: any) => ({
+            userId: user.id,
+            monthKey: entry.monthKey,
+            content: entry.content,
+          }))
+        })
+      }
+    })
 
     // Fetch and return updated month entries
     const updatedUser = await prisma.user.findUnique({

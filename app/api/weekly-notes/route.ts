@@ -42,21 +42,24 @@ export async function POST(request: NextRequest) {
 
     const { weeklyNotes } = await request.json()
 
-    // Delete existing weekly notes for this user
-    await prisma.weeklyNote.deleteMany({
-      where: { userId: user.id }
-    })
-
-    // Create new weekly notes
-    if (weeklyNotes && weeklyNotes.length > 0) {
-      await prisma.weeklyNote.createMany({
-        data: weeklyNotes.map((note: any) => ({
-          userId: user.id,
-          weekKey: note.weekKey,
-          content: note.content,
-        }))
+    // Use a transaction to delete and recreate all notes atomically
+    await prisma.$transaction(async (tx) => {
+      // Delete existing weekly notes for this user
+      await tx.weeklyNote.deleteMany({
+        where: { userId: user.id }
       })
-    }
+
+      // Create new weekly notes
+      if (weeklyNotes && weeklyNotes.length > 0) {
+        await tx.weeklyNote.createMany({
+          data: weeklyNotes.map((note: any) => ({
+            userId: user.id,
+            weekKey: note.weekKey,
+            content: note.content,
+          }))
+        })
+      }
+    })
 
     // Fetch and return updated weekly notes
     const updatedUser = await prisma.user.findUnique({

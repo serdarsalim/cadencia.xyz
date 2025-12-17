@@ -46,22 +46,25 @@ export async function POST(request: NextRequest) {
 
     const { focusAreas } = await request.json()
 
-    // Delete existing focus areas for this user
-    await prisma.focusArea.deleteMany({
-      where: { userId: user.id }
-    })
-
-    // Create new focus areas
-    if (focusAreas && focusAreas.length > 0) {
-      await prisma.focusArea.createMany({
-        data: focusAreas.map((area: any, index: number) => ({
-          userId: user.id,
-          name: area.name,
-          hours: area.hours,
-          order: area.order !== undefined ? area.order : index,
-        }))
+    // Use a transaction to delete and recreate all focus areas atomically
+    await prisma.$transaction(async (tx) => {
+      // Delete existing focus areas for this user
+      await tx.focusArea.deleteMany({
+        where: { userId: user.id }
       })
-    }
+
+      // Create new focus areas
+      if (focusAreas && focusAreas.length > 0) {
+        await tx.focusArea.createMany({
+          data: focusAreas.map((area: any, index: number) => ({
+            userId: user.id,
+            name: area.name,
+            hours: area.hours,
+            order: area.order !== undefined ? area.order : index,
+          }))
+        })
+      }
+    })
 
     // Fetch and return updated focus areas
     const updatedUser = await prisma.user.findUnique({

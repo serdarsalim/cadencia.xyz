@@ -42,21 +42,24 @@ export async function POST(request: NextRequest) {
 
     const { productivityRatings } = await request.json()
 
-    // Delete existing productivity ratings for this user
-    await prisma.productivityRating.deleteMany({
-      where: { userId: user.id }
-    })
-
-    // Create new productivity ratings
-    if (productivityRatings && productivityRatings.length > 0) {
-      await prisma.productivityRating.createMany({
-        data: productivityRatings.map((rating: any) => ({
-          userId: user.id,
-          key: rating.key,
-          rating: rating.rating,
-        }))
+    // Use a transaction to delete and recreate all ratings atomically
+    await prisma.$transaction(async (tx) => {
+      // Delete existing productivity ratings for this user
+      await tx.productivityRating.deleteMany({
+        where: { userId: user.id }
       })
-    }
+
+      // Create new productivity ratings
+      if (productivityRatings && productivityRatings.length > 0) {
+        await tx.productivityRating.createMany({
+          data: productivityRatings.map((rating: any) => ({
+            userId: user.id,
+            key: rating.key,
+            rating: rating.rating,
+          }))
+        })
+      }
+    })
 
     // Fetch and return updated productivity ratings
     const updatedUser = await prisma.user.findUnique({

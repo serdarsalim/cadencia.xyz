@@ -49,44 +49,47 @@ export async function POST(request: NextRequest) {
 
     const { goals } = await request.json()
 
-    // Delete existing goals for this user (cascades to key results)
-    await prisma.goal.deleteMany({
-      where: { userId: user.id }
-    })
-
-    // Create new goals with key results
-    if (goals && goals.length > 0) {
-      await prisma.goal.createMany({
-        data: goals.map((goal: any) => ({
-          userId: user.id,
-          title: goal.title,
-          timeframe: goal.timeframe,
-          statusOverride: goal.statusOverride || null,
-        }))
+    // Use a transaction to delete and recreate all goals atomically
+    await prisma.$transaction(async (tx) => {
+      // Delete existing goals for this user (cascades to key results)
+      await tx.goal.deleteMany({
+        where: { userId: user.id }
       })
 
-      // Fetch created goals to get IDs
-      const createdGoals = await prisma.goal.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: 'asc' }
-      })
+      // Create new goals with key results
+      if (goals && goals.length > 0) {
+        await tx.goal.createMany({
+          data: goals.map((goal: any) => ({
+            userId: user.id,
+            title: goal.title,
+            timeframe: goal.timeframe,
+            statusOverride: goal.statusOverride || null,
+          }))
+        })
 
-      // Create key results for each goal
-      for (let i = 0; i < goals.length; i++) {
-        const goal = goals[i]
-        const createdGoal = createdGoals[i]
+        // Fetch created goals to get IDs
+        const createdGoals = await tx.goal.findMany({
+          where: { userId: user.id },
+          orderBy: { createdAt: 'asc' }
+        })
 
-        if (goal.keyResults && goal.keyResults.length > 0) {
-          await prisma.keyResult.createMany({
-            data: goal.keyResults.map((kr: any) => ({
-              goalId: createdGoal.id,
-              title: kr.title,
-              status: kr.status || 'pending'
-            }))
-          })
+        // Create key results for each goal
+        for (let i = 0; i < goals.length; i++) {
+          const goal = goals[i]
+          const createdGoal = createdGoals[i]
+
+          if (goal.keyResults && goal.keyResults.length > 0) {
+            await tx.keyResult.createMany({
+              data: goal.keyResults.map((kr: any) => ({
+                goalId: createdGoal.id,
+                title: kr.title,
+                status: kr.status || 'pending'
+              }))
+            })
+          }
         }
       }
-    }
+    })
 
     // Fetch and return updated goals
     const updatedUser = await prisma.user.findUnique({
