@@ -434,6 +434,7 @@ export default function Home() {
   const weeklyNotesSaveTimeoutRef = useRef<number | null>(null);
   const isSavingWeeklyNotesRef = useRef(false);
   const lastServerSavedWeeklyNotesRef = useRef<string | null>(null);
+  const hasLoadedServerDataRef = useRef(false);
 
   const triggerScheduleSave = useCallback(() => {
     if (!userEmail) {
@@ -680,6 +681,7 @@ export default function Home() {
       window.clearTimeout(weeklyNotesSaveTimeoutRef.current);
       weeklyNotesSaveTimeoutRef.current = null;
     }
+    hasLoadedServerDataRef.current = false;
   }, [userEmail]);
 
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -721,6 +723,7 @@ export default function Home() {
               shouldOpenProfileModal = !complete;
             }
           }
+          hasLoadedServerDataRef.current = true;
         } else {
           // Guest - load demo data
           setGoals(demoGoals);
@@ -796,8 +799,11 @@ export default function Home() {
         })
       );
 
-      // Save to database only if logged in
+      // Save to database only if logged in and data loaded
       if (userEmail) {
+        if (!hasLoadedServerDataRef.current) {
+          return;
+        }
         saveProfile({
           personName: personName || null,
           dateOfBirth: dateOfBirth || null,
@@ -828,8 +834,11 @@ export default function Home() {
         JSON.stringify(focusAreas)
       );
 
-      // Save to database only if logged in
+      // Save to database only if logged in and data loaded
       if (userEmail) {
+        if (!hasLoadedServerDataRef.current) {
+          return;
+        }
         saveFocusAreas(focusAreas);
       }
     } catch (error) {
@@ -852,6 +861,10 @@ export default function Home() {
       } catch (error) {
         console.error("Failed to cache month entries", error);
       }
+      return;
+    }
+
+    if (!hasLoadedServerDataRef.current) {
       return;
     }
 
@@ -889,6 +902,10 @@ export default function Home() {
       } catch (error) {
         console.error("Failed to cache productivity ratings", error);
       }
+      return;
+    }
+
+    if (!hasLoadedServerDataRef.current) {
       return;
     }
 
@@ -950,11 +967,15 @@ export default function Home() {
         console.warn("Could not save schedule entries to localStorage due to quota limits");
       }
 
-      pendingScheduleRef.current = scheduleEntries;
-
       if (!userEmail) {
         return;
       }
+
+      if (!hasLoadedServerDataRef.current) {
+        return;
+      }
+
+      pendingScheduleRef.current = scheduleEntries;
 
       if (scheduleSaveTimeoutRef.current) {
         window.clearTimeout(scheduleSaveTimeoutRef.current);
@@ -990,6 +1011,10 @@ export default function Home() {
       } catch (error) {
         console.error("Failed to cache goals for guest", error);
       }
+      return;
+    }
+
+    if (!hasLoadedServerDataRef.current) {
       return;
     }
 
@@ -1042,6 +1067,10 @@ export default function Home() {
       } catch (error) {
         console.error("Failed to cache weekly notes", error);
       }
+      return;
+    }
+
+    if (!hasLoadedServerDataRef.current) {
       return;
     }
 
