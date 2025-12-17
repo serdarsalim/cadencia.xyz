@@ -1,6 +1,9 @@
+// Improved goals API route with validation and safer transactions
+
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { goalsArraySchema } from '@/lib/schemas'
 
 export async function GET() {
   try {
@@ -47,68 +50,80 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const { goals } = await request.json()
+    const body = await request.json()
 
-    // Use a transaction to delete and recreate all goals atomically
-    await prisma.$transaction(async (tx) => {
-      // Delete existing goals for this user (cascades to key results)
-      await tx.goal.deleteMany({
-        where: { userId: user.id }
-      })
+    // Validate input
+    const validationResult = goalsArraySchema.safeParse(body.goals)
+    if (!validationResult.success) {
+      return NextResponse.json(
+        { error: 'Invalid goals data', details: validationResult.error.issues },
+        { status: 400 }
+      )
+    }
 
-      // Create new goals with key results
-      if (goals && goals.length > 0) {
-        await tx.goal.createMany({
-          data: goals.map((goal: any) => ({
-            userId: user.id,
-            title: goal.title,
-            timeframe: goal.timeframe,
-            statusOverride: goal.statusOverride || null,
-          }))
+    const goals = validationResult.data
+
+    // Use a transaction with proper error handling
+    const result = await prisma.$transaction(async (tx) => {
+      try {
+        // Step 1: Delete existing goals (cascades to key results)
+        await tx.goal.deleteMany({
+          where: { userId: user.id }
         })
 
-        // Fetch created goals to get IDs
-        const createdGoals = await tx.goal.findMany({
-          where: { userId: user.id },
-          orderBy: { createdAt: 'asc' }
-        })
-
-        // Create key results for each goal
-        for (let i = 0; i < goals.length; i++) {
-          const goal = goals[i]
-          const createdGoal = createdGoals[i]
-
-          if (goal.keyResults && goal.keyResults.length > 0) {
-            await tx.keyResult.createMany({
-              data: goal.keyResults.map((kr: any) => ({
-                goalId: createdGoal.id,
-                title: kr.title,
-                status: kr.status || 'pending'
-              }))
-            })
-          }
+        // Step 2: If no goals to create, return empty array
+        if (!goals || goals.length === 0) {
+          return []
         }
+
+        // Step 3: Create goals one by one to maintain proper relationship with key results
+        const createdGoals = []
+
+        for (const goal of goals) {
+          const created = await tx.goal.create({
+            data: {
+              userId: user.id,
+              title: goal.title,
+              timeframe: goal.timeframe,
+              statusOverride: goal.statusOverride || null,
+              keyResults: {
+                create: goal.keyResults.map(kr => ({
+                  title: kr.title,
+                  status: kr.status
+                }))
+              }
+            },
+            include: {
+              keyResults: true
+            }
+          })
+          createdGoals.push(created)
+        }
+
+        return createdGoals
+      } catch (txError) {
+        console.error('Transaction error:', txError)
+        throw txError
       }
+    }, {
+      maxWait: 5000, // Wait max 5s to get a connection
+      timeout: 10000, // Allow max 10s for transaction
     })
 
-    // Fetch and return updated goals
-    const updatedUser = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      include: {
-        goals: {
-          include: {
-            keyResults: true
-          },
-          orderBy: {
-            createdAt: 'asc'
-          }
-        }
-      }
-    })
-
-    return NextResponse.json({ goals: updatedUser?.goals || [] })
+    return NextResponse.json({ goals: result })
   } catch (error) {
     console.error('Error saving goals:', error)
+
+    // More specific error messages
+    if (error instanceof Error) {
+      if (error.message.includes('Unique constraint')) {
+        return NextResponse.json({ error: 'Duplicate goal detected' }, { status: 409 })
+      }
+      if (error.message.includes('timeout')) {
+        return NextResponse.json({ error: 'Database timeout - please try again' }, { status: 504 })
+      }
+    }
+
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
