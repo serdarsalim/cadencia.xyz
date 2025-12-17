@@ -277,8 +277,10 @@ export default function Home() {
   const [activeKrFieldEdit, setActiveKrFieldEdit] = useState<{
     goalId: string;
     krId: string;
-    field: "title" | "target";
+    field: "title";
   } | null>(null);
+  const [weeklyNotes, setWeeklyNotes] = useState<Record<string, string>>({});
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -373,6 +375,14 @@ export default function Home() {
         const parsedGoals = JSON.parse(storedGoals) as Goal[];
         if (Array.isArray(parsedGoals)) {
           setGoals(parsedGoals);
+        }
+      }
+
+      const storedWeeklyNotes = window.localStorage.getItem("timespent-weekly-notes");
+      if (storedWeeklyNotes) {
+        const parsedNotes = JSON.parse(storedWeeklyNotes) as Record<string, string>;
+        if (parsedNotes && typeof parsedNotes === "object") {
+          setWeeklyNotes(parsedNotes);
         }
       }
 
@@ -523,6 +533,38 @@ export default function Home() {
     }
   }, [weekStartDay]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "timespent-weekly-notes",
+        JSON.stringify(weeklyNotes)
+      );
+    } catch (error) {
+      console.error("Failed to cache weekly notes", error);
+    }
+  }, [weeklyNotes]);
+
+  // Set current week as selected by default when viewing productivity tracker
+  useEffect(() => {
+    if (view === "productivity" && selectedWeek === null) {
+      const weeks = buildWeeksForYear(productivityYear);
+      const today = new Date();
+      const currentWeek = weeks.find((week) =>
+        week.dayKeys.some((dayKey) => {
+          const [y, m, d] = dayKey.split("-").map(Number);
+          const keyDate = new Date(y!, m! - 1, d);
+          return (
+            keyDate.getFullYear() === today.getFullYear() &&
+            keyDate.getMonth() === today.getMonth() &&
+            keyDate.getDate() === today.getDate()
+          );
+        })
+      );
+      if (currentWeek) {
+        setSelectedWeek(currentWeek.weekNumber);
+      }
+    }
+  }, [view, productivityYear, selectedWeek]);
 
   const isProfileComplete = Boolean(personName && dateOfBirth && email);
   const isProfileEditorVisible = isEditingProfile;
@@ -820,7 +862,7 @@ const beginKrFieldEdit = (
   const cancelKrFieldEdit = (
     goalId: string,
     krId: string,
-    field: "title" | "target"
+    field: "title"
   ) => {
     if (
       activeKrFieldEdit?.goalId === goalId &&
@@ -900,25 +942,6 @@ const beginKrFieldEdit = (
     );
   };
 
-  const updateKeyResultProgress = (
-    goalId: string,
-    krId: string,
-    progress: number
-  ) => {
-    setGoals((prev) =>
-      prev.map((goal) =>
-        goal.id === goalId
-          ? {
-              ...goal,
-              keyResults: goal.keyResults.map((kr) =>
-                kr.id === krId ? { ...kr, progress } : kr
-              ),
-            }
-          : goal
-      )
-    );
-  };
-
   const cycleKeyResultStatus = (goalId: string, krId: string) => {
     const order: KeyResultStatus[] = ["started", "pending", "on-hold", "completed"];
     setGoals((prev) =>
@@ -951,7 +974,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
     case "completed":
       return "bg-[#dcfce7] text-[#15803d]";
     default:
-      return "bg-[color-mix(in_srgb,var(--foreground)_12%,transparent)] text-[var(--foreground)]";
+      return "bg-[color-mix(in_srgb,var(--foreground)_12%,transparent)] text-foreground";
   }
 };
 
@@ -983,22 +1006,20 @@ const goalStatusBadge = (status: KeyResultStatus) => {
     );
   };
 
-  const computeGoalProgress = (goal: Goal) => {
-    if (goal.keyResults.length === 0) {
-      return 0;
-    }
-    const total = goal.keyResults.reduce((sum, kr) => sum + kr.progress, 0);
-    return Math.round(total / goal.keyResults.length);
-  };
-
   const deriveGoalStatusFromKeyResults = (goal: Goal): KeyResultStatus => {
-    if (goal.keyResults.some((kr) => kr.status === "off-track")) {
-      return "off-track";
+    if (
+      goal.keyResults.length > 0 &&
+      goal.keyResults.every((kr) => kr.status === "completed")
+    ) {
+      return "completed";
     }
-    if (goal.keyResults.some((kr) => kr.status === "at-risk")) {
-      return "at-risk";
+    if (goal.keyResults.some((kr) => kr.status === "on-hold")) {
+      return "on-hold";
     }
-    return "on-track";
+    if (goal.keyResults.some((kr) => kr.status === "pending")) {
+      return "pending";
+    }
+    return "started";
   };
 
   const deriveGoalStatus = (goal: Goal): KeyResultStatus => {
@@ -1147,7 +1168,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             onClick={() => setView("productivity")}
             className={`rounded-full px-4 py-1 transition ${
               view === "productivity"
-                ? "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-[var(--foreground)]"
+                ? "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-foreground"
                 : "text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]"
             }`}
           >
@@ -1158,7 +1179,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             onClick={() => setView("goals")}
             className={`rounded-full px-4 py-1 transition ${
               view === "goals"
-                ? "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-[var(--foreground)]"
+                ? "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-foreground"
                 : "text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]"
             }`}
           >
@@ -1214,9 +1235,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   </p>
                 )}
                 {goals.map((goal) => {
-                  const progress = computeGoalProgress(goal);
                   const status = deriveGoalStatus(goal);
-                  const draft = krDrafts[goal.id] ?? { title: "", target: "" };
+                  const draft = krDrafts[goal.id] ?? { title: "" };
                   return (
                     <div
                       key={goal.id}
@@ -1241,13 +1261,13 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                                 handleGoalFieldKeyDown(event, goal.id, "title")
                               }
                               autoFocus
-                              className="w-full border-b border-transparent bg-transparent text-2xl font-light text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                              className="w-full border-b border-transparent bg-transparent text-2xl font-light text-foreground outline-none focus:border-foreground"
                             />
                           ) : (
                             <button
                               type="button"
                               onClick={() => beginGoalFieldEdit(goal, "title")}
-                              className="text-left text-2xl font-light text-[var(--foreground)] transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
+                              className="text-left text-2xl font-light text-foreground transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
                             >
                               {goal.title}
                             </button>
@@ -1271,13 +1291,13 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                                 handleGoalFieldKeyDown(event, goal.id, "timeframe")
                               }
                               autoFocus
-                              className="mt-1 w-full border-b border-transparent bg-transparent text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] outline-none focus:border-[var(--foreground)]"
+                              className="mt-1 w-full border-b border-transparent bg-transparent text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] outline-none focus:border-foreground"
                             />
                           ) : (
                             <button
                               type="button"
                               onClick={() => beginGoalFieldEdit(goal, "timeframe")}
-                              className="mt-1 text-left text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:text-[var(--foreground)]"
+                              className="mt-1 text-left text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:text-foreground"
                             >
                               {goal.timeframe}
                             </button>
@@ -1287,7 +1307,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                           <button
                             type="button"
                             onClick={() => handleRemoveGoal(goal.id)}
-                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-[var(--foreground)]"
+                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
                             aria-label="Remove goal"
                           >
                             ✕
@@ -1326,17 +1346,18 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                                         )
                                       }
                                       onBlur={() =>
-                                        commitKrFieldEdit(goal.id, kr.id)
+                                        commitKrFieldEdit(goal.id, kr.id, "title")
                                       }
                                       onKeyDown={(event) =>
                                         handleKeyResultFieldKeyDown(
                                           event,
                                           goal.id,
                                           kr.id,
-                                          )
-                                        }
+                                          "title"
+                                        )
+                                      }
                                       autoFocus
-                                      className="w-full border-b border-transparent bg-transparent text-sm font-medium text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                                      className="w-full border-b border-transparent bg-transparent text-sm font-medium text-foreground outline-none focus:border-foreground"
                                     />
                                   ) : (
                                     <button
@@ -1344,7 +1365,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                                       onClick={() =>
                                         beginKrFieldEdit(goal.id, kr, "title")
                                       }
-                                      className="text-left text-sm font-medium text-[var(--foreground)] transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
+                                      className="text-left text-sm font-medium text-foreground transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
                                     >
                                       {kr.title || "Untitled key result"}
                                     </button>
@@ -1373,7 +1394,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                                     onClick={() =>
                                       handleRemoveKeyResult(goal.id, kr.id)
                                     }
-                                    className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-[var(--foreground)]"
+                                    className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
                                     aria-label="Remove key result"
                                   >
                                     ✕
@@ -1382,7 +1403,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                                     <button
                                       type="button"
                                       onClick={() => startKeyResultDraft(goal.id)}
-                                      className="flex h-7 w-7 items-center justify-center rounded-full text-base text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:text-[var(--foreground)]"
+                                      className="flex h-7 w-7 items-center justify-center rounded-full text-base text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:text-foreground"
                                       aria-label="Add key result"
                                     >
                                       +
@@ -1404,14 +1425,14 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                                   handleKrDraftChange(goal.id, event.target.value)
                                 }
                                 placeholder="Add a key result"
-                                className="w-full border-b border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent pb-1 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                                className="w-full border-b border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
                               />
                             </div>
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
                                 onClick={() => handleAddKeyResult(goal.id)}
-                                className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-1.5 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-[var(--foreground)]"
+                                className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-1.5 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
                               >
                                 Save
                               </button>
@@ -1430,7 +1451,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                             <button
                               type="button"
                               onClick={() => startKeyResultDraft(goal.id)}
-                              className="flex h-7 w-7 items-center justify-center rounded-full text-base text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:text-[var(--foreground)]"
+                              className="flex h-7 w-7 items-center justify-center rounded-full text-base text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:text-foreground"
                               aria-label="Add key result"
                             >
                               +
@@ -1448,7 +1469,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   <button
                     type="button"
                     onClick={startGoalDraft}
-                    className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-[var(--foreground)]"
+                    className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
                   >
                     + Add OKR
                   </button>
@@ -1460,14 +1481,14 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         value={newGoalTitle}
                         onChange={(event) => setNewGoalTitle(event.target.value)}
                         placeholder="Objective title"
-                        className="border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent pb-1 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                        className="border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
                       />
                       <input
                         type="text"
                         value={newGoalTimeframe}
                         onChange={(event) => setNewGoalTimeframe(event.target.value)}
                         placeholder="Timeframe (e.g., Q2 2025)"
-                        className="border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent pb-1 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                        className="border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
                       />
                     </div>
                     <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
@@ -1481,7 +1502,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                       <button
                         type="button"
                         onClick={handleAddGoal}
-                        className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-[var(--foreground)]"
+                        className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
                       >
                         Save
                       </button>
@@ -1504,18 +1525,29 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         Number.parseInt(event.target.value, 10) || 0
                       )
                     }
-                    className="w-28 border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent px-3 text-3xl text-[var(--foreground)] outline-none focus:border-[var(--foreground)] caret-[var(--foreground)] text-center"
+                    className="w-28 border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent px-3 text-3xl text-foreground outline-none focus:border-foreground caret-foreground text-center"
                   />
-                  <span>Productivity tracking</span>
+                  <span>
+                    {selectedWeek !== null
+                      ? (() => {
+                          const weekMeta = buildWeeksForYear(productivityYear).find(
+                            (w) => w.weekNumber === selectedWeek
+                          );
+                          return weekMeta
+                            ? `Week ${selectedWeek} • ${weekMeta.rangeLabel}`
+                            : `Week ${selectedWeek}`;
+                        })()
+                      : "Productivity tracking"}
+                  </span>
                 </div>
                 <div className="mb-6">
                   <ProductivityLegend />
                 </div>
                 <div className="flex-1">
                   <TinyEditor
-                    key={`productivity-goal-${productivityYear}`}
+                    key={selectedWeek !== null ? `week-notes-${productivityYear}-${selectedWeek}` : `productivity-goal-${productivityYear}`}
                     tinymceScriptSrc={TINYMCE_CDN}
-                    value={currentProductivityGoal}
+                    value={selectedWeek !== null ? (weeklyNotes[`week-${productivityYear}-${selectedWeek}`] ?? "") : currentProductivityGoal}
                     init={
                       {
                         menubar: false,
@@ -1528,13 +1560,19 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         toolbar:
                           "bold italic underline | bullist numlist | link removeformat",
                         branding: false,
+                        placeholder: selectedWeek !== null ? "Add notes for this week..." : "",
                       } as Record<string, unknown>
                     }
                     onEditorChange={(content) =>
-                      setProductivityGoals((prev) => ({
-                        ...prev,
-                        [productivityYear]: content,
-                      }))
+                      selectedWeek !== null
+                        ? setWeeklyNotes((prev) => ({
+                            ...prev,
+                            [`week-${productivityYear}-${selectedWeek}`]: content,
+                          }))
+                        : setProductivityGoals((prev) => ({
+                            ...prev,
+                            [productivityYear]: content,
+                          }))
                     }
                   />
                 </div>
@@ -1549,6 +1587,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   onToggleMode={() =>
                     setProductivityMode((prev) => (prev === "day" ? "week" : "day"))
                   }
+                  selectedWeek={selectedWeek}
+                  setSelectedWeek={setSelectedWeek}
                 />
               </div>
             </section>
@@ -1570,7 +1610,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           aria-modal="true"
         >
           <div
-            className="w-full max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[var(--background)] p-6 text-left shadow-2xl"
+            className="w-full max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 text-left shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -1598,7 +1638,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   value={personName}
                   onChange={(event) => setPersonName(event.target.value)}
                   placeholder="Your name"
-                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
                 />
               </label>
               <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
@@ -1607,7 +1647,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   type="date"
                   value={dateOfBirth}
                   onChange={(event) => setDateOfBirth(event.target.value)}
-                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
                 />
               </label>
               <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
@@ -1617,7 +1657,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="you@example.com"
-                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
                 />
               </label>
               <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
@@ -1627,7 +1667,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   onChange={(event) =>
                     setWeekStartDay(Number(event.target.value) as WeekdayIndex)
                   }
-                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
                 >
                   {WEEK_START_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -1646,13 +1686,13 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
           onClick={() => setSelectedMonth(null)}
         >
-          <div className="w-full max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[var(--background)] p-6 text-left shadow-2xl">
+          <div className="w-full max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 text-left shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]">
                   Month journal
                 </p>
-                <p className="text-xl font-light text-[var(--foreground)]">
+                <p className="text-xl font-light text-foreground">
                   {selectedMonthLabel ??
                     `Year ${selectedMonth.year}, month ${selectedMonth.month}`}
                   {selectedMonthAge && (
@@ -1767,7 +1807,7 @@ const YearRow = ({
           selectedMonth?.year === yearNumber &&
           selectedMonth?.month === displayMonth;
         const baseClasses =
-          "h-3 w-3 rounded-[2px] transition sm:h-4 sm:w-4 focus:outline-none";
+          "h-3 w-3 rounded-xs transition sm:h-4 sm:w-4 focus:outline-none";
 
         return (
           <button
@@ -1776,7 +1816,7 @@ const YearRow = ({
             onClick={() => onSelectMonth(yearNumber, displayMonth)}
             className={`${baseClasses} ${
               isSelected
-                ? "bg-[var(--foreground)] ring-2 ring-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
+                ? "bg-foreground ring-2 ring-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
                 : hasEntry
                   ? "bg-[#f6ad55] hover:bg-[#f28c28]"
                   : "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] hover:bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]"
@@ -1936,7 +1976,7 @@ const WeeklyAllocationGrid = ({
             {cells.map((cell, idx) => (
               <div
                 key={`week-cell-${idx}-${cell.label}`}
-                className="aspect-square rounded-[2px] border border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:scale-110 hover:z-10 transition-transform cursor-pointer"
+                className="aspect-square rounded-xs border border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:scale-110 hover:z-10 transition-transform cursor-pointer"
                 style={{ backgroundColor: cell.color }}
                 title={cell.tooltip}
               />
@@ -1971,6 +2011,8 @@ type ProductivityGridProps = {
   setRatings: React.Dispatch<React.SetStateAction<Record<string, number | null>>>;
   mode: "day" | "week";
   onToggleMode: () => void;
+  selectedWeek: number | null;
+  setSelectedWeek: React.Dispatch<React.SetStateAction<number | null>>;
 };
 
 const ProductivityGrid = ({
@@ -1979,6 +2021,8 @@ const ProductivityGrid = ({
   setRatings,
   mode,
   onToggleMode,
+  selectedWeek,
+  setSelectedWeek,
 }: ProductivityGridProps) => {
   const days = Array.from({ length: 31 }, (_, idx) => idx + 1);
   const months = Array.from({ length: 12 }, (_, idx) => idx);
@@ -2000,7 +2044,7 @@ const ProductivityGrid = ({
       <button
         type="button"
         onClick={onToggleMode}
-        className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-2 py-0.5 text-[9px] uppercase text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-[var(--foreground)]"
+        className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-2 py-0.5 text-[9px] uppercase text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
         aria-label={`Switch to ${mode === "week" ? "day" : "week"} view`}
       >
         {toggleLabel}
@@ -2010,6 +2054,19 @@ const ProductivityGrid = ({
 
   const handleCycle = (monthIndex: number, day: number) => {
     const key = `${year}-${monthIndex + 1}-${day}`;
+
+    // Find which week this day belongs to
+    const targetDate = new Date(year, monthIndex, day);
+    const weekForDay = weeks.find((week) =>
+      week.dayKeys.some((dayKey) => {
+        const [y, m, d] = dayKey.split("-").map(Number);
+        return y === year && m === monthIndex + 1 && d === day;
+      })
+    );
+    if (weekForDay) {
+      setSelectedWeek(weekForDay.weekNumber);
+    }
+
     setRatings((prev) => {
       const current = prev[key];
       let next: number | null;
@@ -2027,6 +2084,8 @@ const ProductivityGrid = ({
 
   const handleWeekCycle = (weekNumber: number) => {
     const key = `week-${year}-${weekNumber}`;
+    setSelectedWeek(weekNumber);
+
     setRatings((prev) => {
       const current = prev[key];
       let next: number | null;
@@ -2071,10 +2130,31 @@ const ProductivityGrid = ({
         })}
       </div>
       <div className="mt-2 space-y-1">
-        {days.map((dayOfMonth) => (
+        {days.map((dayOfMonth) => {
+          // Find which week this day belongs to (check first valid month)
+          let dayWeekNumber = null;
+          for (const monthIndex of months) {
+            if (dayOfMonth <= daysInMonth(year, monthIndex)) {
+              const weekForDay = weeks.find((week) =>
+                week.dayKeys.some((dayKey) => {
+                  const [y, m, d] = dayKey.split("-").map(Number);
+                  return y === year && m === monthIndex + 1 && d === dayOfMonth;
+                })
+              );
+              if (weekForDay) {
+                dayWeekNumber = weekForDay.weekNumber;
+                break;
+              }
+            }
+          }
+          const rowBgClass = dayWeekNumber && dayWeekNumber % 2 === 0
+            ? "bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]"
+            : "";
+
+          return (
           <div
             key={`row-${dayOfMonth}`}
-            className="grid items-center gap-2"
+            className={`grid items-center gap-2 -mx-6 px-6 ${rowBgClass}`}
             style={{
               gridTemplateColumns: `${dayColumnWidth} repeat(12, minmax(0, 1fr))`,
             }}
@@ -2096,7 +2176,7 @@ const ProductivityGrid = ({
                 return (
                   <span
                     key={`${key}-empty`}
-                    className="h-4 w-full rounded-[4px] border border-dashed border-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
+                    className="h-4 w-full rounded-sm border border-dashed border-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
                     aria-hidden="true"
                   />
                 );
@@ -2113,7 +2193,7 @@ const ProductivityGrid = ({
                   type="button"
                   key={key}
                   onClick={() => handleCycle(monthIndex, dayOfMonth)}
-                  className={`h-4 w-full rounded-[4px] border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${
+                  className={`h-4 w-full rounded-sm border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${
                     hasValue
                       ? scale.color
                       : "bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
@@ -2131,7 +2211,8 @@ const ProductivityGrid = ({
               );
             })}
           </div>
-        ))}
+        );
+        })}
       </div>
     </div>
   );
@@ -2215,7 +2296,7 @@ const ProductivityGrid = ({
                       type="button"
                       onClick={() => handleWeekCycle(week.weekNumber)}
                       disabled={hasDayScores}
-                      className={`h-4 w-full rounded-[4px] border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${
+                      className={`h-4 w-full rounded-sm border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${
                         hasDayScores
                           ? "cursor-not-allowed opacity-80"
                           : "hover:opacity-90"
@@ -2624,16 +2705,20 @@ const WeeklySchedule = ({
       latestResolution = resolution;
       return resolution.entries;
     });
-    if (!latestResolution || latestResolution.targetIndex === null) {
+    if (!latestResolution) {
+      return entry;
+    }
+    const resolutionResult = latestResolution as EntryResolution;
+    if (resolutionResult.targetIndex === null) {
       return entry;
     }
     return {
       ...entry,
-      dayKey: latestResolution.targetDayKey,
-      index: latestResolution.targetIndex,
+      dayKey: resolutionResult.targetDayKey,
+      index: resolutionResult.targetIndex,
       meta: {
-        originalDayKey: latestResolution.targetDayKey,
-        originalEntryIndex: latestResolution.targetIndex,
+        originalDayKey: resolutionResult.targetDayKey,
+        originalEntryIndex: resolutionResult.targetIndex,
       },
       canChooseScope: false,
       scope: "single",
@@ -2885,14 +2970,14 @@ const WeeklySchedule = ({
     <div className="mx-auto w-full text-left">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-3xl font-light text-[var(--foreground)]">{weekRangeLabel}</p>
+          <p className="text-3xl font-light text-foreground">{weekRangeLabel}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 text-2xl font-light">
             <button
               type="button"
               onClick={() => handleWeekNavigation(-1)}
-              className="rounded-full px-2 py-1 text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-[var(--foreground)]"
+              className="rounded-full px-2 py-1 text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
               aria-label="Previous week"
             >
               ‹
@@ -2903,13 +2988,13 @@ const WeeklySchedule = ({
                 value={weekInputValue}
                 onChange={handleWeekPickerChange}
                 aria-label="Select week"
-                className="w-40 rounded-full border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                className="w-40 rounded-full border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
               />
             </div>
             <button
               type="button"
               onClick={() => handleWeekNavigation(1)}
-              className="rounded-full px-2 py-1 text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-[var(--foreground)]"
+              className="rounded-full px-2 py-1 text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
               aria-label="Next week"
             >
               ›
@@ -2918,7 +3003,7 @@ const WeeklySchedule = ({
           <button
             type="button"
             onClick={() => goToWeek(new Date())}
-            className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-sm transition hover:border-[var(--foreground)]"
+            className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-sm transition hover:border-foreground"
           >
             Today
           </button>
@@ -2968,7 +3053,7 @@ const WeeklySchedule = ({
                   <button
                     type="button"
                     onClick={() => addEntry(dayKey)}
-                    className="flex h-6 w-6 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-xs transition hover:border-[var(--foreground)]"
+                    className="flex h-6 w-6 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-xs transition hover:border-foreground"
                     aria-label="Add task"
                   >
                     +
@@ -3011,7 +3096,7 @@ const WeeklySchedule = ({
                               ? ` – ${entry.endTime}`
                               : ""}
                           </div>
-                          <p className="text-sm font-medium text-[var(--foreground)]">
+                          <p className="text-sm font-medium text-foreground">
                             {entry.title || "Untitled task"}
                           </p>
                         </button>
@@ -3019,7 +3104,7 @@ const WeeklySchedule = ({
                           <button
                             type="button"
                             onClick={() => removeEntry(dayKey, entryIdx, meta)}
-                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] opacity-0 transition group-hover:opacity-100 hover:text-[var(--foreground)]"
+                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] opacity-0 transition group-hover:opacity-100 hover:text-foreground"
                             aria-label="Delete task"
                           >
                             ✕
@@ -3048,7 +3133,7 @@ const WeeklySchedule = ({
           aria-modal="true"
         >
           <div
-            className="w-full max-w-md rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[var(--background)] p-6 shadow-2xl"
+            className="w-full max-w-md rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -3056,7 +3141,7 @@ const WeeklySchedule = ({
                 <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]">
                   Edit task
                 </p>
-                <p className="text-lg font-light text-[var(--foreground)]">
+                <p className="text-lg font-light text-foreground">
                   {activeEntryDate
                     ? activeEntryDate.toLocaleDateString(undefined, {
                         weekday: "short",
@@ -3081,25 +3166,25 @@ const WeeklySchedule = ({
                   Apply changes to
                 </p>
                 <div className="mt-3 space-y-2 text-sm">
-                  <label className="flex items-center gap-2 text-[var(--foreground)]">
+                  <label className="flex items-center gap-2 text-foreground">
                     <input
                       type="radio"
                       name="entry-scope"
                       value="single"
                       checked={activeEntry.scope === "single"}
                       onChange={() => handleScopeSelection("single")}
-                      className="h-4 w-4 accent-[var(--foreground)]"
+                      className="h-4 w-4 accent-foreground"
                     />
                     This task only
                   </label>
-                  <label className="flex items-center gap-2 text-[var(--foreground)]">
+                  <label className="flex items-center gap-2 text-foreground">
                     <input
                       type="radio"
                       name="entry-scope"
                       value="future"
                       checked={activeEntry.scope === "future"}
                       onChange={() => handleScopeSelection("future")}
-                      className="h-4 w-4 accent-[var(--foreground)]"
+                      className="h-4 w-4 accent-foreground"
                     />
                     This and future tasks
                   </label>
@@ -3119,7 +3204,7 @@ const WeeklySchedule = ({
                     onChange={(event) =>
                       handleActiveFieldChange("time", event.target.value)
                     }
-                    className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-3 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                    className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
                   />
                 </label>
                 <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
@@ -3132,7 +3217,7 @@ const WeeklySchedule = ({
                     onChange={(event) =>
                       handleActiveFieldChange("endTime", event.target.value)
                     }
-                    className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-3 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                    className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
                   />
                 </label>
               </div>
@@ -3145,7 +3230,7 @@ const WeeklySchedule = ({
                     handleActiveFieldChange("title", event.target.value)
                   }
                   placeholder="Task title"
-                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
                 />
               </label>
               <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
@@ -3166,7 +3251,7 @@ const WeeklySchedule = ({
                   onChange={(event) =>
                     handleActiveFieldChange("repeat", event.target.value)
                   }
-                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--foreground)]"
+                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
                 >
                   <option value="none">Does not repeat</option>
                   <option value="daily">Daily</option>
@@ -3186,7 +3271,7 @@ const WeeklySchedule = ({
                           onClick={() => handleActiveRepeatDaysToggle(index)}
                           className={`rounded-full border px-3 py-1 text-xs transition ${
                             isActive
-                              ? "border-[var(--foreground)] text-[var(--foreground)]"
+                              ? "border-foreground text-foreground"
                               : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
                           }`}
                         >
@@ -3210,7 +3295,7 @@ const WeeklySchedule = ({
               <button
                 type="button"
                 onClick={closeEntryEditor}
-                className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-sm transition hover:border-[var(--foreground)]"
+                className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-sm transition hover:border-foreground"
               >
                 Done
               </button>
