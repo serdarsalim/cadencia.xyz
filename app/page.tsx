@@ -3229,7 +3229,7 @@ const WeeklySchedule = ({
                 e.dataTransfer.dropEffect = "move";
               }}
               onDrop={(e) => handleDayDrop(e, dayKey)}
-              className={`rounded-2xl border py-4 transition ${
+              className={`group rounded-2xl border py-4 transition ${
                 today
                   ? "border-[#60a5fa] bg-transparent shadow-[0_8px_24px_rgba(96,165,250,0.25)]"
                   : "border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-transparent"
@@ -3260,7 +3260,7 @@ const WeeklySchedule = ({
                   <button
                     type="button"
                     onClick={() => addEntry(dayKey)}
-                    className="flex h-6 w-6 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-xs transition hover:border-foreground"
+                    className="flex h-6 w-6 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-xs opacity-0 transition hover:border-foreground group-hover:opacity-100"
                     aria-label="Add task"
                   >
                     +
@@ -3282,14 +3282,29 @@ const WeeklySchedule = ({
                       originalEntryIndex,
                     };
 
+                    // Calculate duration in minutes for proportional height
+                    const calculateDuration = (start: string, end: string | undefined): number => {
+                      if (!end) return 60; // Default 1 hour if no end time
+                      const [startHour, startMin] = start.split(':').map(Number);
+                      const [endHour, endMin] = end.split(':').map(Number);
+                      const startMinutes = startHour * 60 + startMin;
+                      const endMinutes = endHour * 60 + endMin;
+                      return Math.max(30, endMinutes - startMinutes); // Minimum 30 minutes
+                    };
+
+                    const durationMinutes = calculateDuration(entry.time, entry.endTime);
+                    // Base height: 60px per hour, minimum 40px
+                    const heightPx = Math.max(40, (durationMinutes / 60) * 60);
+
                     return (
                       <div
                         key={`${dayKey}-${entryIdx}`}
-                        className="group rounded-lg py-1"
+                        className="group rounded-lg pb-0 pt-1"
                         style={{
                           backgroundColor: repeatColor
                             ? `color-mix(in srgb, ${repeatColor} 12%, transparent)`
                             : "color-mix(in srgb, var(--foreground) 3%, transparent)",
+                          minHeight: `${heightPx}px`,
                         }}
                       >
                         <button
@@ -3298,21 +3313,23 @@ const WeeklySchedule = ({
                           onDragStart={(e) => handleEntryDragStart(e, dayKey, originalDayKey, originalEntryIndex, entry, meta)}
                           onDragEnd={() => setDraggedEntry(null)}
                           onClick={() => openEntryEditor(dayKey, entryIdx, meta, entry)}
-                          className={`w-full rounded-md px-2 py-1 text-left transition hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] focus:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] focus:outline-none ${
+                          className={`flex h-full w-full flex-col justify-between rounded-md px-2 py-2 text-left transition hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] focus:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] focus:outline-none ${
                             draggedEntry?.dayKey === originalDayKey && draggedEntry?.index === originalEntryIndex
                               ? "opacity-50"
                               : ""
                           }`}
                         >
-                          <div className="mb-1 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
-                            {entry.time || "—"}
-                            {entry.endTime
-                              ? ` – ${entry.endTime}`
-                              : ""}
+                          <div>
+                            <div className="mb-1 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
+                              {entry.time || "—"}
+                              {entry.endTime
+                                ? ` – ${entry.endTime}`
+                                : ""}
+                            </div>
+                            <p className="text-sm font-medium text-foreground">
+                              {entry.title || "Untitled task"}
+                            </p>
                           </div>
-                          <p className="text-sm font-medium text-foreground">
-                            {entry.title || "Untitled task"}
-                          </p>
                         </button>
                         <div className="flex justify-end px-2">
                           <button
