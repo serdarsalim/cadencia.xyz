@@ -114,6 +114,60 @@ const nextEntryTimes = (entries: ScheduleEntry[]): { start: string; end: string 
   };
 };
 
+const getRepeatColor = (title: string, time: string, fallback?: string) => {
+  if (fallback) {
+    return fallback;
+  }
+  const str = `${title}-${time}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const colors = [
+    "#8E7DBE",
+    "#F29E4C",
+    "#5DA9E9",
+    "#80CFA9",
+    "#F7B267",
+    "#B8F2E6",
+  ];
+  return colors[Math.abs(hash) % colors.length];
+};
+
+const createEntryWithColor = (
+  entry: ScheduleEntry
+): ScheduleEntry => {
+  if (entry.color) {
+    return entry;
+  }
+  return {
+    ...entry,
+    color: getRepeatColor(entry.title ?? "", entry.time ?? DEFAULT_ENTRY_START),
+  };
+};
+
+const normalizeScheduleEntryColors = (
+  entries: Record<string, ScheduleEntry[]>
+): Record<string, ScheduleEntry[]> => {
+  let mutated = false;
+  const normalized: Record<string, ScheduleEntry[]> = {};
+  Object.entries(entries).forEach(([dayKey, dayEntries]) => {
+    let dayMutated = false;
+    const updatedDayEntries = dayEntries.map((entry) => {
+      if (entry.color) {
+        return entry;
+      }
+      dayMutated = true;
+      return createEntryWithColor(entry);
+    });
+    if (dayMutated) {
+      mutated = true;
+    }
+    normalized[dayKey] = dayMutated ? updatedDayEntries : dayEntries;
+  });
+  return mutated ? normalized : entries;
+};
+
 type EntryMeta = {
   originalDayKey?: string;
   originalEntryIndex?: number;
@@ -433,7 +487,7 @@ export default function Home() {
           if (data) {
             // Set state from database
             if (data.goals.length > 0) setGoals(data.goals);
-            if (Object.keys(data.scheduleEntries).length > 0) setScheduleEntries(data.scheduleEntries);
+            if (Object.keys(data.scheduleEntries).length > 0) setScheduleEntries(normalizeScheduleEntryColors(data.scheduleEntries));
             if (Object.keys(data.productivityRatings).length > 0) setProductivityRatings(data.productivityRatings);
             if (Object.keys(data.weeklyNotes).length > 0) setWeeklyNotes(data.weeklyNotes);
             if (data.focusAreas.length > 0) setFocusAreas(data.focusAreas);
@@ -453,7 +507,7 @@ export default function Home() {
         } else {
           // Guest - load demo data
           setGoals(demoGoals);
-          setScheduleEntries(demoScheduleEntries);
+          setScheduleEntries(normalizeScheduleEntryColors(demoScheduleEntries));
           setProductivityRatings(demoProductivityRatings);
           setWeeklyNotes(demoWeeklyNotes);
           setFocusAreas(demoFocusAreas);
@@ -2711,11 +2765,12 @@ const WeeklySchedule = ({
     setScheduleEntries((prev) => {
       const dayEntries = prev[dayKey] ?? [];
       const { start, end } = nextEntryTimes(dayEntries);
+      const defaultTitle = "New task";
       return {
         ...prev,
         [dayKey]: [
           ...dayEntries,
-          { time: start, endTime: end, title: "New task" },
+          createEntryWithColor({ time: start, endTime: end, title: defaultTitle }),
         ],
       };
     });
@@ -3055,22 +3110,6 @@ const WeeklySchedule = ({
       date.getMonth() === today.getMonth() &&
       date.getFullYear() === today.getFullYear()
     );
-  };
-
-  const getRepeatColor = (title: string, time: string, fallback?: string) => {
-    if (fallback) {
-      return fallback;
-    }
-    // Generate a consistent color based on task title and time
-    const str = `${title}-${time}`;
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const colors = [
-      "#8E7DBE", "#F29E4C", "#5DA9E9", "#80CFA9", "#F7B267", "#B8F2E6"
-    ];
-    return colors[Math.abs(hash) % colors.length];
   };
 
   const getEntriesForDay = (date: Date) => {
