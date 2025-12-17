@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { UserInfo } from "./components/UserInfo";
 
 type Theme = "light" | "dark";
 
@@ -1603,9 +1604,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
                   Profile & preferences
                 </p>
-                <p className="text-base text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
-                  Customize schedule defaults
-                </p>
               </div>
               <button
                 type="button"
@@ -1615,6 +1613,12 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 ✕
               </button>
             </div>
+            <div className="mb-4 rounded-2xl bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)] p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                Logged in as
+              </p>
+              <UserInfo />
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
                 Full name
@@ -1623,25 +1627,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   value={personName}
                   onChange={(event) => setPersonName(event.target.value)}
                   placeholder="Your name"
-                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
-                />
-              </label>
-              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                Date of birth
-                <input
-                  type="date"
-                  value={dateOfBirth}
-                  onChange={(event) => setDateOfBirth(event.target.value)}
-                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
-                />
-              </label>
-              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                Email
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@example.com"
                   className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
                 />
               </label>
@@ -1719,7 +1704,10 @@ const goalStatusBadge = (status: KeyResultStatus) => {
       )}
 
       <footer className="mt-24 border-t border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] px-6 py-4 text-sm">
-        <p>TimeSpent</p>
+        <div className="flex items-center justify-between">
+          <p>TimeSpent</p>
+          <UserInfo />
+        </div>
       </footer>
     </div>
   );
