@@ -2181,9 +2181,9 @@ const ProductivityGrid = ({
                 const nextDayInWeek = dayOfMonth < daysInMonth(year, monthIndex) && currentWeek.dayKeys.includes(`${year}-${monthIndex + 1}-${dayOfMonth + 1}`);
 
                 // Top border: first day of week (stronger) or between days (visible divider)
-                const borderTop = isFirstInMonth ? "border-t border-t-gray-400" : "border-t border-t-gray-300";
+                const borderTop = isFirstInMonth ? "border-t border-t-gray-400" : "border-t-[0.5px] border-t-gray-300";
                 // Bottom border: last day of week (stronger) or between days (visible divider)
-                const borderBottom = !nextDayInWeek ? "border-b border-b-gray-400" : "border-b border-b-gray-300";
+                const borderBottom = !nextDayInWeek ? "border-b border-b-gray-400" : "border-b-[0.5px] border-b-gray-300";
                 // Left and right borders: always on for week grouping
                 const borderSides = "border-l border-r border-l-gray-400 border-r-gray-400";
 
@@ -2204,7 +2204,7 @@ const ProductivityGrid = ({
                   className={`h-4 w-full -mb-px text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${weekBorderClass} ${
                     hasValue
                       ? scale.color
-                      : "bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
+                      : "bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]"
                   } ${
                     isToday
                       ? "ring-2 ring-blue-500 shadow-[0_0_10px_rgba(0,0,0,0.2)]"
