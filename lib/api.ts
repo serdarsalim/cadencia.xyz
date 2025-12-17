@@ -200,7 +200,17 @@ export async function saveGoals(goals: any[]) {
       return null
     }
 
-    const data = await response.json()
+    if (!response.ok) {
+      console.error('Error saving goals:', response.status, response.statusText)
+      return null
+    }
+
+    const data = await response.json().catch(() => null)
+    if (!data || !Array.isArray(data.goals)) {
+      console.error('Invalid goals response payload', data)
+      return null
+    }
+
     return data.goals
   } catch (error) {
     console.error('Error saving goals:', error)

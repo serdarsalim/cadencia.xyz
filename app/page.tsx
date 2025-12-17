@@ -414,6 +414,11 @@ export default function Home() {
   const scheduleSaveTimeoutRef = useRef<number | null>(null);
   const isSavingScheduleRef = useRef(false);
   const lastServerSavedScheduleRef = useRef<string | null>(null);
+  const lastProcessedGoalsRef = useRef<string | null>(null);
+  const pendingGoalsRef = useRef<Goal[]>([]);
+  const goalsSaveTimeoutRef = useRef<number | null>(null);
+  const isSavingGoalsRef = useRef(false);
+  const lastServerSavedGoalsRef = useRef<string | null>(null);
 
   const triggerScheduleSave = useCallback(() => {
     if (!userEmail) {
@@ -456,6 +461,47 @@ export default function Home() {
     })();
   }, [userEmail]);
 
+  const triggerGoalsSave = useCallback(() => {
+    if (!userEmail) {
+      return;
+    }
+
+    const pendingSerialized = JSON.stringify(pendingGoalsRef.current ?? []);
+    if (lastServerSavedGoalsRef.current === pendingSerialized) {
+      return;
+    }
+
+    if (isSavingGoalsRef.current) {
+      return;
+    }
+
+    const dataToSave = pendingGoalsRef.current;
+    const serializedToSave = pendingSerialized;
+
+    isSavingGoalsRef.current = true;
+    void (async () => {
+      try {
+        await saveGoals(dataToSave);
+        lastServerSavedGoalsRef.current = serializedToSave;
+      } catch (error) {
+        console.error("Failed to persist goals", error);
+      } finally {
+        isSavingGoalsRef.current = false;
+        const latestSerialized = JSON.stringify(pendingGoalsRef.current ?? []);
+        if (
+          userEmail &&
+          latestSerialized !== serializedToSave &&
+          !goalsSaveTimeoutRef.current
+        ) {
+          goalsSaveTimeoutRef.current = window.setTimeout(() => {
+            goalsSaveTimeoutRef.current = null;
+            triggerGoalsSave();
+          }, 200);
+        }
+      }
+    })();
+  }, [userEmail]);
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
@@ -463,6 +509,8 @@ export default function Home() {
   useEffect(() => {
     lastServerSavedScheduleRef.current = null;
     pendingScheduleRef.current = {};
+    lastServerSavedGoalsRef.current = null;
+    pendingGoalsRef.current = [];
   }, [userEmail]);
 
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -725,21 +773,39 @@ export default function Home() {
   useEffect(() => {
     if (!isHydrated) return;
 
-    try {
-      // Save to localStorage as backup
-      window.localStorage.setItem(
-        "timespent-goals",
-        JSON.stringify(goals)
-      );
-
-      // Save to database only if logged in
-      if (userEmail) {
-        saveGoals(goals);
-      }
-    } catch (error) {
-      console.error("Failed to save goals", error);
+    const serializedGoals = JSON.stringify(goals);
+    if (lastProcessedGoalsRef.current === serializedGoals) {
+      return;
     }
-  }, [goals, isHydrated, userEmail]);
+    lastProcessedGoalsRef.current = serializedGoals;
+
+    if (!userEmail) {
+      try {
+        window.localStorage.setItem("timespent-goals", serializedGoals);
+      } catch (error) {
+        console.error("Failed to cache goals for guest", error);
+      }
+      return;
+    }
+
+    pendingGoalsRef.current = goals;
+
+    if (goalsSaveTimeoutRef.current) {
+      window.clearTimeout(goalsSaveTimeoutRef.current);
+    }
+
+    goalsSaveTimeoutRef.current = window.setTimeout(() => {
+      goalsSaveTimeoutRef.current = null;
+      triggerGoalsSave();
+    }, 600);
+
+    return () => {
+      if (goalsSaveTimeoutRef.current) {
+        window.clearTimeout(goalsSaveTimeoutRef.current);
+        goalsSaveTimeoutRef.current = null;
+      }
+    };
+  }, [goals, isHydrated, userEmail, triggerGoalsSave]);
 
   useEffect(() => {
     if (!isHydrated) return;
