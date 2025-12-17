@@ -1227,8 +1227,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           )}
 
           {view === "goals" && (
-            <section className="mx-auto mt-10 flex max-w-5xl flex-col gap-6 text-left">
-              <div className="space-y-4">
+            <section className="mx-auto mt-8 flex max-w-5xl flex-col gap-4 text-left">
+              <div className="space-y-3">
                 {goals.length === 0 && (
                   <p className="text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
                     No goals yet. Define your first objective above to start tracking OKRs.
@@ -1240,7 +1240,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   return (
                     <div
                       key={goal.id}
-                      className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6"
+                      className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] px-7 py-5"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex flex-1 flex-col">
@@ -1315,9 +1315,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         </div>
                       </div>
 
-                      <div className="mt-4" />
-
-                      <div className="mt-5 space-y-3">
+                      <div className="mt-3 space-y-2">
                         {goal.keyResults.map((kr, krIndex) => {
                           const krKey = krFieldKey(goal.id, kr.id);
                           const isEditingKrTitle =
@@ -1328,7 +1326,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                           return (
                             <div
                               key={kr.id}
-                              className="rounded-2xl bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)] p-4"
+                              className="rounded-2xl bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)] px-4 pb-3 pt-4"
                             >
                               <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div className="flex-1 space-y-1">
@@ -1389,6 +1387,16 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                                   ? "On hold"
                                   : "Completed"}
                                   </button>
+                                  {isLastKr && activeKrDraftGoalId !== goal.id && (
+                                    <button
+                                      type="button"
+                                      onClick={() => startKeyResultDraft(goal.id)}
+                                      className="text-xs text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:text-foreground"
+                                      aria-label="Add key result"
+                                    >
+                                      +
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1399,19 +1407,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                                   >
                                     ✕
                                   </button>
-                                  {isLastKr && activeKrDraftGoalId !== goal.id && (
-                                    <button
-                                      type="button"
-                                      onClick={() => startKeyResultDraft(goal.id)}
-                                      className="flex h-7 w-7 items-center justify-center rounded-full text-base text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:text-foreground"
-                                      aria-label="Add key result"
-                                    >
-                                      +
-                                    </button>
-                                  )}
                                 </div>
                               </div>
-                              <div className="mt-3" />
                             </div>
                           );
                         })}
@@ -1515,8 +1512,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
           {view === "productivity" && (
             <section className="mt-8 grid gap-8 text-left lg:grid-cols-[1.2fr_1fr]">
-              <div className="flex flex-col rounded-3xl bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] p-6">
-                <div className="mb-6 text-3xl font-light">
+              <div className="flex flex-col rounded-3xl bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] p-4">
+                <div className="mb-4 text-2xl font-light">
                   <span>
                     {selectedWeek !== null
                       ? (() => {
@@ -1565,7 +1562,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 </div>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <ProductivityGrid
                   year={productivityYear}
                   setYear={setProductivityYear}
