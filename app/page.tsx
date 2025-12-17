@@ -103,10 +103,10 @@ const TinyEditor = dynamic(
 const TINYMCE_CDN =
   "https://cdnjs.cloudflare.com/ajax/libs/tinymce/8.1.2/tinymce.min.js";
 const PRODUCTIVITY_SCALE = [
-  { value: 0, label: "<25%", color: "bg-[#fefae6]" },
-  { value: 1, label: "25-50%", color: "bg-[#d9f0a3]" },
-  { value: 2, label: "50-75%", color: "bg-[#a6d96a]" },
-  { value: 3, label: ">75%", color: "bg-[#66bd63]" },
+  { value: 0, label: "Low", color: "bg-[#fefae6]" },
+  { value: 1, label: "Medium", color: "bg-[#d9f0a3]" },
+  { value: 2, label: "High", color: "bg-[#a6d96a]" },
+  // { value: 3, label: ">75%", color: "bg-[#66bd63]" }, // Hidden for now
 ];
 
 type WeekMeta = {
@@ -1516,17 +1516,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           {view === "productivity" && (
             <section className="mt-8 grid gap-8 text-left lg:grid-cols-[1.2fr_1fr]">
               <div className="flex flex-col rounded-3xl bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] p-6">
-                <div className="mb-6 flex flex-wrap items-center justify-start gap-3 text-3xl font-light">
-                  <input
-                    type="number"
-                    value={productivityYear}
-                    onChange={(event) =>
-                      setProductivityYear(
-                        Number.parseInt(event.target.value, 10) || 0
-                      )
-                    }
-                    className="w-28 border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent px-3 text-3xl text-foreground outline-none focus:border-foreground caret-foreground text-center"
-                  />
+                <div className="mb-6 text-3xl font-light">
                   <span>
                     {selectedWeek !== null
                       ? (() => {
@@ -1534,14 +1524,11 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                             (w) => w.weekNumber === selectedWeek
                           );
                           return weekMeta
-                            ? `Week ${selectedWeek} • ${weekMeta.rangeLabel}`
+                            ? `${weekMeta.rangeLabel}, ${productivityYear}`
                             : `Week ${selectedWeek}`;
                         })()
                       : "Productivity tracking"}
                   </span>
-                </div>
-                <div className="mb-6">
-                  <ProductivityLegend />
                 </div>
                 <div className="flex-1">
                   <TinyEditor
@@ -1581,6 +1568,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
               <div className="space-y-6">
                 <ProductivityGrid
                   year={productivityYear}
+                  setYear={setProductivityYear}
                   ratings={productivityRatings}
                   setRatings={setProductivityRatings}
                   mode={productivityMode}
@@ -2007,6 +1995,7 @@ const ProductivityLegend = ({ className }: ProductivityLegendProps = {}) => (
 
 type ProductivityGridProps = {
   year: number;
+  setYear: React.Dispatch<React.SetStateAction<number>>;
   ratings: Record<string, number | null>;
   setRatings: React.Dispatch<React.SetStateAction<Record<string, number | null>>>;
   mode: "day" | "week";
@@ -2017,6 +2006,7 @@ type ProductivityGridProps = {
 
 const ProductivityGrid = ({
   year,
+  setYear,
   ratings,
   setRatings,
   mode,
@@ -2148,7 +2138,7 @@ const ProductivityGrid = ({
               const storedValue = ratings[key];
               const hasValue =
                 storedValue !== null && storedValue !== undefined;
-              const currentValue = hasValue ? storedValue! : 0;
+              const currentValue = hasValue ? Math.min(storedValue!, PRODUCTIVITY_SCALE.length - 1) : 0;
               const scale = PRODUCTIVITY_SCALE[currentValue];
               const validDay =
                 dayOfMonth <= daysInMonth(year, monthIndex);
@@ -2162,6 +2152,18 @@ const ProductivityGrid = ({
                   />
                 );
               }
+
+              const today = new Date();
+              const isToday =
+                today.getFullYear() === year &&
+                today.getMonth() === monthIndex &&
+                today.getDate() === dayOfMonth;
+
+              // Check if the previous day (day above) is today (so this day should have golden top border)
+              const isPreviousDayToday =
+                today.getFullYear() === year &&
+                today.getMonth() === monthIndex &&
+                today.getDate() === dayOfMonth - 1;
 
               // Week border logic (all months)
               let weekBorderClass = "";
@@ -2180,8 +2182,10 @@ const ProductivityGrid = ({
                 // Check if next day in this month is in same week
                 const nextDayInWeek = dayOfMonth < daysInMonth(year, monthIndex) && currentWeek.dayKeys.includes(`${year}-${monthIndex + 1}-${dayOfMonth + 1}`);
 
-                // Top border: first day of week (stronger) or between days (visible divider)
-                const borderTop = isFirstInMonth ? "border-t border-t-gray-400" : "border-t-[0.5px] border-t-gray-300";
+                // Top border: golden if previous day is today, otherwise first day of week (stronger) or between days (visible divider)
+                const borderTop = isPreviousDayToday
+                  ? "border-t-2 border-t-yellow-400"
+                  : isFirstInMonth ? "border-t border-t-gray-400" : "border-t-[0.5px] border-t-gray-300";
                 // Bottom border: last day of week (stronger) or between days (visible divider)
                 const borderBottom = !nextDayInWeek ? "border-b border-b-gray-400" : "border-b-[0.5px] border-b-gray-300";
                 // Left and right borders: always on for week grouping
@@ -2190,24 +2194,24 @@ const ProductivityGrid = ({
                 weekBorderClass = `${borderTop} ${borderBottom} ${borderSides}`;
               }
 
-              const today = new Date();
-              const isToday =
-                today.getFullYear() === year &&
-                today.getMonth() === monthIndex &&
-                today.getDate() === dayOfMonth;
-
               return (
                 <button
                   type="button"
                   key={key}
                   onClick={() => handleCycle(monthIndex, dayOfMonth)}
-                  className={`h-4 w-full -mb-px text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${weekBorderClass} ${
+                  onKeyDown={(e) => {
+                    if (e.key === "Delete" || e.key === "Backspace") {
+                      e.preventDefault();
+                      setRatings((prev) => ({ ...prev, [key]: null }));
+                    }
+                  }}
+                  className={`h-4 w-full text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${weekBorderClass} ${
                     hasValue
                       ? scale.color
                       : "bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]"
                   } ${
                     isToday
-                      ? "ring-2 ring-blue-500 shadow-[0_0_10px_rgba(0,0,0,0.2)]"
+                      ? "ring-2 ring-yellow-400 shadow-[0_0_12px_rgba(250,204,21,0.4)]"
                       : ""
                   }`}
                   aria-label={`Day ${dayOfMonth} of ${new Date(2020, monthIndex).toLocaleString(undefined, {
@@ -2221,6 +2225,38 @@ const ProductivityGrid = ({
           </div>
         );
         })}
+      </div>
+      <div className="mt-6 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
+        <div className="flex flex-wrap gap-3">
+          {PRODUCTIVITY_SCALE.map((scale) => (
+            <div key={scale.value} className="flex items-center gap-2 whitespace-nowrap">
+              <span
+                className={`h-4 w-4 rounded ${scale.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]`}
+                aria-hidden="true"
+              />
+              <span>{scale.label}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setYear(year - 1)}
+            className="rounded p-1 hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
+            aria-label="Previous year"
+          >
+            ←
+          </button>
+          <span className="font-semibold">{year}</span>
+          <button
+            type="button"
+            onClick={() => setYear(year + 1)}
+            className="rounded p-1 hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
+            aria-label="Next year"
+          >
+            →
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -2293,7 +2329,9 @@ const ProductivityGrid = ({
                         Math.round(dayAverage ?? 0)
                       )
                     )
-                  : manualScore;
+                  : manualScore !== null && manualScore !== undefined
+                    ? Math.min(manualScore, PRODUCTIVITY_SCALE.length - 1)
+                    : null;
                 const scaleClass =
                   colorIndex !== null && colorIndex !== undefined
                     ? PRODUCTIVITY_SCALE[colorIndex].color
@@ -2303,6 +2341,13 @@ const ProductivityGrid = ({
                     <button
                       type="button"
                       onClick={() => handleWeekCycle(week.weekNumber)}
+                      onKeyDown={(e) => {
+                        if (!hasDayScores && (e.key === "Delete" || e.key === "Backspace")) {
+                          e.preventDefault();
+                          const key = `week-${year}-${week.weekNumber}`;
+                          setRatings((prev) => ({ ...prev, [key]: null }));
+                        }
+                      }}
                       disabled={hasDayScores}
                       className={`h-4 w-full rounded-sm border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${
                         hasDayScores
@@ -2323,6 +2368,38 @@ const ProductivityGrid = ({
               })}
             </div>
           ))}
+        </div>
+        <div className="mt-6 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
+          <div className="flex flex-wrap gap-3">
+            {PRODUCTIVITY_SCALE.map((scale) => (
+              <div key={scale.value} className="flex items-center gap-2 whitespace-nowrap">
+                <span
+                  className={`h-4 w-4 rounded ${scale.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]`}
+                  aria-hidden="true"
+                />
+                <span>{scale.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setYear(year - 1)}
+              className="rounded p-1 hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
+              aria-label="Previous year"
+            >
+              ←
+            </button>
+            <span className="font-semibold">{year}</span>
+            <button
+              type="button"
+              onClick={() => setYear(year + 1)}
+              className="rounded p-1 hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
+              aria-label="Next year"
+            >
+              →
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -2348,6 +2425,7 @@ const WeeklySchedule = ({
     getWeekStart(new Date(), weekStartDay)
   );
   const [activeEntry, setActiveEntry] = useState<EditingEntryState | null>(null);
+  const [draggedEntry, setDraggedEntry] = useState<{ dayKey: string; index: number } | null>(null);
 
   const currentWeekStart = useMemo(
     () => getWeekStart(currentWeekAnchor, weekStartDay),
@@ -2969,6 +3047,123 @@ const WeeklySchedule = ({
     };
   };
 
+  const handleEntryDragStart = (
+    e: React.DragEvent,
+    occurrenceDayKey: string,
+    storageDayKey: string,
+    storageIndex: number,
+    entry: ScheduleEntry,
+    meta: EntryMeta
+  ) => {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData(
+      "application/json",
+      JSON.stringify({ occurrenceDayKey, storageDayKey, storageIndex, entry, meta })
+    );
+    setDraggedEntry({ dayKey: storageDayKey, index: storageIndex });
+  };
+
+  const executeMoveEntry = (
+    occurrenceDayKey: string,
+    storageDayKey: string,
+    storageIndex: number,
+    targetDayKey: string,
+    entry: ScheduleEntry,
+    meta: EntryMeta,
+    scope: "single" | null
+  ) => {
+    let updatedEntries = { ...scheduleEntries };
+
+    if (scope === "single") {
+      // Recurring instance - use prepareEntriesForMutation with the occurrence day
+      const { entries: preparedEntries, targetDayKey: newDayKey, targetIndex } =
+        prepareEntriesForMutation(
+          updatedEntries,
+          occurrenceDayKey,
+          storageIndex,
+          meta,
+          scope
+        );
+
+      updatedEntries = preparedEntries;
+
+      // Now move the prepared entry
+      const entryToMove = targetIndex !== null ? updatedEntries[newDayKey]?.[targetIndex] : null;
+      if (entryToMove && targetIndex !== null) {
+        // Remove from source
+        updatedEntries[newDayKey] = updatedEntries[newDayKey]!.filter(
+          (_, i) => i !== targetIndex
+        );
+
+        // Strip recurring fields and add to target
+        const movedEntry: ScheduleEntry = {
+          time: entryToMove.time,
+          endTime: entryToMove.endTime,
+          title: entryToMove.title,
+          color: entryToMove.color,
+          // No repeat fields
+        };
+
+        updatedEntries[targetDayKey] = [
+          ...(updatedEntries[targetDayKey] || []),
+          movedEntry,
+        ];
+      }
+    } else {
+      // Non-recurring or original entry - direct move
+      const sourceEntries = updatedEntries[storageDayKey] || [];
+      const entryToMove = sourceEntries[storageIndex];
+
+      if (entryToMove) {
+        // Remove from source
+        updatedEntries[storageDayKey] = sourceEntries.filter(
+          (_, i) => i !== storageIndex
+        );
+
+        // Add to target (preserve all fields for original recurring entries)
+        updatedEntries[targetDayKey] = [
+          ...(updatedEntries[targetDayKey] || []),
+          entryToMove,
+        ];
+      }
+    }
+
+    setScheduleEntries(updatedEntries);
+  };
+
+  const handleDayDrop = (e: React.DragEvent, targetDayKey: string) => {
+    e.preventDefault();
+
+    const dragData = JSON.parse(
+      e.dataTransfer.getData("application/json")
+    ) as {
+      occurrenceDayKey: string;
+      storageDayKey: string;
+      storageIndex: number;
+      entry: ScheduleEntry;
+      meta: EntryMeta;
+    };
+
+    const { occurrenceDayKey, storageDayKey, storageIndex, entry, meta } = dragData;
+
+    // Don't move to same day
+    if (occurrenceDayKey === targetDayKey) {
+      setDraggedEntry(null);
+      return;
+    }
+
+    // Check if this is a repeated instance (not the original)
+    // If occurrence day differs from storage day, it's a repeated instance
+    const isRepeatedInstance = occurrenceDayKey !== storageDayKey;
+
+    // Auto-use "single" scope for repeated instances, otherwise direct move
+    const scope = isRepeatedInstance ? "single" : null;
+
+    // Pass occurrence day to executeMoveEntry so prepareEntriesForMutation knows which date to skip
+    executeMoveEntry(occurrenceDayKey, storageDayKey, storageIndex, targetDayKey, entry, meta, scope);
+    setDraggedEntry(null);
+  };
+
   const activeEntryDate = activeEntry ? parseDayKey(activeEntry.dayKey) : null;
   const activeEntryRepeatValue: RepeatFrequency =
     activeEntry?.data.repeat ?? "none";
@@ -3030,6 +3225,11 @@ const WeeklySchedule = ({
           return (
             <div
               key={dayKey}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(e) => handleDayDrop(e, dayKey)}
               className={`rounded-2xl border py-4 transition ${
                 today
                   ? "border-[#60a5fa] bg-transparent shadow-[0_8px_24px_rgba(96,165,250,0.25)]"
@@ -3095,8 +3295,15 @@ const WeeklySchedule = ({
                       >
                         <button
                           type="button"
+                          draggable={true}
+                          onDragStart={(e) => handleEntryDragStart(e, dayKey, originalDayKey, originalEntryIndex, entry, meta)}
+                          onDragEnd={() => setDraggedEntry(null)}
                           onClick={() => openEntryEditor(dayKey, entryIdx, meta, entry)}
-                          className="w-full rounded-md px-2 py-1 text-left transition hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] focus:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] focus:outline-none"
+                          className={`w-full rounded-md px-2 py-1 text-left transition hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] focus:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] focus:outline-none ${
+                            draggedEntry?.dayKey === originalDayKey && draggedEntry?.index === originalEntryIndex
+                              ? "opacity-50"
+                              : ""
+                          }`}
                         >
                           <div className="mb-1 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
                             {entry.time || "—"}
