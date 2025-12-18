@@ -505,6 +505,13 @@ export default function Home() {
     }
 
     const dataToSave = pendingGoalsRef.current;
+
+    // Safety check: Don't save if goals data looks incomplete
+    // This prevents accidentally wiping keyResults
+    if (!dataToSave || dataToSave.length === 0) {
+      return;
+    }
+
     const serializedToSave = pendingSerialized;
 
     isSavingGoalsRef.current = true;
@@ -2230,7 +2237,22 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
           {view === "productivity" && (
             <>
-              <section className="mt-8 grid gap-8 text-left lg:grid-cols-[1.2fr_1fr]">
+              <section className="mx-auto mt-8 grid max-w-[1920px] gap-8 text-left lg:grid-cols-[1fr_1.2fr]">
+                <div className="space-y-4">
+                  <ProductivityGrid
+                    year={productivityYear}
+                    setYear={setProductivityYear}
+                    ratings={productivityRatings}
+                    setRatings={setProductivityRatings}
+                    mode={productivityMode}
+                    onToggleMode={() =>
+                      setProductivityMode((prev) => (prev === "day" ? "week" : "day"))
+                    }
+                    selectedWeek={selectedWeek}
+                    setSelectedWeek={setSelectedWeek}
+                  />
+                </div>
+
                 <div className="flex flex-col rounded-3xl bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] p-4">
                 <div className="mb-4 flex items-center justify-center gap-4 text-sm uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
                   <button
@@ -2333,21 +2355,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     }
                   />
                 </div>
-                </div>
-
-                <div className="space-y-4">
-                  <ProductivityGrid
-                    year={productivityYear}
-                    setYear={setProductivityYear}
-                    ratings={productivityRatings}
-                    setRatings={setProductivityRatings}
-                    mode={productivityMode}
-                    onToggleMode={() =>
-                      setProductivityMode((prev) => (prev === "day" ? "week" : "day"))
-                    }
-                    selectedWeek={selectedWeek}
-                    setSelectedWeek={setSelectedWeek}
-                  />
                 </div>
               </section>
               {renderGoalsSection("mt-12", goalsSectionRef)}
