@@ -31,11 +31,25 @@ export function UserInfo({ showLabel = false }: UserInfoProps) {
   if (loading) return null;
 
   if (!session?.user) {
+    const openAuthPopup = (e: React.MouseEvent<HTMLAnchorElement>) => {
+      e.preventDefault();
+      const width = 500;
+      const height = 600;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+      window.open(
+        '/api/auth/signin',
+        'Sign in',
+        `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+      );
+    };
+
     return (
       <div className="flex items-center gap-3">
         <a
           href="/api/auth/signin"
-          className="text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:text-foreground"
+          onClick={openAuthPopup}
+          className="text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:text-foreground cursor-pointer"
         >
           Sign in
         </a>
@@ -44,8 +58,9 @@ export function UserInfo({ showLabel = false }: UserInfoProps) {
         </span>
         <a
           href="/api/auth/signin"
-          className="text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:text-foreground"
-          title="Sign up to save your goals and tracker data"
+          onClick={openAuthPopup}
+          className="text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:text-foreground cursor-pointer"
+          title="Create an account to save your goals and tracker data permanently. Demo data is not saved."
         >
           Sign up
         </a>
