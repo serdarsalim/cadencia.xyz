@@ -37,3 +37,45 @@ body {
     "Segoe UI", sans-serif;
   transition: background 0.3s ease, color 0.3s ease;
 }
+
+/* Productivity colors for light mode */
+.productivity-low {
+  background-color: #ede8c5;
+}
+.productivity-medium {
+  background-color: #99c699;
+}
+.productivity-high {
+  background-color: #66a866;
+}
+
+/* Productivity colors for dark mode */
+:root[data-theme="dark"] .productivity-low {
+  background-color: #52525b;
+}
+:root[data-theme="dark"] .productivity-medium {
+  background-color: #4a8a4d;
+}
+:root[data-theme="dark"] .productivity-high {
+  background-color: #10b981;
+}
+
+/* Day grid border colors for dark mode */
+:root[data-theme="dark"] .border-t-gray-400 {
+  border-top-color: #4b5563 !important; /* gray-600 */
+}
+:root[data-theme="dark"] .border-t-gray-300 {
+  border-top-color: #374151 !important; /* gray-700 */
+}
+:root[data-theme="dark"] .border-b-gray-400 {
+  border-bottom-color: #4b5563 !important; /* gray-600 */
+}
+:root[data-theme="dark"] .border-b-gray-300 {
+  border-bottom-color: #374151 !important; /* gray-700 */
+}
+:root[data-theme="dark"] .border-l-gray-400 {
+  border-left-color: #4b5563 !important; /* gray-600 */
+}
+:root[data-theme="dark"] .border-r-gray-400 {
+  border-right-color: #4b5563 !important; /* gray-600 */
+}

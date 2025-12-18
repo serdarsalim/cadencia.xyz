@@ -227,9 +227,9 @@ const TinyEditor = dynamic(
 const TINYMCE_CDN =
   "https://cdnjs.cloudflare.com/ajax/libs/tinymce/8.1.2/tinymce.min.js";
 const PRODUCTIVITY_SCALE = [
-  { value: 0, label: "Low", color: "bg-[#fefae6]" },
-  { value: 1, label: "Medium", color: "bg-[#e5f5b8]" },
-  { value: 2, label: "High", color: "bg-[#a6d96a]" },
+  { value: 0, label: "Low", color: "productivity-low" },
+  { value: 1, label: "Medium", color: "productivity-medium" },
+  { value: 2, label: "High", color: "productivity-high" },
   // { value: 3, label: ">75%", color: "bg-[#66bd63]" }, // Hidden for now
 ];
 
@@ -2277,34 +2277,50 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   <div className="mb-4 grid gap-4 sm:grid-cols-2">
                     <label
                       className="flex flex-col gap-2 rounded-2xl p-3"
-                      style={{ backgroundColor: "var(--card-muted-bg)" }}
+                      style={{ backgroundColor: "#e8f5e9" }}
                     >
                       <span className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
                         Do&apos;s
                       </span>
                       <textarea
                         value={selectedWeekEntry?.dos ?? ""}
-                        onChange={(event) =>
-                          updateWeeklyNoteEntry(selectedWeekKey, { dos: event.target.value })
-                        }
+                        onChange={(event) => {
+                          updateWeeklyNoteEntry(selectedWeekKey, { dos: event.target.value });
+                          event.target.style.height = 'auto';
+                          event.target.style.height = event.target.scrollHeight + 'px';
+                        }}
+                        onInput={(event) => {
+                          const target = event.target as HTMLTextAreaElement;
+                          target.style.height = 'auto';
+                          target.style.height = target.scrollHeight + 'px';
+                        }}
                         placeholder="Behaviors to reinforce"
-                        className="min-h-[88px] resize-y rounded-2xl border-none bg-transparent p-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)]"
+                        className="min-h-[88px] resize-none overflow-hidden rounded-2xl border-none bg-transparent p-2 text-sm text-[#0f172a] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)]"
+                        style={{ height: 'auto' }}
                       />
                     </label>
                     <label
                       className="flex flex-col gap-2 rounded-2xl p-3"
-                      style={{ backgroundColor: "var(--card-muted-bg)" }}
+                      style={{ backgroundColor: "#ffebee" }}
                     >
                       <span className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
                         Don&apos;ts
                         </span>
                         <textarea
                           value={selectedWeekEntry?.donts ?? ""}
-                        onChange={(event) =>
-                          updateWeeklyNoteEntry(selectedWeekKey, { donts: event.target.value })
-                        }
+                        onChange={(event) => {
+                          updateWeeklyNoteEntry(selectedWeekKey, { donts: event.target.value });
+                          event.target.style.height = 'auto';
+                          event.target.style.height = event.target.scrollHeight + 'px';
+                        }}
+                        onInput={(event) => {
+                          const target = event.target as HTMLTextAreaElement;
+                          target.style.height = 'auto';
+                          target.style.height = target.scrollHeight + 'px';
+                        }}
                         placeholder="Behaviors to avoid"
-                        className="min-h-[88px] resize-y rounded-2xl border-none bg-transparent p-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)]"
+                        className="min-h-[88px] resize-none overflow-hidden rounded-2xl border-none bg-transparent p-2 text-sm text-[#0f172a] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)]"
+                        style={{ height: 'auto' }}
                       />
                     </label>
                   </div>
@@ -2333,7 +2349,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         content_style: `
                           body {
                             background-color: #ebecf0 !important;
-                            color: ${theme === "dark" ? "#f8fafc" : "#0f172a"} !important;
+                            color: #0f172a !important;
                             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
                             font-size: 15px;
                             padding: 10px;
@@ -2480,7 +2496,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   content_style: `
                     body {
                       background-color: #ebecf0 !important;
-                      color: ${theme === "dark" ? "#f8fafc" : "#0f172a"} !important;
+                      color: #0f172a !important;
                       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
                       font-size: 15px;
                       padding: 10px;
