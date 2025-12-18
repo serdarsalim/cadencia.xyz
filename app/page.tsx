@@ -2418,7 +2418,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
               </p>
               <UserInfo />
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4">
               <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
                 Full name
                 <input
@@ -2428,22 +2428,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   placeholder="Your name"
                   className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
                 />
-              </label>
-              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                First day of week
-                <select
-                  value={weekStartDay}
-                  onChange={(event) =>
-                    setWeekStartDay(Number(event.target.value) as WeekdayIndex)
-                  }
-                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
-                >
-                  {WEEK_START_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
               </label>
             </div>
           </div>
@@ -2517,55 +2501,50 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
       <footer className="mt-24 border-t border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] px-6 py-6 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-8">
-          <div className="min-w-[220px] text-center sm:text-left">
-            <p className="text-base font-medium text-foreground">{APP_NAME}</p>
-            <p className="text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-              Personal goal and productivity tracker
-            </p>
+          <div className="flex items-center gap-4 text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+            <Link href="/about" className="transition hover:text-foreground">
+              About
+            </Link>
+            <Link href="/terms" className="transition hover:text-foreground">
+              Terms
+            </Link>
           </div>
 
-          <div className="flex flex-1 justify-center">
-            <div className="flex flex-col items-center gap-1">
-              <UserInfo showLabel />
+          <div className="flex flex-1 justify-center text-center">
+            <div>
+              <p className="text-base font-medium text-foreground">{APP_NAME}</p>
+              <p className="text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                Personal goal and productivity tracker
+              </p>
             </div>
           </div>
 
-          <div className="flex min-w-[220px] flex-col items-end gap-3">
-            <div className="flex items-center gap-4 text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-              <Link href="/about" className="transition hover:text-foreground">
-                About
-              </Link>
-              <Link href="/terms" className="transition hover:text-foreground">
-                Terms
-              </Link>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsEditingProfile((prev) => !prev);
-                }}
-                className={`flex h-10 w-10 items-center justify-center rounded-full border transition ${
-                  isProfileEditorVisible
-                    ? "border-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
-                    : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] hover:border-foreground"
-                }`}
-                aria-label="Toggle profile settings"
-                aria-pressed={isProfileEditorVisible}
-              >
-                ⚙️
-              </button>
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] text-lg transition hover:border-foreground"
-                aria-label="Toggle dark mode"
-              >
-                <span role="img" aria-hidden="true">
-                  {theme === "light" ? "🌙" : "☀️"}
-                </span>
-              </button>
-            </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setIsEditingProfile((prev) => !prev);
+              }}
+              className={`flex h-10 w-10 items-center justify-center rounded-full border transition ${
+                isProfileEditorVisible
+                  ? "border-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
+                  : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] hover:border-foreground"
+              }`}
+              aria-label="Toggle profile settings"
+              aria-pressed={isProfileEditorVisible}
+            >
+              ⚙️
+            </button>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] text-lg transition hover:border-foreground"
+              aria-label="Toggle dark mode"
+            >
+              <span role="img" aria-hidden="true">
+                {theme === "light" ? "🌙" : "☀️"}
+              </span>
+            </button>
           </div>
         </div>
       </footer>

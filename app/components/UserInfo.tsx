@@ -32,12 +32,24 @@ export function UserInfo({ showLabel = false }: UserInfoProps) {
 
   if (!session?.user) {
     return (
-      <a
-        href="/api/auth/signin"
-        className="text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:text-foreground"
-      >
-        Sign in
-      </a>
+      <div className="flex items-center gap-3">
+        <a
+          href="/api/auth/signin"
+          className="text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:text-foreground"
+        >
+          Sign in
+        </a>
+        <span className="text-[color-mix(in_srgb,var(--foreground)_30%,transparent)]">
+          /
+        </span>
+        <a
+          href="/api/auth/signin"
+          className="text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:text-foreground"
+          title="Sign up to save your goals and tracker data"
+        >
+          Sign up
+        </a>
+      </div>
     );
   }
 
