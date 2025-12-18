@@ -854,6 +854,7 @@ export default function Home() {
           name: personName,
           dateOfBirth,
           email,
+          goalsSectionTitle,
         })
       );
 
