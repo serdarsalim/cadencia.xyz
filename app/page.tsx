@@ -402,11 +402,11 @@ export default function Home() {
   const [activeKrDraftGoalId, setActiveKrDraftGoalId] = useState<string | null>(null);
   const [isAddingGoal, setIsAddingGoal] = useState(false);
   const [goalFieldDrafts, setGoalFieldDrafts] = useState<
-    Record<string, { title?: string; timeframe?: string }>
+    Record<string, { title?: string }>
   >({});
   const [activeGoalFieldEdit, setActiveGoalFieldEdit] = useState<{
     goalId: string;
-    field: "title" | "timeframe";
+    field: "title";
   } | null>(null);
   const [krFieldDrafts, setKrFieldDrafts] = useState<
     Record<string, { title?: string }>
@@ -1359,11 +1359,10 @@ const handleKrDraftChange = (goalId: string, value: string) => {
   const cancelGoalDraft = () => {
     setIsAddingGoal(false);
     setNewGoalTitle("");
-    setNewGoalTimeframe("");
   };
 
-  const beginGoalFieldEdit = (goal: Goal, field: "title" | "timeframe") => {
-    const currentValue = field === "title" ? goal.title : goal.timeframe;
+  const beginGoalFieldEdit = (goal: Goal, field: "title") => {
+    const currentValue = goal.title;
     setActiveGoalFieldEdit({ goalId: goal.id, field });
     setGoalFieldDrafts((prev) => ({
       ...prev,
@@ -1374,11 +1373,7 @@ const handleKrDraftChange = (goalId: string, value: string) => {
     }));
   };
 
-  const handleGoalFieldDraftChange = (
-    goalId: string,
-    field: "title" | "timeframe",
-    value: string
-  ) => {
+  const handleGoalFieldDraftChange = (goalId: string, field: "title", value: string) => {
     setGoalFieldDrafts((prev) => ({
       ...prev,
       [goalId]: {
@@ -1388,7 +1383,7 @@ const handleKrDraftChange = (goalId: string, value: string) => {
     }));
   };
 
-  const clearGoalFieldDraft = (goalId: string, field: "title" | "timeframe") => {
+  const clearGoalFieldDraft = (goalId: string, field: "title") => {
     setGoalFieldDrafts((prev) => {
       const existing = prev[goalId];
       if (!existing) {
@@ -1408,10 +1403,7 @@ const handleKrDraftChange = (goalId: string, value: string) => {
     });
   };
 
-  const commitGoalFieldEdit = (
-    goalId: string,
-    field: "title" | "timeframe"
-  ) => {
+  const commitGoalFieldEdit = (goalId: string, field: "title") => {
     const draftValue = goalFieldDrafts[goalId]?.[field];
     const trimmed = draftValue?.trim();
     if (!trimmed) {
@@ -1423,9 +1415,7 @@ const handleKrDraftChange = (goalId: string, value: string) => {
         goal.id === goalId
           ? {
               ...goal,
-              ...(field === "title"
-                ? { title: trimmed }
-                : { timeframe: trimmed }),
+              title: trimmed,
             }
           : goal
       )
@@ -1439,10 +1429,7 @@ const handleKrDraftChange = (goalId: string, value: string) => {
     clearGoalFieldDraft(goalId, field);
   };
 
-  const cancelGoalFieldEdit = (
-    goalId: string,
-    field: "title" | "timeframe"
-  ) => {
+  const cancelGoalFieldEdit = (goalId: string, field: "title") => {
     if (
       activeGoalFieldEdit?.goalId === goalId &&
       activeGoalFieldEdit.field === field
@@ -1567,7 +1554,7 @@ const beginKrFieldEdit = (
   const handleGoalFieldKeyDown = (
     event: KeyboardEvent<HTMLInputElement>,
     goalId: string,
-    field: "title" | "timeframe"
+    field: "title"
   ) => {
     if (event.key === "Enter") {
       event.preventDefault();
