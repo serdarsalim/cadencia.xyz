@@ -1196,6 +1196,37 @@ export default function Home() {
     return `${activeWeek.rangeLabel}, ${labelYear}`;
   }, [weeksForYear, selectedWeek, productivityYear]);
 
+  const shiftSelectedWeek = (direction: -1 | 1) => {
+    if (!weeksForYear.length) return;
+    let targetWeekNumber: number | null = selectedWeek;
+    if (targetWeekNumber === null) {
+      const currentWeek = weeksForYear.find((week) =>
+        week.dayKeys.some((dayKey) => {
+          const [y, m, d] = dayKey.split("-").map(Number);
+          const keyDate = new Date(y!, m! - 1, d);
+          const today = new Date();
+          return (
+            keyDate.getFullYear() === today.getFullYear() &&
+            keyDate.getMonth() === today.getMonth() &&
+            keyDate.getDate() === today.getDate()
+          );
+        })
+      );
+      targetWeekNumber = currentWeek ? currentWeek.weekNumber : null;
+    }
+    if (targetWeekNumber === null) {
+      targetWeekNumber = 1;
+    } else {
+      targetWeekNumber += direction;
+      if (targetWeekNumber < 1) {
+        targetWeekNumber = weeksForYear[weeksForYear.length - 1]!.weekNumber;
+      } else if (targetWeekNumber > weeksForYear[weeksForYear.length - 1]!.weekNumber) {
+        targetWeekNumber = weeksForYear[0]!.weekNumber;
+      }
+    }
+    setSelectedWeek(targetWeekNumber);
+  };
+
   const toggleFocusEditor = () => {
     setIsEditingFocus((prev) => !prev);
   };
@@ -1803,9 +1834,9 @@ const goalStatusBadge = (status: KeyResultStatus) => {
   ) => (
     <section
       ref={sectionRef}
-      className={`mx-auto ${spacingClass} flex max-w-5xl flex-col gap-4 pt-8 text-left`}
+      className={`mx-auto ${spacingClass} flex max-w-5xl flex-col gap-4 pt-16 text-left`}
     >
-      <div className="space-y-6">
+      <div className="space-y-6 pt-6">
         <div className="text-center">
           <h2 className="text-3xl font-light uppercase tracking-[0.4em] text-foreground">
             My Goals
@@ -2140,9 +2171,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             </button>
           </nav>
         </div>
-        <div className="ml-auto text-right text-xs font-semibold uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_65%,transparent)]">
-          {navbarWeekLabel}
-        </div>
+        <div className="ml-auto" />
       </header>
       <main className="flex flex-1 items-start justify-center px-4">
         <div className="w-full py-2 text-center">
@@ -2162,6 +2191,25 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             <>
               <section className="mt-8 grid gap-8 text-left lg:grid-cols-[1.2fr_1fr]">
                 <div className="flex flex-col rounded-3xl bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] p-4">
+                <div className="mb-4 flex items-center justify-center gap-4 text-sm uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
+                  <button
+                    type="button"
+                    onClick={() => shiftSelectedWeek(-1)}
+                    className="rounded-full px-2 py-1 text-xs transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+                    aria-label="Previous week"
+                  >
+                    ←
+                  </button>
+                  <span className="font-semibold">Week {navbarWeekLabel}</span>
+                  <button
+                    type="button"
+                    onClick={() => shiftSelectedWeek(1)}
+                    className="rounded-full px-2 py-1 text-xs transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+                    aria-label="Next week"
+                  >
+                    →
+                  </button>
+                </div>
                 {selectedWeekKey && (
                   <div className="mb-4 grid gap-4 sm:grid-cols-2">
                     <label
@@ -2219,8 +2267,17 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         skin: theme === "dark" ? "oxide-dark" : "oxide",
                         content_css: theme === "dark" ? "dark" : "default",
                         toolbar: false,
-                        content_style:
-                          "html,body { background-color: transparent; color: inherit; font-family: var(--font-sans, system-ui); }",
+                        content_style: `
+                          body,
+                          .mce-content-body,
+                          .mce-content-body p,
+                          .mce-content-body span,
+                          .mce-content-body li {
+                            background: var(--card-muted-bg) !important;
+                            color: ${theme === "dark" ? "#f8fafc" : "#0f172a"} !important;
+                            font-family: var(--font-sans, system-ui);
+                          }
+                        `,
                         branding: false,
                         placeholder: selectedWeek !== null ? "Add notes for this week..." : "",
                       } as Record<string, unknown>
@@ -2745,16 +2802,14 @@ const ProductivityGrid = ({
   const toggleLabel = mode === "week" ? "Week" : "Day";
   const dayColumnWidth = "minmax(44px,max-content)";
   const toggleButton = (
-    <div className="flex justify-end">
-      <button
-        type="button"
-        onClick={onToggleMode}
-        className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-2 py-0.5 text-[9px] uppercase text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-        aria-label={`Switch to ${mode === "week" ? "day" : "week"} view`}
-      >
-        {toggleLabel}
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={onToggleMode}
+      className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-2 py-0.5 text-[9px] uppercase text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
+      aria-label={`Switch to ${mode === "week" ? "day" : "week"} view`}
+    >
+      {toggleLabel}
+    </button>
   );
 
   const handleCycle = (monthIndex: number, day: number) => {
@@ -2856,7 +2911,6 @@ const ProductivityGrid = ({
 
   const renderDayGrid = () => (
     <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6">
-      {toggleButton}
       <div
         className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
         style={{
@@ -3015,7 +3069,7 @@ const ProductivityGrid = ({
             </div>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => setYear(year - 1)}
@@ -3033,6 +3087,7 @@ const ProductivityGrid = ({
           >
             →
           </button>
+          {toggleButton}
         </div>
       </div>
     </div>
@@ -3047,7 +3102,6 @@ const ProductivityGrid = ({
             gridTemplateColumns: `${dayColumnWidth} repeat(12, minmax(0, 1fr))`,
           }}
         >
-          {toggleButton}
           {months.map((monthIndex) => {
             const monthName = new Date(2020, monthIndex).toLocaleString(undefined, {
               month: "short",
@@ -3157,7 +3211,7 @@ const ProductivityGrid = ({
               </div>
             ))}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setYear(year - 1)}
@@ -3175,6 +3229,7 @@ const ProductivityGrid = ({
             >
               →
             </button>
+            {toggleButton}
           </div>
         </div>
       </div>
