@@ -1914,10 +1914,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
         {goals.map((goal) => {
           const draft = krDrafts[goal.id] ?? { title: "" };
           return (
-            <div
-              key={goal.id}
-              className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] px-7 py-5"
-            >
+            <div key={goal.id} className="okr-card px-7 py-6">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex flex-1 flex-col">
                   {activeGoalFieldEdit?.goalId === goal.id &&
@@ -2000,10 +1997,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     activeKrFieldEdit.field === "title";
                   const isLastKr = krIndex === goal.keyResults.length - 1;
                   return (
-                    <div
-                      key={kr.id}
-                      className="rounded-2xl bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)] px-4 pb-3 pt-4"
-                    >
+                    <div key={kr.id} className="rounded-2xl px-4 pb-3 pt-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex-1 space-y-1">
                           {isEditingKrTitle ? (
@@ -2031,7 +2025,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                                 )
                               }
                               autoFocus
-                              className="w-full border-b border-transparent bg-transparent text-sm font-medium text-foreground outline-none focus:border-foreground"
+                              className="kr-apple-font w-full border-b border-transparent bg-transparent text-sm font-medium text-foreground outline-none focus:border-foreground"
                             />
                           ) : (
                             <button
@@ -2039,7 +2033,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                               onClick={() =>
                                 beginKrFieldEdit(goal.id, kr, "title")
                               }
-                              className="text-left text-sm font-medium text-foreground transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
+                              className="kr-apple-font text-left text-sm font-medium text-foreground transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
                             >
                               {kr.title || "Untitled key result"}
                             </button>
@@ -2147,7 +2141,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             + Add OKR
           </button>
         ) : (
-          <div className="w-full max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)] p-6">
+          <div className="w-full max-w-3xl okr-card p-6">
             <div className="grid gap-4 sm:grid-cols-2">
               <input
                 type="text"
