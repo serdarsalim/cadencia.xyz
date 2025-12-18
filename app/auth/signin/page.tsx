@@ -41,7 +41,14 @@ export default function SignInPage() {
           </div>
 
           <button
-            onClick={() => signIn("google", { callbackUrl: "/" })}
+            onClick={() => {
+              // Check if we're in a popup
+              if (window.opener) {
+                signIn("google", { callbackUrl: "/auth/callback" });
+              } else {
+                signIn("google", { callbackUrl: "/" });
+              }
+            }}
             className="flex w-full items-center justify-center gap-3 rounded-full bg-foreground px-6 py-3 text-background transition hover:opacity-90"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
