@@ -2235,7 +2235,9 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             </button>
           </nav>
         </div>
-        <div className="ml-auto" />
+        <div className="ml-auto">
+          <UserInfo />
+        </div>
       </header>
       <main className="flex flex-1 items-start justify-center px-4">
         <div className="w-full py-2 text-center">
