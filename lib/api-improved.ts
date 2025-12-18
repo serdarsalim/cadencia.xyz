@@ -79,17 +79,32 @@ function transformProductivityToDB(obj: Record<string, number | null>): any[] {
   return Object.entries(obj).map(([key, rating]) => ({ key, rating }))
 }
 
-function transformWeeklyNotesFromDB(notes: any[]): Record<string, string> {
-  const obj: Record<string, string> = {}
+type WeeklyNotePayload = {
+  content: string
+  dos?: string
+  donts?: string
+}
+
+function transformWeeklyNotesFromDB(notes: any[]): Record<string, WeeklyNotePayload> {
+  const obj: Record<string, WeeklyNotePayload> = {}
   if (!Array.isArray(notes)) return obj
   for (const note of notes) {
-    obj[note.weekKey] = note.content
+    obj[note.weekKey] = {
+      content: note.content ?? '',
+      dos: note.dos ?? '',
+      donts: note.donts ?? ''
+    }
   }
   return obj
 }
 
-function transformWeeklyNotesToDB(obj: Record<string, string>): any[] {
-  return Object.entries(obj).map(([weekKey, content]) => ({ weekKey, content }))
+function transformWeeklyNotesToDB(obj: Record<string, WeeklyNotePayload>): any[] {
+  return Object.entries(obj).map(([weekKey, entry]) => ({
+    weekKey,
+    content: entry.content ?? '',
+    dos: entry.dos ?? '',
+    donts: entry.donts ?? ''
+  }))
 }
 
 function transformMonthEntriesFromDB(entries: any[]): Record<string, string> {
