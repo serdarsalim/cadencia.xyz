@@ -2328,17 +2328,18 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         license_key: "gpl",
                         plugins: "lists",
                         skin: theme === "dark" ? "oxide-dark" : "oxide",
-                        content_css: theme === "dark" ? "dark" : "default",
+                        content_css: false,
                         toolbar: false,
                         content_style: `
-                          body,
-                          .mce-content-body,
-                          .mce-content-body p,
-                          .mce-content-body span,
-                          .mce-content-body li {
-                            background: var(--card-muted-bg) !important;
+                          body {
+                            background-color: #ebecf0 !important;
                             color: ${theme === "dark" ? "#f8fafc" : "#0f172a"} !important;
-                            font-family: var(--font-sans, system-ui);
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                            padding: 10px;
+                            margin: 0;
+                          }
+                          * {
+                            background-color: transparent !important;
                           }
                         `,
                         branding: false,
@@ -2472,9 +2473,21 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   height: 320,
                   license_key: "gpl",
                   skin: theme === "dark" ? "oxide-dark" : "oxide",
-                  content_css: theme === "dark" ? "dark" : "default",
+                  content_css: false,
                   toolbar:
                     "bold italic underline | bullist numlist | link removeformat",
+                  content_style: `
+                    body {
+                      background-color: ${theme === "dark" ? "rgba(248, 250, 252, 0.04)" : "rgba(15, 23, 42, 0.04)"} !important;
+                      color: ${theme === "dark" ? "#f8fafc" : "#0f172a"} !important;
+                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                      padding: 10px;
+                      margin: 0;
+                    }
+                    * {
+                      background-color: transparent !important;
+                    }
+                  `,
                   branding: false,
                 } as Record<string, unknown>
               }

@@ -117,7 +117,6 @@ await prisma.$transaction(async (tx) => {
 - `lib/use-synced-state.ts` - React hook for synced state
 - `lib/toast.tsx` - Toast notification system
 - `MIGRATION_GUIDE.md` - Step-by-step migration instructions
-- `app/api/goals/route.old.ts` - Backup of old implementation
 
 ## 🚀 How to Use
 
@@ -136,7 +135,6 @@ If issues occur:
 1. Change imports back to `lib/api`
 2. Replace `useSyncedState` with `useState` + `useEffect`
 3. Remove ToastProvider
-4. Restore old goals route: `mv route.old.ts route.ts`
 
 ## ⚠️ Not Included (Future Improvements)
 
