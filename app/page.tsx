@@ -2370,8 +2370,13 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                             color: #0f172a !important;
                             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
                             font-size: 15px;
-                            padding: 10px 25px;
+                            padding: 10px;
                             margin: 0;
+                          }
+                          @media (min-width: 640px) {
+                            body {
+                              padding: 10px 25px;
+                            }
                           }
                           * {
                             background-color: transparent !important;
@@ -2503,8 +2508,13 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                       color: #0f172a !important;
                       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
                       font-size: 15px;
-                      padding: 10px 25px;
+                      padding: 10px;
                       margin: 0;
+                    }
+                    @media (min-width: 640px) {
+                      body {
+                        padding: 10px 25px;
+                      }
                     }
                     * {
                       background-color: transparent !important;
