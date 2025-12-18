@@ -10,6 +10,18 @@ import {
 
 export async function migrateFromLocalStorage(): Promise<boolean> {
   try {
+    const wantsMigration =
+      window.localStorage.getItem('timespent-migration-opt-in') === 'true'
+    if (!wantsMigration) {
+      console.log('Skipping migration because opt-in flag is not set')
+      return true
+    }
+    const isDemoMode = window.localStorage.getItem('timespent-demo-mode') === 'true'
+    if (isDemoMode) {
+      console.log('Skipping migration because demo data should not sync')
+      return true
+    }
+
     // Check if migration has already been done
     const migrationDone = window.localStorage.getItem('timespent-migration-done')
     if (migrationDone === 'true') {

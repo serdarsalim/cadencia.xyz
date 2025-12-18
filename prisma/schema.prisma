@@ -140,6 +140,8 @@ model WeeklyNote {
   user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   weekKey String // Format: "week-YYYY-W"
   content String
+  dos     String?
+  donts   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

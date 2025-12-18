@@ -78,8 +78,12 @@ export const demoFocusAreas = [
 
 export const demoWeeklyNotes = {
   // This week
-  [`${new Date().getFullYear()}-W${Math.ceil((new Date().getDate() - new Date().getDay() + 10) / 7)}`]:
-    "Great progress this week! Focused on deep work sessions and maintained good work-life balance.",
+  [`${new Date().getFullYear()}-W${Math.ceil((new Date().getDate() - new Date().getDay() + 10) / 7)}`]: {
+    content:
+      "Great progress this week! Focused on deep work sessions and maintained good work-life balance.",
+    dos: "Plan deep work blocks in advance\nReview priorities nightly",
+    donts: "Skip warm-ups before exercise\nOverbook afternoons",
+  },
 };
 
 export const demoMonthEntries = {

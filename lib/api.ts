@@ -99,21 +99,36 @@ function transformProductivityToDB(obj: Record<string, number | null>): any[] {
 }
 
 // Transform weekly notes from array to object
-function transformWeeklyNotesFromDB(notes: any[]): Record<string, string> {
-  const obj: Record<string, string> = {}
+type WeeklyNotePayload = {
+  content: string
+  dos?: string
+  donts?: string
+}
+
+function transformWeeklyNotesFromDB(notes: any[]): Record<string, WeeklyNotePayload> {
+  const obj: Record<string, WeeklyNotePayload> = {}
   if (!Array.isArray(notes)) {
     console.error('transformWeeklyNotesFromDB: notes is not an array', notes)
     return obj
   }
   for (const note of notes) {
-    obj[note.weekKey] = note.content
+    obj[note.weekKey] = {
+      content: note.content ?? '',
+      dos: note.dos ?? '',
+      donts: note.donts ?? ''
+    }
   }
   return obj
 }
 
 // Transform weekly notes from object to array
-function transformWeeklyNotesToDB(obj: Record<string, string>): any[] {
-  return Object.entries(obj).map(([weekKey, content]) => ({ weekKey, content }))
+function transformWeeklyNotesToDB(obj: Record<string, WeeklyNotePayload>): any[] {
+  return Object.entries(obj).map(([weekKey, entry]) => ({
+    weekKey,
+    content: entry.content ?? '',
+    dos: entry.dos ?? '',
+    donts: entry.donts ?? ''
+  }))
 }
 
 // Transform month entries from array to object
@@ -283,7 +298,7 @@ export async function saveProductivity(productivityRatings: Record<string, numbe
   }
 }
 
-export async function saveWeeklyNotes(weeklyNotes: Record<string, string>) {
+export async function saveWeeklyNotes(weeklyNotes: Record<string, WeeklyNotePayload>) {
   try {
     const array = transformWeeklyNotesToDB(weeklyNotes)
     const response = await fetch('/api/weekly-notes', {

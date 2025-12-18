@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "WeeklyNote"
+ADD COLUMN IF NOT EXISTS "dos" TEXT,
+ADD COLUMN IF NOT EXISTS "donts" TEXT;

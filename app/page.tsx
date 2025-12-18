@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { UserInfo } from "./components/UserInfo";
 import { migrateFromLocalStorage } from "@/lib/migrate";
 import {
@@ -214,6 +214,12 @@ type Goal = {
   statusOverride?: KeyResultStatus;
 };
 
+type WeeklyNoteEntry = {
+  content: string;
+  dos: string;
+  donts: string;
+};
+
 const TinyEditor = dynamic(
   () => import("@tinymce/tinymce-react").then((mod) => mod.Editor),
   { ssr: false }
@@ -356,13 +362,16 @@ export default function Home() {
   const [recentYears, setRecentYears] = useState<string>("10");
   const [view, setView] = useState<ViewMode>(() => {
     // Initialize from localStorage if available
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const stored = window.localStorage.getItem("timespent-active-view");
-      if (stored === "life" || stored === "productivity" || stored === "goals") {
+      if (stored === "productivity" || stored === "goals") {
         return stored;
       }
+      if (stored === "life") {
+        return "productivity";
+      }
     }
-    return "life";
+    return "productivity";
   });
   const [isHydrated, setIsHydrated] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -407,9 +416,10 @@ export default function Home() {
     krId: string;
     field: "title";
   } | null>(null);
-  const [weeklyNotes, setWeeklyNotes] = useState<Record<string, string>>({});
+  const [weeklyNotes, setWeeklyNotes] = useState<Record<string, WeeklyNoteEntry>>({});
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const goalsSectionRef = useRef<HTMLDivElement | null>(null);
   const lastProcessedScheduleRef = useRef<string | null>(null);
   const pendingScheduleRef = useRef<Record<string, ScheduleEntry[]>>({});
   const scheduleSaveTimeoutRef = useRef<number | null>(null);
@@ -431,7 +441,7 @@ export default function Home() {
   const isSavingProductivityRef = useRef(false);
   const lastServerSavedProductivityRef = useRef<string | null>(null);
   const lastProcessedWeeklyNotesRef = useRef<string | null>(null);
-  const pendingWeeklyNotesRef = useRef<Record<string, string>>({});
+  const pendingWeeklyNotesRef = useRef<Record<string, WeeklyNoteEntry>>({});
   const weeklyNotesSaveTimeoutRef = useRef<number | null>(null);
   const isSavingWeeklyNotesRef = useRef(false);
   const lastServerSavedWeeklyNotesRef = useRef<string | null>(null);
@@ -704,6 +714,11 @@ export default function Home() {
 
         if (isLoggedIn) {
           setIsDemoMode(false);
+          try {
+            window.localStorage.setItem("timespent-demo-mode", "false");
+          } catch (error) {
+            console.error("Failed to update demo mode flag", error);
+          }
           // Logged in - load from database
           await migrateFromLocalStorage();
           cleanupOldScheduleEntries();
@@ -711,39 +726,48 @@ export default function Home() {
           const data = await loadAllData();
 
           if (data) {
-            // Set state from database
-            if (data.goals.length > 0) setGoals(data.goals);
-            if (Object.keys(data.scheduleEntries).length > 0) setScheduleEntries(normalizeScheduleEntryColors(data.scheduleEntries));
-            if (Object.keys(data.productivityRatings).length > 0) setProductivityRatings(data.productivityRatings);
-            if (Object.keys(data.weeklyNotes).length > 0) setWeeklyNotes(data.weeklyNotes);
-            if (data.focusAreas.length > 0) setFocusAreas(data.focusAreas);
-            if (Object.keys(data.monthEntries).length > 0) setMonthEntries(data.monthEntries);
+            setGoals(data.goals ?? []);
+            setScheduleEntries(normalizeScheduleEntryColors(data.scheduleEntries ?? {}));
+            setProductivityRatings(data.productivityRatings ?? {});
+            setWeeklyNotes(normalizeWeeklyNotes(data.weeklyNotes));
+            setFocusAreas(data.focusAreas ?? []);
+            setMonthEntries(data.monthEntries ?? {});
 
             // Set profile data
             if (data.profile) {
               if (data.profile.personName) setPersonName(data.profile.personName);
               if (data.profile.dateOfBirth) setDateOfBirth(data.profile.dateOfBirth);
-              if (data.profile.weekStartDay !== undefined) setWeekStartDay(data.profile.weekStartDay as WeekdayIndex);
+              if (data.profile.weekStartDay !== undefined) {
+                setWeekStartDay(data.profile.weekStartDay as WeekdayIndex);
+              }
               if (data.profile.recentYears) setRecentYears(data.profile.recentYears);
 
               const complete = Boolean(data.profile.personName);
               shouldOpenProfileModal = !complete;
+            } else {
+              setWeekStartDay(1);
             }
           }
           hasLoadedServerDataRef.current = true;
         } else {
           setIsDemoMode(true);
+          try {
+            window.localStorage.setItem("timespent-demo-mode", "true");
+          } catch (error) {
+            console.error("Failed to update demo mode flag", error);
+          }
           // Guest - load demo data
           setGoals(demoGoals);
           setScheduleEntries(normalizeScheduleEntryColors(demoScheduleEntries));
           setProductivityRatings(demoProductivityRatings);
-          setWeeklyNotes(demoWeeklyNotes);
+          setWeeklyNotes(normalizeWeeklyNotes(demoWeeklyNotes));
           setFocusAreas(demoFocusAreas);
           setMonthEntries(demoMonthEntries);
           setPersonName(demoProfile.personName);
           setDateOfBirth(demoProfile.dateOfBirth);
           setWeekStartDay(demoProfile.weekStartDay as WeekdayIndex);
           setRecentYears(demoProfile.recentYears);
+          setView("productivity");
         }
 
         // Also load UI preferences from localStorage (these are not in DB)
@@ -757,7 +781,13 @@ export default function Home() {
 
         const storedView = window.localStorage.getItem("timespent-active-view");
         if (storedView === "life" || storedView === "productivity" || storedView === "goals") {
-          setView(storedView);
+          if (isLoggedIn) {
+            setView(storedView);
+          } else {
+            setView("productivity");
+          }
+        } else if (!isLoggedIn) {
+          setView("productivity");
         }
 
         const storedProfileModalPreference = window.localStorage.getItem("timespent-profile-modal-open");
@@ -1219,6 +1249,20 @@ const handleKrDraftChange = (goalId: string, value: string) => {
     });
   };
 
+  const updateWeeklyNoteEntry = (weekKey: string, updates: Partial<WeeklyNoteEntry>) => {
+    setWeeklyNotes((prev) => {
+      const existing = prev[weekKey] ?? createWeeklyNoteEntry();
+      return {
+        ...prev,
+        [weekKey]: {
+          content: updates.content ?? existing.content,
+          dos: updates.dos ?? existing.dos,
+          donts: updates.donts ?? existing.donts,
+        },
+      };
+    });
+  };
+
   const startGoalDraft = () => {
     setIsAddingGoal(true);
   };
@@ -1634,6 +1678,9 @@ const goalStatusBadge = (status: KeyResultStatus) => {
     return productivityGoals[productivityYear] ?? "";
   }, [productivityGoals, productivityYear]);
 
+  const selectedWeekKey = selectedWeek !== null ? `week-${productivityYear}-${selectedWeek}` : null;
+  const selectedWeekEntry = selectedWeekKey ? weeklyNotes[selectedWeekKey] ?? createWeeklyNoteEntry() : null;
+
   const selectedMonthLabel = useMemo(() => {
     if (!selectedMonth || !dateOfBirth) {
       return null;
@@ -1701,6 +1748,313 @@ const goalStatusBadge = (status: KeyResultStatus) => {
     });
   };
 
+  const scrollToGoalsSection = () => {
+    setView("productivity");
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      goalsSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  };
+
+  const renderGoalsSection = (
+    spacingClass = "mt-8",
+    sectionRef?: RefObject<HTMLDivElement>
+  ) => (
+    <section
+      ref={sectionRef}
+      className={`mx-auto ${spacingClass} flex max-w-5xl flex-col gap-4 pt-8 text-left`}
+    >
+      <div className="space-y-6">
+        <div className="text-center">
+          <h2 className="text-3xl font-light uppercase tracking-[0.4em] text-foreground">
+            My Goals
+          </h2>
+        </div>
+        {goals.length === 0 && (
+          <p className="text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] text-center">
+            No goals yet. Define your first objective above to start tracking OKRs.
+          </p>
+        )}
+        {goals.map((goal) => {
+          const draft = krDrafts[goal.id] ?? { title: "" };
+          return (
+            <div
+              key={goal.id}
+              className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] px-7 py-5"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-1 flex-col">
+                  {activeGoalFieldEdit?.goalId === goal.id &&
+                  activeGoalFieldEdit.field === "title" ? (
+                    <input
+                      type="text"
+                      value={goalFieldDrafts[goal.id]?.title ?? goal.title}
+                      onChange={(event) =>
+                        handleGoalFieldDraftChange(
+                          goal.id,
+                          "title",
+                          event.target.value
+                        )
+                      }
+                      onBlur={() => commitGoalFieldEdit(goal.id, "title")}
+                      onKeyDown={(event) =>
+                        handleGoalFieldKeyDown(event, goal.id, "title")
+                      }
+                      autoFocus
+                      className="w-full border-b border-transparent bg-transparent text-2xl font-light text-foreground outline-none focus:border-foreground"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => beginGoalFieldEdit(goal, "title")}
+                      className="text-left text-2xl font-light text-foreground transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
+                    >
+                      {goal.title}
+                    </button>
+                  )}
+                  {activeGoalFieldEdit?.goalId === goal.id &&
+                  activeGoalFieldEdit.field === "timeframe" ? (
+                    <input
+                      type="text"
+                      value={
+                        goalFieldDrafts[goal.id]?.timeframe ?? goal.timeframe
+                      }
+                      onChange={(event) =>
+                        handleGoalFieldDraftChange(
+                          goal.id,
+                          "timeframe",
+                          event.target.value
+                        )
+                      }
+                      onBlur={() => commitGoalFieldEdit(goal.id, "timeframe")}
+                      onKeyDown={(event) =>
+                        handleGoalFieldKeyDown(event, goal.id, "timeframe")
+                      }
+                      autoFocus
+                      className="mt-1 w-full border-b border-transparent bg-transparent text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] outline-none focus:border-foreground"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => beginGoalFieldEdit(goal, "timeframe")}
+                      className="mt-1 text-left text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:text-foreground"
+                    >
+                      {goal.timeframe}
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveGoal(goal.id)}
+                    className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
+                    aria-label="Remove goal"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {goal.keyResults.map((kr, krIndex) => {
+                  const krKey = krFieldKey(goal.id, kr.id);
+                  const isEditingKrTitle =
+                    activeKrFieldEdit?.goalId === goal.id &&
+                    activeKrFieldEdit.krId === kr.id &&
+                    activeKrFieldEdit.field === "title";
+                  const isLastKr = krIndex === goal.keyResults.length - 1;
+                  return (
+                    <div
+                      key={kr.id}
+                      className="rounded-2xl bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)] px-4 pb-3 pt-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex-1 space-y-1">
+                          {isEditingKrTitle ? (
+                            <input
+                              type="text"
+                              value={
+                                krFieldDrafts[krKey]?.title ?? kr.title
+                              }
+                              onChange={(event) =>
+                                handleKrFieldDraftChange(
+                                  goal.id,
+                                  kr.id,
+                                  event.target.value
+                                )
+                              }
+                              onBlur={() =>
+                                commitKrFieldEdit(goal.id, kr.id, "title")
+                              }
+                              onKeyDown={(event) =>
+                                handleKeyResultFieldKeyDown(
+                                  event,
+                                  goal.id,
+                                  kr.id,
+                                  "title"
+                                )
+                              }
+                              autoFocus
+                              className="w-full border-b border-transparent bg-transparent text-sm font-medium text-foreground outline-none focus:border-foreground"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                beginKrFieldEdit(goal.id, kr, "title")
+                              }
+                              className="text-left text-sm font-medium text-foreground transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
+                            >
+                              {kr.title || "Untitled key result"}
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              cycleKeyResultStatus(goal.id, kr.id)
+                            }
+                            className={`rounded-full px-3 py-1 text-xs uppercase tracking-[0.2em] ${goalStatusBadge(
+                              kr.status
+                            )}`}
+                          >
+                            {kr.status === "started"
+                              ? "Started"
+                              : kr.status === "pending"
+                                ? "Pending"
+                                : kr.status === "on-hold"
+                                  ? "On hold"
+                                  : "Completed"}
+                          </button>
+                          {isLastKr && activeKrDraftGoalId !== goal.id && (
+                            <button
+                              type="button"
+                              onClick={() => startKeyResultDraft(goal.id)}
+                              className="text-xs text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:text-foreground"
+                              aria-label="Add key result"
+                            >
+                              +
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleRemoveKeyResult(goal.id, kr.id)
+                            }
+                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
+                            aria-label="Remove key result"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {activeKrDraftGoalId === goal.id && (
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <div className="flex-1 rounded-2xl border border-dashed border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] p-4">
+                      <input
+                        type="text"
+                        value={draft.title}
+                        onChange={(event) =>
+                          handleKrDraftChange(goal.id, event.target.value)
+                        }
+                        placeholder="Add a key result"
+                        className="w-full border-b border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAddKeyResult(goal.id)}
+                        className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-1.5 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => cancelKeyResultDraft(goal.id)}
+                        className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {goal.keyResults.length === 0 && activeKrDraftGoalId !== goal.id && (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => startKeyResultDraft(goal.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-base text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:text-foreground"
+                      aria-label="Add key result"
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-6 flex justify-center">
+        {!isAddingGoal ? (
+          <button
+            type="button"
+            onClick={startGoalDraft}
+            className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
+          >
+            + Add OKR
+          </button>
+        ) : (
+          <div className="w-full max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)] p-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <input
+                type="text"
+                value={newGoalTitle}
+                onChange={(event) => setNewGoalTitle(event.target.value)}
+                placeholder="Objective title"
+                className="border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
+              />
+              <input
+                type="text"
+                value={newGoalTimeframe}
+                onChange={(event) => setNewGoalTimeframe(event.target.value)}
+                placeholder="Timeframe (e.g., Q2 2025)"
+                className="border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={cancelGoalDraft}
+                className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddGoal}
+                className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+
   if (!isHydrated) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -1716,7 +2070,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground transition-colors">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] px-4 py-3 text-sm">
+      <header className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-4 border-b border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] bg-background/95 px-4 py-3 text-sm backdrop-blur">
         <div className="flex flex-wrap items-center gap-4">
           <Link href="/" className="block">
             <img
@@ -1728,17 +2082,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           <nav className="flex gap-2 text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
             <button
               type="button"
-              onClick={() => setView("life")}
-              className={`rounded-full px-4 py-1 transition ${
-                view === "life"
-                  ? "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-foreground"
-                  : "text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]"
-              }`}
-            >
-              Schedule
-            </button>
-            <button
-              type="button"
               onClick={() => setView("productivity")}
               className={`rounded-full px-4 py-1 transition ${
                 view === "productivity"
@@ -1746,11 +2089,11 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   : "text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]"
               }`}
             >
-              Tracker
+              Pr
             </button>
             <button
               type="button"
-              onClick={() => setView("goals")}
+              onClick={scrollToGoalsSection}
               className={`rounded-full px-4 py-1 transition ${
                 view === "goals"
                   ? "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-foreground"
@@ -1760,6 +2103,9 @@ const goalStatusBadge = (status: KeyResultStatus) => {
               Goals
             </button>
           </nav>
+        </div>
+        <div className="ml-auto text-right text-xs font-semibold uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_65%,transparent)]">
+          Dec 15–21, 2025
         </div>
       </header>
       <main className="flex flex-1 items-start justify-center px-4">
@@ -1774,357 +2120,91 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             </section>
           )}
 
-          {view === "goals" && (
-            <section className="mx-auto mt-8 flex max-w-5xl flex-col gap-4 text-left">
-              <div className="space-y-3">
-                {goals.length === 0 && (
-                  <p className="text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                    No goals yet. Define your first objective above to start tracking OKRs.
-                  </p>
-                )}
-                {goals.map((goal) => {
-                  const status = deriveGoalStatus(goal);
-                  const draft = krDrafts[goal.id] ?? { title: "" };
-                  return (
-                    <div
-                      key={goal.id}
-                      className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] px-7 py-5"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="flex flex-1 flex-col">
-                          {activeGoalFieldEdit?.goalId === goal.id &&
-                          activeGoalFieldEdit.field === "title" ? (
-                            <input
-                              type="text"
-                              value={goalFieldDrafts[goal.id]?.title ?? goal.title}
-                              onChange={(event) =>
-                                handleGoalFieldDraftChange(
-                                  goal.id,
-                                  "title",
-                                  event.target.value
-                                )
-                              }
-                              onBlur={() => commitGoalFieldEdit(goal.id, "title")}
-                              onKeyDown={(event) =>
-                                handleGoalFieldKeyDown(event, goal.id, "title")
-                              }
-                              autoFocus
-                              className="w-full border-b border-transparent bg-transparent text-2xl font-light text-foreground outline-none focus:border-foreground"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => beginGoalFieldEdit(goal, "title")}
-                              className="text-left text-2xl font-light text-foreground transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
-                            >
-                              {goal.title}
-                            </button>
-                          )}
-                          {activeGoalFieldEdit?.goalId === goal.id &&
-                          activeGoalFieldEdit.field === "timeframe" ? (
-                            <input
-                              type="text"
-                              value={
-                                goalFieldDrafts[goal.id]?.timeframe ?? goal.timeframe
-                              }
-                              onChange={(event) =>
-                                handleGoalFieldDraftChange(
-                                  goal.id,
-                                  "timeframe",
-                                  event.target.value
-                                )
-                              }
-                              onBlur={() => commitGoalFieldEdit(goal.id, "timeframe")}
-                              onKeyDown={(event) =>
-                                handleGoalFieldKeyDown(event, goal.id, "timeframe")
-                              }
-                              autoFocus
-                              className="mt-1 w-full border-b border-transparent bg-transparent text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] outline-none focus:border-foreground"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => beginGoalFieldEdit(goal, "timeframe")}
-                              className="mt-1 text-left text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:text-foreground"
-                            >
-                              {goal.timeframe}
-                            </button>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveGoal(goal.id)}
-                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
-                            aria-label="Remove goal"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 space-y-2">
-                        {goal.keyResults.map((kr, krIndex) => {
-                          const krKey = krFieldKey(goal.id, kr.id);
-                          const isEditingKrTitle =
-                            activeKrFieldEdit?.goalId === goal.id &&
-                            activeKrFieldEdit.krId === kr.id &&
-                            activeKrFieldEdit.field === "title";
-                          const isLastKr = krIndex === goal.keyResults.length - 1;
-                          return (
-                            <div
-                              key={kr.id}
-                              className="rounded-2xl bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)] px-4 pb-3 pt-4"
-                            >
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div className="flex-1 space-y-1">
-                                  {isEditingKrTitle ? (
-                                    <input
-                                      type="text"
-                                      value={
-                                        krFieldDrafts[krKey]?.title ?? kr.title
-                                      }
-                                      onChange={(event) =>
-                                        handleKrFieldDraftChange(
-                                          goal.id,
-                                          kr.id,
-                                          event.target.value
-                                        )
-                                      }
-                                      onBlur={() =>
-                                        commitKrFieldEdit(goal.id, kr.id, "title")
-                                      }
-                                      onKeyDown={(event) =>
-                                        handleKeyResultFieldKeyDown(
-                                          event,
-                                          goal.id,
-                                          kr.id,
-                                          "title"
-                                        )
-                                      }
-                                      autoFocus
-                                      className="w-full border-b border-transparent bg-transparent text-sm font-medium text-foreground outline-none focus:border-foreground"
-                                    />
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        beginKrFieldEdit(goal.id, kr, "title")
-                                      }
-                                      className="text-left text-sm font-medium text-foreground transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
-                                    >
-                                      {kr.title || "Untitled key result"}
-                                    </button>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      cycleKeyResultStatus(goal.id, kr.id)
-                                    }
-                                    className={`rounded-full px-3 py-1 text-xs uppercase tracking-[0.2em] ${goalStatusBadge(
-                                      kr.status
-                                    )}`}
-                                  >
-                                {kr.status === "started"
-                                  ? "Started"
-                                  : kr.status === "pending"
-                                  ? "Pending"
-                                  : kr.status === "on-hold"
-                                  ? "On hold"
-                                  : "Completed"}
-                                  </button>
-                                  {isLastKr && activeKrDraftGoalId !== goal.id && (
-                                    <button
-                                      type="button"
-                                      onClick={() => startKeyResultDraft(goal.id)}
-                                      className="text-xs text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:text-foreground"
-                                      aria-label="Add key result"
-                                    >
-                                      +
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleRemoveKeyResult(goal.id, kr.id)
-                                    }
-                                    className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
-                                    aria-label="Remove key result"
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {activeKrDraftGoalId === goal.id && (
-                          <div className="mt-3 flex flex-wrap items-center gap-3">
-                            <div className="flex-1 rounded-2xl border border-dashed border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] p-4">
-                              <input
-                                type="text"
-                                value={draft.title}
-                                onChange={(event) =>
-                                  handleKrDraftChange(goal.id, event.target.value)
-                                }
-                                placeholder="Add a key result"
-                                className="w-full border-b border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleAddKeyResult(goal.id)}
-                                className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-1.5 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-                              >
-                                Save
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => cancelKeyResultDraft(goal.id)}
-                                className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        {goal.keyResults.length === 0 && activeKrDraftGoalId !== goal.id && (
-                          <div className="flex justify-end">
-                            <button
-                              type="button"
-                              onClick={() => startKeyResultDraft(goal.id)}
-                              className="flex h-7 w-7 items-center justify-center rounded-full text-base text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:text-foreground"
-                              aria-label="Add key result"
-                            >
-                              +
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-6 flex justify-center">
-                {!isAddingGoal ? (
-                  <button
-                    type="button"
-                    onClick={startGoalDraft}
-                    className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-                  >
-                    + Add OKR
-                  </button>
-                ) : (
-                  <div className="w-full max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)] p-6">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <input
-                        type="text"
-                        value={newGoalTitle}
-                        onChange={(event) => setNewGoalTitle(event.target.value)}
-                        placeholder="Objective title"
-                        className="border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
-                      />
-                      <input
-                        type="text"
-                        value={newGoalTimeframe}
-                        onChange={(event) => setNewGoalTimeframe(event.target.value)}
-                        placeholder="Timeframe (e.g., Q2 2025)"
-                        className="border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
-                      />
-                    </div>
-                    <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
-                      <button
-                        type="button"
-                        onClick={cancelGoalDraft}
-                        className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleAddGoal}
-                        className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
+          {view === "goals" && renderGoalsSection()}
 
           {view === "productivity" && (
-            <section className="mt-8 grid gap-8 text-left lg:grid-cols-[1.2fr_1fr]">
-              <div className="flex flex-col rounded-3xl bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] p-4">
-                <div className="mb-4 text-2xl font-light">
-                  <span>
-                    {selectedWeek !== null
-                      ? (() => {
-                          const weekMeta = buildWeeksForYear(productivityYear).find(
-                            (w) => w.weekNumber === selectedWeek
-                          );
-                          return weekMeta
-                            ? `${weekMeta.rangeLabel}, ${productivityYear}`
-                            : `Week ${selectedWeek}`;
-                        })()
-                      : "Productivity tracking"}
-                  </span>
-                </div>
+            <>
+              <section className="mt-8 grid gap-8 text-left lg:grid-cols-[1.2fr_1fr]">
+                <div className="flex flex-col rounded-3xl bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] p-4">
                 <div className="flex-1">
-                  <TinyEditor
-                    key={selectedWeek !== null ? `week-notes-${productivityYear}-${selectedWeek}` : `productivity-goal-${productivityYear}`}
-                    tinymceScriptSrc={TINYMCE_CDN}
-                    value={selectedWeek !== null ? (weeklyNotes[`week-${productivityYear}-${selectedWeek}`] ?? "") : currentProductivityGoal}
-                    init={
-                      {
-                        menubar: false,
-                        statusbar: false,
-                        height: 420,
-                        license_key: "gpl",
-                        plugins: "lists",
-                        skin: theme === "dark" ? "oxide-dark" : "oxide",
-                        content_css: theme === "dark" ? "dark" : "default",
-                        toolbar:
-                          "bold italic underline | bullist numlist | link removeformat",
-                        branding: false,
-                        placeholder: selectedWeek !== null ? "Add notes for this week..." : "",
-                      } as Record<string, unknown>
+                    <TinyEditor
+                      key={selectedWeek !== null ? `week-notes-${productivityYear}-${selectedWeek}` : `productivity-goal-${productivityYear}`}
+                      tinymceScriptSrc={TINYMCE_CDN}
+                      value={selectedWeek !== null ? selectedWeekEntry?.content ?? "" : currentProductivityGoal}
+                      init={
+                        {
+                          menubar: false,
+                          statusbar: false,
+                          height: 420,
+                          license_key: "gpl",
+                          plugins: "lists",
+                          skin: theme === "dark" ? "oxide-dark" : "oxide",
+                          content_css: theme === "dark" ? "dark" : "default",
+                          toolbar:
+                            "bold italic underline | bullist numlist | link removeformat",
+                          branding: false,
+                          placeholder: selectedWeek !== null ? "Add notes for this week..." : "",
+                        } as Record<string, unknown>
+                      }
+                      onEditorChange={(content) =>
+                        selectedWeekKey
+                          ? updateWeeklyNoteEntry(selectedWeekKey, { content })
+                          : setProductivityGoals((prev) => ({
+                              ...prev,
+                              [productivityYear]: content,
+                            }))
+                      }
+                    />
+                  </div>
+                  {selectedWeekKey && (
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <label className="flex flex-col gap-2 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] p-3">
+                        <span className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
+                          Do&apos;s
+                        </span>
+                        <textarea
+                          value={selectedWeekEntry?.dos ?? ""}
+                          onChange={(event) =>
+                            updateWeeklyNoteEntry(selectedWeekKey, { dos: event.target.value })
+                          }
+                          placeholder="Behaviors to reinforce"
+                          className="min-h-[80px] resize-y rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-transparent p-2 text-sm text-foreground outline-none focus:border-foreground"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-2 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] p-3">
+                        <span className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
+                          Don&apos;ts
+                        </span>
+                        <textarea
+                          value={selectedWeekEntry?.donts ?? ""}
+                          onChange={(event) =>
+                            updateWeeklyNoteEntry(selectedWeekKey, { donts: event.target.value })
+                          }
+                          placeholder="Behaviors to avoid"
+                          className="min-h-[80px] resize-y rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-transparent p-2 text-sm text-foreground outline-none focus:border-foreground"
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <ProductivityGrid
+                    year={productivityYear}
+                    setYear={setProductivityYear}
+                    ratings={productivityRatings}
+                    setRatings={setProductivityRatings}
+                    mode={productivityMode}
+                    onToggleMode={() =>
+                      setProductivityMode((prev) => (prev === "day" ? "week" : "day"))
                     }
-                    onEditorChange={(content) =>
-                      selectedWeek !== null
-                        ? setWeeklyNotes((prev) => ({
-                            ...prev,
-                            [`week-${productivityYear}-${selectedWeek}`]: content,
-                          }))
-                        : setProductivityGoals((prev) => ({
-                            ...prev,
-                            [productivityYear]: content,
-                          }))
-                    }
+                    selectedWeek={selectedWeek}
+                    setSelectedWeek={setSelectedWeek}
                   />
                 </div>
-              </div>
-
-              <div className="space-y-4">
-                <ProductivityGrid
-                  year={productivityYear}
-                  setYear={setProductivityYear}
-                  ratings={productivityRatings}
-                  setRatings={setProductivityRatings}
-                  mode={productivityMode}
-                  onToggleMode={() =>
-                    setProductivityMode((prev) => (prev === "day" ? "week" : "day"))
-                  }
-                  selectedWeek={selectedWeek}
-                  setSelectedWeek={setSelectedWeek}
-                />
-              </div>
-            </section>
+              </section>
+              {renderGoalsSection("mt-12", goalsSectionRef)}
+            </>
           )}
 
           <datalist id="time-select-options">
@@ -2680,13 +2760,13 @@ const ProductivityGrid = ({
 
   const renderDayGrid = () => (
     <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6">
+      {toggleButton}
       <div
         className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
         style={{
-          gridTemplateColumns: `${dayColumnWidth} repeat(12, minmax(0, 1fr))`,
+          gridTemplateColumns: `repeat(12, minmax(0, 1fr))`,
         }}
       >
-        {toggleButton}
         {months.map((monthIndex) => {
           const monthName = new Date(2020, monthIndex).toLocaleString(undefined, {
             month: "short",
@@ -2709,13 +2789,10 @@ const ProductivityGrid = ({
             key={`row-${dayOfMonth}`}
             className="grid items-center"
             style={{
-              gridTemplateColumns: `${dayColumnWidth} repeat(12, minmax(0, 1fr))`,
+              gridTemplateColumns: `repeat(12, minmax(0, 1fr))`,
               columnGap: "0.5rem",
             }}
           >
-            <span className="text-right text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-              {dayOfMonth}
-            </span>
             {months.map((monthIndex) => {
               const key = `${year}-${monthIndex + 1}-${dayOfMonth}`;
               const storedValue = ratings[key];
@@ -2788,7 +2865,7 @@ const ProductivityGrid = ({
                       setRatings((prev) => ({ ...prev, [key]: null }));
                     }
                   }}
-                  className={`h-4 w-full text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${weekBorderClass} ${
+                  className={`h-4 w-full text-[10px] font-semibold text-transparent transition focus:text-transparent ${weekBorderClass} ${
                     hasValue
                       ? scale.color
                       : "bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]"
@@ -4110,4 +4187,22 @@ const WeeklySchedule = ({
       )}
     </div>
   );
+};
+const createWeeklyNoteEntry = (entry?: Partial<WeeklyNoteEntry>): WeeklyNoteEntry => ({
+  content: entry?.content ?? "",
+  dos: entry?.dos ?? "",
+  donts: entry?.donts ?? "",
+});
+
+const normalizeWeeklyNotes = (
+  notes: Record<string, Partial<WeeklyNoteEntry>> | undefined
+): Record<string, WeeklyNoteEntry> => {
+  const normalized: Record<string, WeeklyNoteEntry> = {};
+  if (!notes) {
+    return normalized;
+  }
+  Object.entries(notes).forEach(([key, entry]) => {
+    normalized[key] = createWeeklyNoteEntry(entry);
+  });
+  return normalized;
 };

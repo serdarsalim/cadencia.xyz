@@ -56,6 +56,8 @@ export async function POST(request: NextRequest) {
             userId: user.id,
             weekKey: note.weekKey,
             content: note.content,
+            dos: note.dos ?? null,
+            donts: note.donts ?? null
           }))
         })
       }
