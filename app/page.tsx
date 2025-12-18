@@ -761,6 +761,9 @@ export default function Home() {
               }
               if (data.profile.recentYears) setRecentYears(data.profile.recentYears);
               if (data.profile.goalsSectionTitle) setGoalsSectionTitle(data.profile.goalsSectionTitle);
+              if (data.profile.productivityViewMode !== undefined) {
+                setProductivityMode(data.profile.productivityViewMode as "day" | "week");
+              }
 
               const complete = Boolean(data.profile.personName);
               shouldOpenProfileModal = !complete;
@@ -2193,7 +2196,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
   return (
     <div className="app-shell flex min-h-screen flex-col text-foreground transition-colors">
-      <header className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-4 border-b border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] bg-background/95 px-4 py-3 text-sm backdrop-blur">
+      <header className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-4 border-b border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-white/30 dark:bg-gray-900/25 px-4 py-3 text-sm backdrop-blur-xl">
         <div className="flex flex-wrap items-center gap-4">
           <Link href="/" className="block">
             <img
@@ -2202,21 +2205,21 @@ const goalStatusBadge = (status: KeyResultStatus) => {
               className="h-8 w-auto"
             />
           </Link>
-          <nav className="flex gap-2 text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+          <nav className="flex gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
             <button
               type="button"
               onClick={() => {
                 setView("productivity");
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className="rounded-full px-4 py-1 transition text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] hover:text-foreground"
+              className="rounded-full px-4 py-1 transition text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] hover:text-foreground"
             >
               Track
             </button>
             <button
               type="button"
               onClick={scrollToGoalsSection}
-              className="rounded-full px-4 py-1 transition text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] hover:text-foreground"
+              className="rounded-full px-4 py-1 transition text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] hover:text-foreground"
             >
               Goals
             </button>
@@ -2248,9 +2251,21 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     ratings={productivityRatings}
                     setRatings={setProductivityRatings}
                     mode={productivityMode}
-                    onToggleMode={() =>
-                      setProductivityMode((prev) => (prev === "day" ? "week" : "day"))
-                    }
+                    onToggleMode={() => {
+                      const newMode = productivityMode === "day" ? "week" : "day";
+                      setProductivityMode(newMode);
+                      // Save preference to profile
+                      if (!isDemoMode) {
+                        saveProfile({
+                          personName,
+                          dateOfBirth,
+                          weekStartDay,
+                          recentYears,
+                          goalsSectionTitle,
+                          productivityViewMode: newMode,
+                        });
+                      }
+                    }}
                     selectedWeek={selectedWeek}
                     setSelectedWeek={setSelectedWeek}
                   />
@@ -3165,6 +3180,7 @@ const ProductivityGrid = ({
             gridTemplateColumns: `${dayColumnWidth} repeat(12, minmax(0, 1fr))`,
           }}
         >
+          <div aria-hidden="true" />
           {months.map((monthIndex) => {
             const monthName = new Date(2020, monthIndex).toLocaleString(undefined, {
               month: "short",
@@ -3172,9 +3188,9 @@ const ProductivityGrid = ({
             const quarterColor =
               Math.floor(monthIndex / 3) % 2 === 0
                 ? "text-[#5B8FF9]"
-                : "text-[#F6BD16]";
+                : "text-[#9b59b6]";
             return (
-              <span key={`week-month-${monthIndex}`} className={`text-center font-medium ${quarterColor}`}>
+              <span key={`week-month-${monthIndex}`} className={`text-center font-bold ${quarterColor}`}>
                 {monthName}
               </span>
             );

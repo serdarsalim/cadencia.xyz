@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
           weekStartDay: profile.weekStartDay ?? 0,
           recentYears: profile.recentYears || '10',
           goalsSectionTitle: profile.goalsSectionTitle || '2026 GOALS',
+          productivityViewMode: profile.productivityViewMode || 'day',
         }
       })
     } else {
@@ -69,6 +70,7 @@ export async function POST(request: NextRequest) {
           weekStartDay: profile.weekStartDay ?? 0,
           recentYears: profile.recentYears || '10',
           goalsSectionTitle: profile.goalsSectionTitle || '2026 GOALS',
+          productivityViewMode: profile.productivityViewMode || 'day',
         }
       })
     }
