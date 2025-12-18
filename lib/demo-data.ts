@@ -70,14 +70,6 @@ export const demoGoals = [
   },
 ];
 
-export const demoFocusAreas = [
-  { id: "sleep", name: "Sleep", hours: "8" },
-  { id: "eating", name: "Eating", hours: "2" },
-  { id: "body", name: "Body functions", hours: "1" },
-  { id: "work", name: "Work", hours: "8" },
-  { id: "exercise", name: "Exercise", hours: "1" },
-];
-
 export const demoWeeklyNotes = {
   // This week
   [`${new Date().getFullYear()}-W${Math.ceil((new Date().getDate() - new Date().getDay() + 10) / 7)}`]: {
@@ -86,11 +78,6 @@ export const demoWeeklyNotes = {
     dos: "Plan deep work blocks in advance\nReview priorities nightly",
     donts: "Skip warm-ups before exercise\nOverbook afternoons",
   },
-};
-
-export const demoMonthEntries = {
-  [`${new Date().getFullYear()}-${new Date().getMonth() + 1}`]:
-    "# Month Highlights\n\n- Launched beta version\n- Improved productivity system\n- Started new exercise routine",
 };
 
 export const demoProfile = {

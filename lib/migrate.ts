@@ -3,8 +3,6 @@ import {
   saveSchedule,
   saveProductivity,
   saveWeeklyNotes,
-  saveFocusAreas,
-  saveMonthEntries,
   saveProfile
 } from './api'
 
@@ -36,8 +34,6 @@ export async function migrateFromLocalStorage(): Promise<boolean> {
     const schedule = window.localStorage.getItem('timespent-schedule-entries')
     const productivity = window.localStorage.getItem('timespent-productivity-ratings')
     const weeklyNotes = window.localStorage.getItem('timespent-weekly-notes')
-    const focusAreas = window.localStorage.getItem('timespent-focus-areas')
-    const monthEntries = window.localStorage.getItem('timespent-life-entries')
     const profile = window.localStorage.getItem('timespent-profile')
     const weekStart = window.localStorage.getItem('timespent-week-start')
     const recentYears = window.localStorage.getItem('timespent-recent-years')
@@ -70,20 +66,6 @@ export async function migrateFromLocalStorage(): Promise<boolean> {
       const parsed = JSON.parse(weeklyNotes)
       if (parsed && typeof parsed === 'object') {
         promises.push(saveWeeklyNotes(parsed))
-      }
-    }
-
-    if (focusAreas) {
-      const parsed = JSON.parse(focusAreas)
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        promises.push(saveFocusAreas(parsed))
-      }
-    }
-
-    if (monthEntries) {
-      const parsed = JSON.parse(monthEntries)
-      if (parsed && typeof parsed === 'object') {
-        promises.push(saveMonthEntries(parsed))
       }
     }
 

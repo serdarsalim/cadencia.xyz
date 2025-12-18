@@ -26,16 +26,12 @@ export async function GET() {
       scheduleEntries,
       productivityRatings,
       weeklyNotes,
-      monthEntries,
-      goals,
-      focusAreas
+      goals
     ] = await Promise.all([
       prisma.scheduleEntry.findMany({ where: { userId: user.id } }),
       prisma.productivityRating.findMany({ where: { userId: user.id } }),
       prisma.weeklyNote.findMany({ where: { userId: user.id } }),
-      prisma.monthEntry.findMany({ where: { userId: user.id } }),
-      prisma.goal.findMany({ where: { userId: user.id }, include: { keyResults: true } }),
-      prisma.focusArea.findMany({ where: { userId: user.id } })
+      prisma.goal.findMany({ where: { userId: user.id }, include: { keyResults: true } })
     ])
 
     // Calculate sizes
@@ -93,20 +89,9 @@ export async function GET() {
             ? Math.round(weeklyNotes.reduce((sum, n) => sum + n.content.length, 0) / weeklyNotes.length)
             : 0
         },
-        monthEntries: {
-          total: monthEntries.length,
-          size: estimateSize(monthEntries),
-          avgContentLength: monthEntries.length > 0
-            ? Math.round(monthEntries.reduce((sum, m) => sum + m.content.length, 0) / monthEntries.length)
-            : 0
-        },
         goals: {
           total: goals.length,
           size: estimateSize(goals)
-        },
-        focusAreas: {
-          total: focusAreas.length,
-          size: estimateSize(focusAreas)
         }
       }
     })

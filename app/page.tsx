@@ -11,8 +11,6 @@ import {
   saveSchedule,
   saveProductivity,
   saveWeeklyNotes,
-  saveFocusAreas,
-  saveMonthEntries,
   saveProfile
 } from "@/lib/api";
 import { APP_NAME, legacyStorageKey, storageKey } from "@/lib/branding";
@@ -26,19 +24,11 @@ import {
   demoScheduleEntries,
   demoProductivityRatings,
   demoGoals,
-  demoFocusAreas,
   demoWeeklyNotes,
-  demoMonthEntries,
   demoProfile,
 } from "@/lib/demo-data";
 
 type Theme = "light" | "dark";
-
-type FocusArea = {
-  id: string;
-  name: string;
-  hours: string;
-};
 
 type RepeatFrequency = "none" | "daily" | "weekly" | "biweekly" | "monthly";
 
@@ -187,13 +177,6 @@ type EditingEntryState = {
   scope: "single" | "future";
   canChooseScope: boolean;
 };
-
-const defaultFocusAreas: FocusArea[] = [
-  { id: "sleep", name: "Sleep", hours: "8" },
-  { id: "eating", name: "Eating", hours: "2" },
-  { id: "body", name: "Body functions", hours: "1" },
-  { id: "work", name: "Work", hours: "8" },
-];
 
 type ViewMode = "life" | "productivity";
 
@@ -358,8 +341,6 @@ export default function Home() {
   const [email, setEmail] = useState<string>("");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [theme, setTheme] = useState<Theme>("light");
-  const [focusAreas, setFocusAreas] = useState<FocusArea[]>(defaultFocusAreas);
-  const [isEditingFocus, setIsEditingFocus] = useState(false);
   const [recentYears, setRecentYears] = useState<string>("10");
   const [view, setView] = useState<ViewMode>(() => {
     // Initialize from localStorage if available
@@ -380,11 +361,6 @@ export default function Home() {
   const weeksForYear = useMemo(() => buildWeeksForYear(productivityYear), [productivityYear]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [monthEntries, setMonthEntries] = useState<Record<string, string>>({});
-  const [selectedMonth, setSelectedMonth] = useState<{
-    year: number;
-    month: number;
-  } | null>(null);
   const [productivityRatings, setProductivityRatings] = useState<
     Record<string, number | null>
   >({});
@@ -437,11 +413,6 @@ export default function Home() {
   const goalsSaveTimeoutRef = useRef<number | null>(null);
   const isSavingGoalsRef = useRef(false);
   const lastServerSavedGoalsRef = useRef<string | null>(null);
-  const lastProcessedMonthEntriesRef = useRef<string | null>(null);
-  const pendingMonthEntriesRef = useRef<Record<string, string>>({});
-  const monthEntriesSaveTimeoutRef = useRef<number | null>(null);
-  const isSavingMonthEntriesRef = useRef(false);
-  const lastServerSavedMonthEntriesRef = useRef<string | null>(null);
   const lastProcessedProductivityRef = useRef<string | null>(null);
   const pendingProductivityRef = useRef<Record<string, number | null>>({});
   const productivitySaveTimeoutRef = useRef<number | null>(null);
@@ -452,6 +423,7 @@ export default function Home() {
   const weeklyNotesSaveTimeoutRef = useRef<number | null>(null);
   const isSavingWeeklyNotesRef = useRef(false);
   const lastServerSavedWeeklyNotesRef = useRef<string | null>(null);
+  const lastServerSavedProfileRef = useRef<string | null>(null);
   const hasLoadedServerDataRef = useRef(false);
 
   const triggerScheduleSave = useCallback(() => {
@@ -560,48 +532,6 @@ export default function Home() {
     triggerGoalsSave();
   }, [userEmail, isDemoMode, triggerGoalsSave]);
 
-  const triggerMonthEntriesSave = useCallback(() => {
-    if (!userEmail || isDemoMode) {
-      return;
-    }
-
-    const pendingSerialized = JSON.stringify(pendingMonthEntriesRef.current ?? {});
-    if (lastServerSavedMonthEntriesRef.current === pendingSerialized) {
-      return;
-    }
-
-    if (isSavingMonthEntriesRef.current) {
-      return;
-    }
-
-    const dataToSave = pendingMonthEntriesRef.current;
-    const serializedToSave = pendingSerialized;
-
-    isSavingMonthEntriesRef.current = true;
-    void (async () => {
-      try {
-        await saveMonthEntries(dataToSave);
-        lastServerSavedMonthEntriesRef.current = serializedToSave;
-      } catch (error) {
-        console.error("Failed to persist month entries", error);
-      } finally {
-        isSavingMonthEntriesRef.current = false;
-        const latestSerialized = JSON.stringify(pendingMonthEntriesRef.current ?? {});
-        if (
-          userEmail &&
-          !isDemoMode &&
-          latestSerialized !== serializedToSave &&
-          !monthEntriesSaveTimeoutRef.current
-        ) {
-          monthEntriesSaveTimeoutRef.current = window.setTimeout(() => {
-            monthEntriesSaveTimeoutRef.current = null;
-            triggerMonthEntriesSave();
-          }, 200);
-        }
-      }
-    })();
-  }, [userEmail, isDemoMode]);
-
   const triggerProductivitySave = useCallback(() => {
     if (!userEmail || isDemoMode) {
       return;
@@ -705,13 +635,6 @@ export default function Home() {
       window.clearTimeout(goalsSaveTimeoutRef.current);
       goalsSaveTimeoutRef.current = null;
     }
-    lastServerSavedMonthEntriesRef.current = null;
-    pendingMonthEntriesRef.current = {};
-    lastProcessedMonthEntriesRef.current = null;
-    if (monthEntriesSaveTimeoutRef.current) {
-      window.clearTimeout(monthEntriesSaveTimeoutRef.current);
-      monthEntriesSaveTimeoutRef.current = null;
-    }
     lastServerSavedProductivityRef.current = null;
     pendingProductivityRef.current = {};
     lastProcessedProductivityRef.current = null;
@@ -727,6 +650,7 @@ export default function Home() {
       weeklyNotesSaveTimeoutRef.current = null;
     }
     hasLoadedServerDataRef.current = false;
+    lastServerSavedProfileRef.current = null;
   }, [userEmail]);
 
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -765,30 +689,75 @@ export default function Home() {
               return acc;
             }, []);
             setGoals(uniqueGoals);
-            setScheduleEntries(normalizeScheduleEntryColors(data.scheduleEntries ?? {}));
-            setProductivityRatings(data.productivityRatings ?? {});
-            setWeeklyNotes(normalizeWeeklyNotes(data.weeklyNotes));
-            setFocusAreas(data.focusAreas ?? []);
-            setMonthEntries(data.monthEntries ?? {});
+            const serializedGoals = JSON.stringify(uniqueGoals);
+            lastProcessedGoalsRef.current = serializedGoals;
+            lastServerSavedGoalsRef.current = serializedGoals;
+            pendingGoalsRef.current = uniqueGoals;
+
+            const normalizedSchedule = normalizeScheduleEntryColors(data.scheduleEntries ?? {});
+            setScheduleEntries(normalizedSchedule);
+            const serializedSchedule = JSON.stringify(normalizedSchedule);
+            lastProcessedScheduleRef.current = serializedSchedule;
+            lastServerSavedScheduleRef.current = serializedSchedule;
+            pendingScheduleRef.current = normalizedSchedule;
+
+            const productivityData = data.productivityRatings ?? {};
+            setProductivityRatings(productivityData);
+            const serializedProductivity = JSON.stringify(productivityData);
+            lastProcessedProductivityRef.current = serializedProductivity;
+            lastServerSavedProductivityRef.current = serializedProductivity;
+            pendingProductivityRef.current = productivityData;
+
+            const normalizedWeekly = normalizeWeeklyNotes(data.weeklyNotes);
+            setWeeklyNotes(normalizedWeekly);
+            const serializedWeekly = JSON.stringify(normalizedWeekly);
+            lastProcessedWeeklyNotesRef.current = serializedWeekly;
+            lastServerSavedWeeklyNotesRef.current = serializedWeekly;
+            pendingWeeklyNotesRef.current = normalizedWeekly;
 
             // Set profile data
-            if (data.profile) {
-              if (data.profile.personName) setPersonName(data.profile.personName);
-              if (data.profile.dateOfBirth) setDateOfBirth(data.profile.dateOfBirth);
-              if (data.profile.weekStartDay !== undefined) {
-                setWeekStartDay(data.profile.weekStartDay as WeekdayIndex);
+            const profile = data.profile;
+            let nextWeekStartDay: WeekdayIndex = 1;
+            let nextRecentYears = recentYears;
+            let nextGoalsSectionTitle = goalsSectionTitle;
+            let nextPersonName = "";
+            let nextDateOfBirth = "";
+
+            if (profile) {
+              nextPersonName = profile.personName ?? "";
+              nextDateOfBirth = profile.dateOfBirth ?? "";
+              setPersonName(nextPersonName);
+              setDateOfBirth(nextDateOfBirth);
+              if (profile.weekStartDay !== undefined) {
+                nextWeekStartDay = profile.weekStartDay as WeekdayIndex;
               }
-              if (data.profile.recentYears) setRecentYears(data.profile.recentYears);
-              if (data.profile.goalsSectionTitle) setGoalsSectionTitle(data.profile.goalsSectionTitle);
-              if (data.profile.productivityViewMode !== undefined) {
-                setProductivityMode(data.profile.productivityViewMode as "day" | "week");
+              setWeekStartDay(nextWeekStartDay);
+              if (profile.recentYears) {
+                nextRecentYears = profile.recentYears;
+                setRecentYears(nextRecentYears);
+              }
+              if (profile.goalsSectionTitle) {
+                nextGoalsSectionTitle = profile.goalsSectionTitle;
+                setGoalsSectionTitle(nextGoalsSectionTitle);
+              }
+              if (profile.productivityViewMode !== undefined) {
+                setProductivityMode(profile.productivityViewMode as "day" | "week");
               }
 
-              const complete = Boolean(data.profile.personName);
+              const complete = Boolean(profile.personName);
               shouldOpenProfileModal = !complete;
             } else {
               setWeekStartDay(1);
             }
+
+            const profilePayload = {
+              personName: nextPersonName.trim() ? nextPersonName : null,
+              dateOfBirth: nextDateOfBirth.trim() ? nextDateOfBirth : null,
+              weekStartDay: nextWeekStartDay,
+              recentYears: nextRecentYears,
+              goalsSectionTitle: nextGoalsSectionTitle
+            };
+            lastServerSavedProfileRef.current = JSON.stringify(profilePayload);
           }
           hasLoadedServerDataRef.current = true;
         } else {
@@ -803,8 +772,6 @@ export default function Home() {
           setScheduleEntries(normalizeScheduleEntryColors(demoScheduleEntries));
           setProductivityRatings(demoProductivityRatings);
           setWeeklyNotes(normalizeWeeklyNotes(demoWeeklyNotes));
-          setFocusAreas(demoFocusAreas);
-          setMonthEntries(demoMonthEntries);
           setPersonName(demoProfile.personName);
           setDateOfBirth(demoProfile.dateOfBirth);
           setWeekStartDay(demoProfile.weekStartDay as WeekdayIndex);
@@ -879,23 +846,34 @@ export default function Home() {
           goalsSectionTitle,
         })
       );
-
-      // Save to database only if logged in and data loaded
-      if (userEmail) {
-        if (!hasLoadedServerDataRef.current || isDemoMode) {
-          return;
-        }
-        saveProfile({
-          personName: personName || null,
-          dateOfBirth: dateOfBirth || null,
-          weekStartDay,
-          recentYears,
-          goalsSectionTitle
-        });
-      }
     } catch (error) {
       console.error("Failed to save profile", error);
     }
+
+    if (!userEmail || !hasLoadedServerDataRef.current || isDemoMode) {
+      return;
+    }
+
+    const profilePayload = {
+      personName: personName || null,
+      dateOfBirth: dateOfBirth || null,
+      weekStartDay,
+      recentYears,
+      goalsSectionTitle
+    };
+    const serializedProfile = JSON.stringify(profilePayload);
+    if (lastServerSavedProfileRef.current === serializedProfile) {
+      return;
+    }
+
+    void (async () => {
+      try {
+        await saveProfile(profilePayload);
+        lastServerSavedProfileRef.current = serializedProfile;
+      } catch (error) {
+        console.error("Failed to save profile", error);
+      }
+    })();
   }, [personName, dateOfBirth, email, weekStartDay, recentYears, goalsSectionTitle, isHydrated, userEmail, isDemoMode]);
 
   useEffect(() => {
@@ -905,69 +883,6 @@ export default function Home() {
       console.error("Failed to cache active view", error);
     }
   }, [view]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-
-    try {
-      // Save to localStorage as backup
-      window.localStorage.setItem(
-        "timespent-focus-areas",
-        JSON.stringify(focusAreas)
-      );
-
-      // Save to database only if logged in and data loaded
-      if (userEmail) {
-        if (!hasLoadedServerDataRef.current || isDemoMode) {
-          return;
-        }
-        saveFocusAreas(focusAreas);
-      }
-    } catch (error) {
-      console.error("Failed to save focus areas", error);
-    }
-  }, [focusAreas, isHydrated, userEmail, isDemoMode]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-
-    const serialized = JSON.stringify(monthEntries);
-    if (lastProcessedMonthEntriesRef.current === serialized) {
-      return;
-    }
-    lastProcessedMonthEntriesRef.current = serialized;
-
-    if (!userEmail) {
-      try {
-        window.localStorage.setItem("timespent-life-entries", serialized);
-      } catch (error) {
-        console.error("Failed to cache month entries", error);
-      }
-      return;
-    }
-
-    if (!hasLoadedServerDataRef.current || isDemoMode) {
-      return;
-    }
-
-    pendingMonthEntriesRef.current = monthEntries;
-
-    if (monthEntriesSaveTimeoutRef.current) {
-      window.clearTimeout(monthEntriesSaveTimeoutRef.current);
-    }
-
-    monthEntriesSaveTimeoutRef.current = window.setTimeout(() => {
-      monthEntriesSaveTimeoutRef.current = null;
-      triggerMonthEntriesSave();
-    }, 600);
-
-    return () => {
-      if (monthEntriesSaveTimeoutRef.current) {
-        window.clearTimeout(monthEntriesSaveTimeoutRef.current);
-        monthEntriesSaveTimeoutRef.current = null;
-      }
-    };
-  }, [monthEntries, isHydrated, userEmail, isDemoMode, triggerMonthEntriesSave]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -1272,29 +1187,6 @@ export default function Home() {
 
   const toggleFocusEditor = () => {
     setIsEditingFocus((prev) => !prev);
-  };
-
-  const updateFocusArea = (
-    id: string,
-    field: "name" | "hours",
-    value: string
-  ) => {
-    setFocusAreas((areas) =>
-      areas.map((area) =>
-        area.id === id ? { ...area, [field]: value } : area
-      )
-    );
-  };
-
-  const addFocusArea = () => {
-    setFocusAreas((areas) => [
-      ...areas,
-      {
-        id: `focus-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        name: "New focus",
-        hours: "1",
-      },
-    ]);
   };
 
   const generateId = () =>
@@ -1838,14 +1730,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
     return { monthsLived: clampedMonths, hasValidBirthdate: true };
   }, [dateOfBirth]);
 
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    if (view !== "life" && selectedMonth) {
-      setSelectedMonth(null);
-    }
-  }, [view, selectedMonth]);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
   useEffect(() => {
     if (!activeGoalCardId) {
       return undefined;
@@ -1869,18 +1753,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
     };
   }, [activeGoalCardId]);
 
-  const handleMonthSelect = (year: number, month: number) => {
-    setSelectedMonth({ year, month });
-  };
-
-  const monthKey = (year: number, month: number) => `${year}-${month}`;
-
-  const selectedMonthKey = selectedMonth
-    ? monthKey(selectedMonth.year, selectedMonth.month)
-    : null;
-  const selectedMonthContent = selectedMonthKey
-    ? monthEntries[selectedMonthKey] ?? ""
-    : "";
   const currentProductivityGoal = useMemo(() => {
     return productivityGoals[productivityYear] ?? "";
   }, [productivityGoals, productivityYear]);
@@ -1929,24 +1801,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
   const selectedWeekEntry = getWeekEntryWithCarryover(selectedWeekKey);
 
-  const selectedMonthLabel = useMemo(() => {
-    if (!selectedMonth || !dateOfBirth) {
-      return null;
-    }
-    const dob = new Date(dateOfBirth);
-    if (Number.isNaN(dob.getTime())) {
-      return null;
-    }
-    const monthDate = new Date(dob);
-    monthDate.setMonth(
-      dob.getMonth() + (selectedMonth.year - 1) * 12 + (selectedMonth.month - 1)
-    );
-    return monthDate.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "long",
-    });
-  }, [selectedMonth, dateOfBirth]);
-
   const parsedRecentYears = useMemo(() => {
     const parsed = Number.parseInt(recentYears, 10);
     if (Number.isNaN(parsed) || parsed <= 0) {
@@ -1954,47 +1808,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
     }
     return Math.min(parsed, 90);
   }, [recentYears]);
-
-  const selectedMonthAge = useMemo(() => {
-    if (!selectedMonth || !dateOfBirth) {
-      return null;
-    }
-    const dob = new Date(dateOfBirth);
-    if (Number.isNaN(dob.getTime())) {
-      return null;
-    }
-    const monthDate = new Date(dob);
-    monthDate.setMonth(
-      dob.getMonth() + (selectedMonth.year - 1) * 12 + (selectedMonth.month - 1)
-    );
-    let years = monthDate.getFullYear() - dob.getFullYear();
-    let months = monthDate.getMonth() - dob.getMonth();
-    if (monthDate.getDate() < dob.getDate()) {
-      months -= 1;
-    }
-    if (months < 0) {
-      years -= 1;
-      months += 12;
-    }
-    years = Math.max(years, 0);
-    months = Math.max(months, 0);
-    return { years, months };
-  }, [selectedMonth, dateOfBirth]);
-
-  const handleEntryChange = (content: string) => {
-    if (!selectedMonthKey) {
-      return;
-    }
-    setMonthEntries((prev) => {
-      const updated = { ...prev };
-      if (!content.trim()) {
-        delete updated[selectedMonthKey];
-      } else {
-        updated[selectedMonthKey] = content;
-      }
-      return updated;
-    });
-  };
 
   const scrollToGoalsSection = () => {
     setView("productivity");
@@ -2634,76 +2447,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
         </div>
       )}
 
-      {selectedMonth && hasValidBirthdate && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
-          onClick={() => setSelectedMonth(null)}
-        >
-          <div className="w-full max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 text-left shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]">
-                  Month journal
-                </p>
-                <p className="text-xl font-light text-foreground">
-                  {selectedMonthLabel ??
-                    `Year ${selectedMonth.year}, month ${selectedMonth.month}`}
-                  {selectedMonthAge && (
-                    <span className="ml-2 text-base text-[color-mix(in_srgb,var(--foreground)_65%,transparent)]">
-                      • Age {selectedMonthAge.years}y {selectedMonthAge.months}m
-                    </span>
-                  )}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedMonth(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
-              >
-                ✕
-              </button>
-            </div>
-            <TinyEditor
-              key={selectedMonthKey ?? "editor"}
-              tinymceScriptSrc={TINYMCE_CDN}
-              value={selectedMonthContent}
-              init={
-                {
-                  menubar: false,
-                  statusbar: false,
-                  height: 282,
-                  license_key: "gpl",
-                  skin: theme === "dark" ? "oxide-dark" : "oxide",
-                  content_css: false,
-                  toolbar:
-                    "bold italic underline | bullist numlist | link removeformat",
-                  content_style: `
-                    body {
-                      background-color: #f1e9e5 !important;
-                      color: #0f172a !important;
-                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                      font-size: 15px;
-                      padding: 10px;
-                      margin: 0;
-                    }
-                    @media (min-width: 640px) {
-                      body {
-                        padding: 10px 25px;
-                      }
-                    }
-                    * {
-                      background-color: transparent !important;
-                    }
-                  `,
-                  branding: false,
-                } as Record<string, unknown>
-              }
-              onEditorChange={handleEntryChange}
-            />
-          </div>
-        </div>
-      )}
-
       <footer className="mt-24 border-t border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] px-6 py-6 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-8">
           <div className="flex items-center gap-4 text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
@@ -2757,252 +2500,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
   );
 }
 
-type AgeGridProps = {
-  totalMonthsLived: number;
-  maxYears: number;
-  onSelectMonth: (year: number, month: number) => void;
-  selectedMonth: { year: number; month: number } | null;
-  entries: Record<string, string>;
-};
-
-const AgeGrid = ({
-  totalMonthsLived,
-  maxYears,
-  onSelectMonth,
-  selectedMonth,
-  entries,
-}: AgeGridProps) => {
-  const totalYears = maxYears;
-  const clampedMonths = Math.max(
-    0,
-    Math.min(totalMonthsLived, totalYears * 12)
-  );
-
-  const allYears = Array.from({ length: totalYears }, (_, idx) => idx + 1);
-
-  return (
-    <div className="mt-6 grid grid-cols-2 gap-6 sm:grid-cols-3">
-      {allYears.map((yearNumber) => (
-        <YearRow
-          key={`year-${yearNumber}`}
-          yearNumber={yearNumber}
-          yearIndex={yearNumber - 1}
-          totalMonthsLived={clampedMonths}
-          onSelectMonth={onSelectMonth}
-          selectedMonth={selectedMonth}
-          entries={entries}
-        />
-      ))}
-    </div>
-  );
-};
-
-const YearRow = ({
-  yearNumber,
-  yearIndex,
-  totalMonthsLived,
-  onSelectMonth,
-  selectedMonth,
-  entries,
-}: {
-  yearNumber: number;
-  yearIndex: number;
-  totalMonthsLived: number;
-  onSelectMonth: (year: number, month: number) => void;
-  selectedMonth: { year: number; month: number } | null;
-  entries: Record<string, string>;
-}) => {
-  const months = Array.from({ length: 12 }, (_, idx) => idx);
-
-  return (
-    <div className="grid grid-cols-12 gap-px">
-      {months.map((monthIndex) => {
-        const displayMonth = monthIndex + 1;
-        const key = `${yearNumber}-${displayMonth}`;
-        const hasEntry = Boolean(entries[key]?.trim());
-        const isSelected =
-          selectedMonth?.year === yearNumber &&
-          selectedMonth?.month === displayMonth;
-        const baseClasses =
-          "h-3 w-3 rounded-xs transition sm:h-4 sm:w-4 focus:outline-none";
-
-        return (
-          <button
-            type="button"
-            key={key}
-            onClick={() => onSelectMonth(yearNumber, displayMonth)}
-            className={`${baseClasses} ${
-              isSelected
-                ? "bg-foreground ring-2 ring-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
-                : hasEntry
-                  ? "bg-[#f6ad55] hover:bg-[#f28c28]"
-                  : "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] hover:bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]"
-            }`}
-            aria-label={`Year ${yearNumber}, month ${displayMonth}`}
-            aria-pressed={isSelected}
-            title={
-              hasEntry
-                ? "Contains notes. Click to view or edit."
-                : "Click to add notes."
-            }
-          />
-        );
-      })}
-    </div>
-  );
-};
-
 type ProductivityLegendProps = {
   className?: string;
-};
-
-type WeeklyAllocationGridProps = {
-  years: number;
-  focusAreas: FocusArea[];
-};
-
-const WEEK_COLORS = [
-  "#8E7DBE",
-  "#F29E4C",
-  "#F25C54",
-  "#5DA9E9",
-  "#80CFA9",
-  "#F7B267",
-  "#B8F2E6",
-  "#C8553D",
-];
-
-const WeeklyAllocationGrid = ({
-  years,
-  focusAreas,
-}: WeeklyAllocationGridProps) => {
-  const isDailyView = years <= 2;
-  const totalUnits = Math.max(1, isDailyView ? years * 365 : years * 52);
-  const parsedAreas = focusAreas
-    .map((area, index) => ({
-      ...area,
-      hoursPerDay: Math.max(Number.parseFloat(area.hours) || 0, 0),
-      color: WEEK_COLORS[index % WEEK_COLORS.length]!,
-    }))
-    .filter((area) => area.hoursPerDay > 0);
-
-  const totalHoursPerDay = parsedAreas.reduce(
-    (sum, area) => sum + area.hoursPerDay,
-    0
-  );
-
-  if (parsedAreas.length === 0 || totalHoursPerDay === 0) {
-    return null;
-  }
-
-  const allocations = parsedAreas.map((area) => {
-    const share = area.hoursPerDay / totalHoursPerDay;
-    const proportionalUnits = share * totalUnits;
-    const wholeUnits = Math.floor(proportionalUnits);
-    const remainder = proportionalUnits - wholeUnits;
-    return {
-      ...area,
-      share,
-      proportionalUnits,
-      unitsInt: wholeUnits,
-      remainder,
-    };
-  });
-
-  const assigned = allocations.reduce((sum, area) => sum + area.unitsInt, 0);
-  let remaining = totalUnits - assigned;
-  if (remaining > 0) {
-    const sorted = [...allocations].sort(
-      (a, b) => b.remainder - a.remainder
-    );
-    let idx = 0;
-    while (remaining > 0 && sorted.length > 0) {
-      sorted[idx % sorted.length]!.unitsInt += 1;
-      remaining -= 1;
-      idx += 1;
-    }
-  }
-
-  const columnsDesktop = isDailyView ? 30 : 26;
-  const columnsMobile = isDailyView ? 17 : 15;
-
-  const cells: { color: string; label: string; tooltip: string }[] = [];
-
-  // Add unallocated cells
-  const allocatedCount = allocations.reduce((sum, area) => sum + area.unitsInt, 0);
-  const unallocatedCount = totalUnits - allocatedCount;
-  for (let i = 0; i < unallocatedCount; i += 1) {
-    cells.push({
-      color: "transparent",
-      label: "Unallocated",
-      tooltip: "Unallocated time",
-    });
-  }
-
-  // Add allocated cells sorted from least to most time spent
-  const sortedAllocations = [...allocations].sort((a, b) => a.unitsInt - b.unitsInt);
-  sortedAllocations.forEach((area) => {
-    const percent = area.share * 100;
-    const totalDaysPeriod = years * 365;
-    const totalDaysInvested = area.share * totalDaysPeriod;
-    const months = totalDaysInvested / 30;
-    const yearsSpent = totalDaysInvested / 365;
-
-    let durationLabel: string;
-    if (yearsSpent >= 1) {
-      durationLabel = `${yearsSpent.toFixed(1)} years`;
-    } else if (months >= 1) {
-      durationLabel = `${months.toFixed(1)} months`;
-    } else {
-      durationLabel = `${totalDaysInvested.toFixed(0)} days`;
-    }
-
-    const tooltip = `${area.name}: ${durationLabel} (${percent.toFixed(1)}%)`;
-
-    for (let i = 0; i < area.unitsInt; i += 1) {
-      cells.push({ color: area.color, label: area.name, tooltip });
-    }
-  });
-
-  const totalUnitsLabel = isDailyView
-    ? `${totalUnits} days`
-    : `${totalUnits} weeks`;
-
-  return (
-    <div className="mx-auto mt-12 w-full max-w-5xl text-left px-4">
-      <div className="mb-6 text-center">
-        <p className="text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]" style={{ fontFamily: "'Lato', 'Helvetica Neue', Arial, sans-serif" }}>
-          {years} year{years > 1 ? "s" : ""} • {totalUnitsLabel}
-        </p>
-      </div>
-      <div className="flex justify-center">
-        <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-white/90 dark:bg-gray-900/85 backdrop-blur-2xl p-4 w-full max-w-fit">
-          <style dangerouslySetInnerHTML={{
-            __html: `
-              .time-allocation-grid {
-                grid-template-columns: repeat(${columnsMobile}, minmax(18px, 1fr));
-              }
-              @media (min-width: 640px) {
-                .time-allocation-grid {
-                  grid-template-columns: repeat(${columnsDesktop}, minmax(18px, 1fr));
-                }
-              }
-            `
-          }} />
-          <div className="time-allocation-grid grid gap-1">
-            {cells.map((cell, idx) => (
-              <div
-                key={`week-cell-${idx}-${cell.label}`}
-                className="aspect-square rounded-xs border border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:scale-110 hover:z-10 transition-transform cursor-pointer"
-                style={{ backgroundColor: cell.color }}
-                title={cell.tooltip}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 };
 
 const ProductivityLegend = ({ className }: ProductivityLegendProps = {}) => (

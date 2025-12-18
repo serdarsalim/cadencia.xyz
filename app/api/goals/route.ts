@@ -81,9 +81,13 @@ export async function POST(request: NextRequest) {
 
         const existingGoals = await tx.goal.findMany({
           where: { userId: user.id },
-          select: { id: true, archived: true }
+          include: { keyResults: true }
         })
+        const existingGoalMap = new Map(
+          existingGoals.map(goal => [goal.id, goal])
+        )
         const processedGoalIds = new Set<string>()
+
         for (const goal of goals) {
           const goalId = goal.id || randomUUID()
           processedGoalIds.add(goalId)
@@ -96,32 +100,99 @@ export async function POST(request: NextRequest) {
             userId: user.id
           }
 
-          await tx.goal.upsert({
-            where: { id: goalId },
-            update: {
-              title: baseData.title,
-              timeframe: baseData.timeframe,
-              statusOverride: baseData.statusOverride,
-              archived: baseData.archived
-            },
-            create: {
-              id: goalId,
-              ...baseData
-            }
-          })
+          const existingGoal = existingGoalMap.get(goalId)
 
-          await tx.keyResult.deleteMany({
-            where: { goalId }
-          })
+          if (!existingGoal) {
+            await tx.goal.create({
+              data: {
+                id: goalId,
+                ...baseData,
+                keyResults: {
+                  create: goal.keyResults.map(keyResult => ({
+                    id: keyResult.id || randomUUID(),
+                    title: keyResult.title,
+                    status: keyResult.status
+                  }))
+                }
+              }
+            })
+            continue
+          }
 
-          if (goal.keyResults.length > 0) {
-            await tx.keyResult.createMany({
-              data: goal.keyResults.map(keyResult => ({
-                id: keyResult.id || randomUUID(),
+          const goalNeedsUpdate =
+            existingGoal.title !== baseData.title ||
+            existingGoal.timeframe !== baseData.timeframe ||
+            existingGoal.statusOverride !== baseData.statusOverride ||
+            existingGoal.archived !== baseData.archived
+
+          if (goalNeedsUpdate) {
+            await tx.goal.update({
+              where: { id: goalId },
+              data: {
+                title: baseData.title,
+                timeframe: baseData.timeframe,
+                statusOverride: baseData.statusOverride,
+                archived: baseData.archived
+              }
+            })
+          }
+
+          const existingKeyResultsMap = new Map(
+            existingGoal.keyResults.map(kr => [kr.id, kr])
+          )
+          const incomingKeyResultIds = new Set<string>()
+          const keyResultsToCreate: {
+            id: string
+            goalId: string
+            title: string
+            status: string
+          }[] = []
+
+          for (const keyResult of goal.keyResults) {
+            const keyResultId = keyResult.id || randomUUID()
+            incomingKeyResultIds.add(keyResultId)
+
+            const existingKeyResult = keyResult.id
+              ? existingKeyResultsMap.get(keyResultId)
+              : null
+
+            if (!existingKeyResult) {
+              keyResultsToCreate.push({
+                id: keyResultId,
                 goalId,
                 title: keyResult.title,
                 status: keyResult.status
-              }))
+              })
+              continue
+            }
+
+            if (
+              existingKeyResult.title !== keyResult.title ||
+              existingKeyResult.status !== keyResult.status
+            ) {
+              await tx.keyResult.update({
+                where: { id: keyResultId },
+                data: {
+                  title: keyResult.title,
+                  status: keyResult.status
+                }
+              })
+            }
+          }
+
+          if (keyResultsToCreate.length > 0) {
+            await tx.keyResult.createMany({
+              data: keyResultsToCreate
+            })
+          }
+
+          const keyResultIdsToDelete = existingGoal.keyResults
+            .filter(existingKr => !incomingKeyResultIds.has(existingKr.id))
+            .map(kr => kr.id)
+
+          if (keyResultIdsToDelete.length > 0) {
+            await tx.keyResult.deleteMany({
+              where: { id: { in: keyResultIdsToDelete } }
             })
           }
         }

@@ -6,13 +6,10 @@ import {
   goalsArraySchema,
   scheduleEntriesSchema,
   productivityRatingsSchema,
-  focusAreasArraySchema,
   weeklyNotesSchema,
-  monthEntriesSchema,
   profileSchema,
   type Goal,
   type ScheduleEntry,
-  type FocusArea,
   type Profile
 } from './schemas'
 
@@ -107,29 +104,14 @@ function transformWeeklyNotesToDB(obj: Record<string, WeeklyNotePayload>): any[]
   }))
 }
 
-function transformMonthEntriesFromDB(entries: any[]): Record<string, string> {
-  const obj: Record<string, string> = {}
-  if (!Array.isArray(entries)) return obj
-  for (const entry of entries) {
-    obj[entry.monthKey] = entry.content
-  }
-  return obj
-}
-
-function transformMonthEntriesToDB(obj: Record<string, string>): any[] {
-  return Object.entries(obj).map(([monthKey, content]) => ({ monthKey, content }))
-}
-
 // API functions
 export async function loadAllData() {
   try {
-    const [goalsRes, productivityRes, weeklyNotesRes, focusAreasRes, monthEntriesRes, profileRes] =
+    const [goalsRes, productivityRes, weeklyNotesRes, profileRes] =
       await Promise.all([
         apiGet('/api/goals'),
         apiGet('/api/productivity'),
         apiGet('/api/weekly-notes'),
-        apiGet('/api/focus-areas'),
-        apiGet('/api/month-entries'),
         apiGet('/api/profile')
       ])
 
@@ -138,8 +120,6 @@ export async function loadAllData() {
       scheduleEntries: {},
       productivityRatings: productivityRes.success && productivityRes.data ? transformProductivityFromDB((productivityRes.data as any).productivityRatings || []) : {},
       weeklyNotes: weeklyNotesRes.success && weeklyNotesRes.data ? transformWeeklyNotesFromDB((weeklyNotesRes.data as any).weeklyNotes || []) : {},
-      focusAreas: focusAreasRes.success && focusAreasRes.data ? (focusAreasRes.data as any).focusAreas || [] : [],
-      monthEntries: monthEntriesRes.success && monthEntriesRes.data ? transformMonthEntriesFromDB((monthEntriesRes.data as any).monthEntries || []) : {},
       profile: profileRes.success && profileRes.data ? (profileRes.data as any).profile || null : null
     }
   } catch (error) {
@@ -183,29 +163,6 @@ export async function saveWeeklyNotes(weeklyNotes: Record<string, WeeklyNotePayl
     throw new Error(response.error || 'Failed to save weekly notes')
   }
   return transformWeeklyNotesFromDB((response.data as any)?.weeklyNotes || [])
-}
-
-export async function saveFocusAreas(focusAreas: FocusArea[]) {
-  const result = focusAreasArraySchema.safeParse(focusAreas)
-  if (!result.success) {
-    console.error('Focus areas validation failed:', result.error)
-    throw new Error('Invalid focus areas data')
-  }
-
-  const response = await apiPost('/api/focus-areas', { focusAreas: result.data })
-  if (!response.success) {
-    throw new Error(response.error || 'Failed to save focus areas')
-  }
-  return (response.data as any)?.focusAreas || []
-}
-
-export async function saveMonthEntries(monthEntries: Record<string, string>) {
-  const array = transformMonthEntriesToDB(monthEntries)
-  const response = await apiPost('/api/month-entries', { monthEntries: array })
-  if (!response.success) {
-    throw new Error(response.error || 'Failed to save month entries')
-  }
-  return transformMonthEntriesFromDB((response.data as any)?.monthEntries || [])
 }
 
 export async function saveProfile(profile: Profile) {

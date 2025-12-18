@@ -50,8 +50,6 @@ model User {
   scheduleEntries ScheduleEntry[]
   productivityRatings ProductivityRating[]
   weeklyNotes   WeeklyNote[]
-  focusAreas    FocusArea[]
-  monthEntries  MonthEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -150,29 +148,4 @@ model WeeklyNote {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, weekKey])
-}
-
-model FocusArea {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name   String
-  hours  String
-  order  Int    @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model MonthEntry {
-  id       String @id @default(cuid())
-  userId   String
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  monthKey String // Format: "YYYY-M"
-  content  String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, monthKey])
 }

@@ -36,18 +36,8 @@ export const scheduleEntriesSchema = z.record(z.string(), z.array(scheduleEntryS
 // Productivity schemas
 export const productivityRatingsSchema = z.record(z.string(), z.number().min(1).max(10).nullable())
 
-// Focus areas schemas
-export const focusAreaSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1).max(100),
-  hours: z.string().max(10)
-})
-
-export const focusAreasArraySchema = z.array(focusAreaSchema)
-
 // Notes schemas
 export const weeklyNotesSchema = z.record(z.string(), z.string().max(10000))
-export const monthEntriesSchema = z.record(z.string(), z.string().max(10000))
 
 // Profile schema
 export const profileSchema = z.object({
@@ -61,5 +51,4 @@ export const profileSchema = z.object({
 export type Goal = z.infer<typeof goalSchema>
 export type KeyResult = z.infer<typeof keyResultSchema>
 export type ScheduleEntry = z.infer<typeof scheduleEntrySchema>
-export type FocusArea = z.infer<typeof focusAreaSchema>
 export type Profile = z.infer<typeof profileSchema>

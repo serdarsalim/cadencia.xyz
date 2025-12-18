@@ -26,33 +26,24 @@ export async function GET() {
       scheduleCount,
       productivityCount,
       weeklyNotesCount,
-      monthEntriesCount,
-      goalsCount,
-      focusAreasCount
+      goalsCount
     ] = await Promise.all([
       prisma.scheduleEntry.count({ where: { userId: user.id } }),
       prisma.productivityRating.count({ where: { userId: user.id } }),
       prisma.weeklyNote.count({ where: { userId: user.id } }),
-      prisma.monthEntry.count({ where: { userId: user.id } }),
-      prisma.goal.count({ where: { userId: user.id } }),
-      prisma.focusArea.count({ where: { userId: user.id } })
+      prisma.goal.count({ where: { userId: user.id } })
     ])
 
     // Get sample records to estimate size
     const [
       sampleProductivity,
-      sampleWeeklyNotes,
-      sampleMonthEntries
+      sampleWeeklyNotes
     ] = await Promise.all([
       prisma.productivityRating.findMany({
         where: { userId: user.id },
         take: 100
       }),
       prisma.weeklyNote.findMany({
-        where: { userId: user.id },
-        take: 10
-      }),
-      prisma.monthEntry.findMany({
         where: { userId: user.id },
         take: 10
       })
@@ -70,14 +61,11 @@ export async function GET() {
         scheduleEntries: scheduleCount,
         productivityRatings: productivityCount,
         weeklyNotes: weeklyNotesCount,
-        monthEntries: monthEntriesCount,
-        goals: goalsCount,
-        focusAreas: focusAreasCount
+        goals: goalsCount
       },
       estimatedAvgSizes: {
         productivityRating: Math.round(estimateSize(sampleProductivity)),
-        weeklyNote: Math.round(estimateSize(sampleWeeklyNotes)),
-        monthEntry: Math.round(estimateSize(sampleMonthEntries))
+        weeklyNote: Math.round(estimateSize(sampleWeeklyNotes))
       },
       samples: {
         oldestProductivity: sampleProductivity[0]?.key,
@@ -85,10 +73,6 @@ export async function GET() {
         weeklyNoteSizes: sampleWeeklyNotes.map(n => ({
           key: n.weekKey,
           size: n.content.length
-        })),
-        monthEntrySizes: sampleMonthEntries.map(m => ({
-          key: m.monthKey,
-          size: m.content.length
         }))
       }
     })

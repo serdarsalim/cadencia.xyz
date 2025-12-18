@@ -27,16 +27,7 @@ type Analysis = {
     size: { bytes: number; kb: number; mb: number };
     avgContentLength: number;
   };
-  monthEntries: {
-    total: number;
-    size: { bytes: number; kb: number; mb: number };
-    avgContentLength: number;
-  };
   goals: {
-    total: number;
-    size: { bytes: number; kb: number; mb: number };
-  };
-  focusAreas: {
     total: number;
     size: { bytes: number; kb: number; mb: number };
   };
@@ -101,9 +92,7 @@ export default function CleanupPage() {
     analysis.scheduleEntries.size.mb +
     analysis.productivityRatings.size.mb +
     analysis.weeklyNotes.size.mb +
-    analysis.monthEntries.size.mb +
-    analysis.goals.size.mb +
-    analysis.focusAreas.size.mb;
+    analysis.goals.size.mb;
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
@@ -138,16 +127,8 @@ export default function CleanupPage() {
                   <span>{analysis.weeklyNotes.total} items ({analysis.weeklyNotes.size.kb} KB)</span>
                 </div>
                 <div className="flex justify-between border-b border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] pb-2">
-                  <span>Month Entries</span>
-                  <span>{analysis.monthEntries.total} items ({analysis.monthEntries.size.kb} KB)</span>
-                </div>
-                <div className="flex justify-between border-b border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] pb-2">
                   <span>Goals</span>
                   <span>{analysis.goals.total} items ({analysis.goals.size.kb} KB)</span>
-                </div>
-                <div className="flex justify-between pb-2">
-                  <span>Focus Areas</span>
-                  <span>{analysis.focusAreas.total} items ({analysis.focusAreas.size.kb} KB)</span>
                 </div>
               </div>
             </div>

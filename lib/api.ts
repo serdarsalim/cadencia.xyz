@@ -131,39 +131,17 @@ function transformWeeklyNotesToDB(obj: Record<string, WeeklyNotePayload>): any[]
   }))
 }
 
-// Transform month entries from array to object
-function transformMonthEntriesFromDB(entries: any[]): Record<string, string> {
-  const obj: Record<string, string> = {}
-  if (!Array.isArray(entries)) {
-    console.error('transformMonthEntriesFromDB: entries is not an array', entries)
-    return obj
-  }
-  for (const entry of entries) {
-    obj[entry.monthKey] = entry.content
-  }
-  return obj
-}
-
-// Transform month entries from object to array
-function transformMonthEntriesToDB(obj: Record<string, string>): any[] {
-  return Object.entries(obj).map(([monthKey, content]) => ({ monthKey, content }))
-}
-
 export async function loadAllData() {
   try {
     const [
       goalsRes,
       productivityRes,
       weeklyNotesRes,
-      focusAreasRes,
-      monthEntriesRes,
       profileRes
     ] = await Promise.all([
       fetch('/api/goals'),
       fetch('/api/productivity'),
       fetch('/api/weekly-notes'),
-      fetch('/api/focus-areas'),
-      fetch('/api/month-entries'),
       fetch('/api/profile')
     ])
 
@@ -171,15 +149,11 @@ export async function loadAllData() {
       { goals },
       { productivityRatings },
       { weeklyNotes },
-      { focusAreas },
-      { monthEntries },
       { profile }
     ] = await Promise.all([
       goalsRes.json(),
       productivityRes.json(),
       weeklyNotesRes.json(),
-      focusAreasRes.json(),
-      monthEntriesRes.json(),
       profileRes.json()
     ])
 
@@ -188,8 +162,6 @@ export async function loadAllData() {
       scheduleEntries: {},
       productivityRatings: transformProductivityFromDB(productivityRatings || []),
       weeklyNotes: transformWeeklyNotesFromDB(weeklyNotes || []),
-      focusAreas: focusAreas || [],
-      monthEntries: transformMonthEntriesFromDB(monthEntries || []),
       profile: profile || null
     }
   } catch (error) {
@@ -200,7 +172,6 @@ export async function loadAllData() {
 
 export async function saveGoals(goals: any[]) {
   try {
-    console.log('CLIENT: Saving goals:', JSON.stringify(goals, null, 2))
     const response = await fetch('/api/goals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -297,59 +268,6 @@ export async function saveWeeklyNotes(weeklyNotes: Record<string, WeeklyNotePayl
     return transformWeeklyNotesFromDB(data.weeklyNotes)
   } catch (error) {
     console.error('Error saving weekly notes:', error)
-    return null
-  }
-}
-
-export async function saveFocusAreas(focusAreas: any[]) {
-  try {
-    const response = await fetch('/api/focus-areas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ focusAreas })
-    })
-
-    // Guest users will get 401, which is expected
-    if (response.status === 401) {
-      return null
-    }
-
-    const data = await response.json()
-    return data.focusAreas
-  } catch (error) {
-    console.error('Error saving focus areas:', error)
-    return null
-  }
-}
-
-export async function saveMonthEntries(monthEntries: Record<string, string>) {
-  try {
-    const array = transformMonthEntriesToDB(monthEntries)
-    const response = await fetch('/api/month-entries', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ monthEntries: array })
-    })
-
-    // Guest users will get 401, which is expected
-    if (response.status === 401) {
-      return null
-    }
-
-    if (!response.ok) {
-      console.error('Error saving month entries:', response.status, response.statusText)
-      return null
-    }
-
-    const data = await response.json().catch(() => null)
-    if (!data || !Array.isArray(data.monthEntries)) {
-      console.error('Invalid month entries response payload', data)
-      return null
-    }
-
-    return transformMonthEntriesFromDB(data.monthEntries)
-  } catch (error) {
-    console.error('Error saving month entries:', error)
     return null
   }
 }
