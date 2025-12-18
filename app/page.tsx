@@ -417,6 +417,8 @@ export default function Home() {
     krId: string;
     field: "title";
   } | null>(null);
+  const [activeGoalCardId, setActiveGoalCardId] = useState<string | null>(null);
+  const okrCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [weeklyNotes, setWeeklyNotes] = useState<Record<string, WeeklyNoteEntry>>({});
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -1752,6 +1754,29 @@ const goalStatusBadge = (status: KeyResultStatus) => {
   }, [view, selectedMonth]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  useEffect(() => {
+    if (!activeGoalCardId) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const current = okrCardRefs.current[activeGoalCardId];
+      if (!current) {
+        setActiveGoalCardId(null);
+        return;
+      }
+      if (event.target instanceof Node && current.contains(event.target)) {
+        return;
+      }
+      setActiveGoalCardId(null);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [activeGoalCardId]);
+
   const handleMonthSelect = (year: number, month: number) => {
     setSelectedMonth({ year, month });
   };
@@ -1914,7 +1939,19 @@ const goalStatusBadge = (status: KeyResultStatus) => {
         {goals.map((goal) => {
           const draft = krDrafts[goal.id] ?? { title: "" };
           return (
-            <div key={goal.id} className="okr-card px-7 py-6">
+            <div
+              key={goal.id}
+              className="okr-card px-7 py-6"
+              onClick={() => setActiveGoalCardId(goal.id)}
+              onFocusCapture={() => setActiveGoalCardId(goal.id)}
+              ref={(node) => {
+                if (node) {
+                  okrCardRefs.current[goal.id] = node;
+                } else {
+                  delete okrCardRefs.current[goal.id];
+                }
+              }}
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex flex-1 flex-col">
                   {activeGoalFieldEdit?.goalId === goal.id &&
@@ -1977,14 +2014,16 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveGoal(goal.id)}
-                    className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
-                    aria-label="Remove goal"
-                  >
-                    ✕
-                  </button>
+                  {activeGoalCardId === goal.id && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveGoal(goal.id)}
+                      className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
+                      aria-label="Remove goal"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1995,7 +2034,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     activeKrFieldEdit?.goalId === goal.id &&
                     activeKrFieldEdit.krId === kr.id &&
                     activeKrFieldEdit.field === "title";
-                  const isLastKr = krIndex === goal.keyResults.length - 1;
                   return (
                     <div key={kr.id} className="rounded-2xl px-4 pb-3 pt-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2050,33 +2088,25 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                             )}`}
                           >
                             {kr.status === "started"
-                              ? "Started"
-                              : kr.status === "pending"
-                                ? "Pending"
-                                : kr.status === "on-hold"
-                                  ? "On hold"
-                                  : "Completed"}
+                            ? "Started"
+                            : kr.status === "pending"
+                              ? "Pending"
+                              : kr.status === "on-hold"
+                                ? "On hold"
+                                : "Completed"}
                           </button>
-                          {isLastKr && activeKrDraftGoalId !== goal.id && (
+                          {activeGoalCardId === goal.id && (
                             <button
                               type="button"
-                              onClick={() => startKeyResultDraft(goal.id)}
-                              className="text-xs text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:text-foreground"
-                              aria-label="Add key result"
+                              onClick={() =>
+                                handleRemoveKeyResult(goal.id, kr.id)
+                              }
+                              className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
+                              aria-label="Remove key result"
                             >
-                              +
+                              ✕
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleRemoveKeyResult(goal.id, kr.id)
-                            }
-                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
-                            aria-label="Remove key result"
-                          >
-                            ✕
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -2113,15 +2143,14 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     </div>
                   </div>
                 )}
-                {goal.keyResults.length === 0 && activeKrDraftGoalId !== goal.id && (
-                  <div className="flex justify-end">
+                {activeGoalCardId === goal.id && activeKrDraftGoalId !== goal.id && (
+                  <div className="pt-3">
                     <button
                       type="button"
                       onClick={() => startKeyResultDraft(goal.id)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-base text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:text-foreground"
-                      aria-label="Add key result"
+                      className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_75%,transparent)] transition hover:text-foreground"
                     >
-                      +
+                      + Add KR
                     </button>
                   </div>
                 )}
@@ -2372,7 +2401,10 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                           }
                         `,
                         branding: false,
-                        placeholder: selectedWeek !== null ? "Add notes for this week..." : "",
+                        placeholder:
+                          selectedWeek !== null
+                            ? "What are your goals this week, and did you accomplish them?"
+                            : "",
                       } as Record<string, unknown>
                     }
                     onEditorChange={(content) =>
