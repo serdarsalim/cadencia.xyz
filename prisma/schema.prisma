@@ -98,7 +98,7 @@ model KeyResult {
   goalId String
   goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
   title  String
-  status String @default("pending")
+  status String @default("on-hold")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

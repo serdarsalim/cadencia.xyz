@@ -53,7 +53,7 @@ export const demoGoals = [
     keyResults: [
       { id: "kr1", title: "Complete user research (Jan 12)", status: "completed" as const },
       { id: "kr2", title: "Build MVP ready for review (Feb 10)", status: "started" as const },
-      { id: "kr3", title: "Get 100 beta users before Mar 01", status: "pending" as const },
+      { id: "kr3", title: "Get 100 beta users before Mar 01", status: "on-hold" as const },
     ],
   },
   {
