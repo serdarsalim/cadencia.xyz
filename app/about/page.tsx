@@ -24,13 +24,31 @@ export default function AboutPage() {
             <span key={feature}>{feature}</span>
           ))}
         </div>
-        <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6 text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
+        <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6 text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] space-y-4">
+          <div>
+            <h2 className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)] mb-2">
+              How it works
+            </h2>
+            <ul className="space-y-2 list-disc list-inside">
+              <li>
+                <strong>Set OKRs:</strong> Create objectives with key results. Track their status (not started, in progress, complete) and archive goals you're no longer pursuing.
+              </li>
+              <li>
+                <strong>Plan weekly:</strong> Each week, write your goals in free text. This is your plan for the week—flexible and judgment-free.
+              </li>
+              <li>
+                <strong>Score daily:</strong> Rate each day against your weekly plan. Click a day to cycle through: not achieved → partly achieved → achieved.
+              </li>
+              <li>
+                <strong>Set behavioral anchors:</strong> Define your Do's and Don'ts—principles that guide your work habits.
+              </li>
+              <li>
+                <strong>Review the year:</strong> The calendar shows your entire year at a glance. Click any day to jump to that week.
+              </li>
+            </ul>
+          </div>
           <p>
-            SLMTRACK is built for personal clarity—capture your schedule, track
-            productivity across every time horizon, and define lightweight OKRs
-            that stay top of mind without visual noise. It is a personal
-            workspace and does not provide professional advice. By using the
-            product you acknowledge it is provided as-is.
+            SLMTRACK is built for personal clarity and accountability. Perfect for New Year's resolutions—the year view runs January to December. It is a personal workspace and does not provide professional advice. By using the product you acknowledge it is provided as-is.
           </p>
         </div>
         <Link

@@ -2189,21 +2189,21 @@ const goalStatusBadge = (status: KeyResultStatus) => {
               className="h-8 w-auto"
             />
           </Link>
-          <nav className="flex gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
+          <nav className="flex gap-2 text-sm font-bold uppercase tracking-[0.2em]">
             <button
               type="button"
               onClick={() => {
                 setView("productivity");
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className="rounded-full px-4 py-1 transition text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] hover:text-foreground"
+              className="rounded-full px-4 py-1.5 transition text-foreground/60 hover:text-foreground"
             >
               Track
             </button>
             <button
               type="button"
               onClick={scrollToGoalsSection}
-              className="rounded-full px-4 py-1 transition text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] hover:text-foreground"
+              className="rounded-full px-4 py-1.5 transition text-foreground/60 hover:text-foreground"
             >
               Goals
             </button>
@@ -2443,7 +2443,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
         </div>
       )}
 
-      <footer className="mt-24 border-t border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] px-6 py-6 text-sm">
+      <footer className="mt-24 border-t border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] px-6 md:px-24 py-6 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-8">
           <div className="flex items-center gap-4 text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
             <Link href="/about" className="transition hover:text-foreground">
