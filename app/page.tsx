@@ -2009,7 +2009,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     activeKrFieldEdit.field === "title";
                   return (
                     <div key={kr.id} className="rounded-2xl px-3 py-1">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex-1 space-y-1">
                           {isEditingKrTitle ? (
                             <input
