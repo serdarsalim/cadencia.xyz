@@ -373,6 +373,10 @@ export default function Home() {
     }
     return "productivity";
   });
+  const [productivityYear, setProductivityYear] = useState(() =>
+    new Date().getFullYear()
+  );
+  const weeksForYear = useMemo(() => buildWeeksForYear(productivityYear), [productivityYear]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [monthEntries, setMonthEntries] = useState<Record<string, string>>({});
@@ -380,9 +384,6 @@ export default function Home() {
     year: number;
     month: number;
   } | null>(null);
-  const [productivityYear, setProductivityYear] = useState(() =>
-    new Date().getFullYear()
-  );
   const [productivityRatings, setProductivityRatings] = useState<
     Record<string, number | null>
   >({});
@@ -1134,9 +1135,8 @@ export default function Home() {
   // Set current week as selected by default when viewing productivity tracker
   useEffect(() => {
     if (view === "productivity" && selectedWeek === null) {
-      const weeks = buildWeeksForYear(productivityYear);
       const today = new Date();
-      const currentWeek = weeks.find((week) =>
+      const currentWeek = weeksForYear.find((week) =>
         week.dayKeys.some((dayKey) => {
           const [y, m, d] = dayKey.split("-").map(Number);
           const keyDate = new Date(y!, m! - 1, d);
@@ -1151,7 +1151,7 @@ export default function Home() {
         setSelectedWeek(currentWeek.weekNumber);
       }
     }
-  }, [view, productivityYear, selectedWeek]);
+  }, [view, weeksForYear, selectedWeek]);
 
   const isProfileComplete = Boolean(personName && dateOfBirth && email);
   const isProfileEditorVisible = isEditingProfile;
@@ -1159,6 +1159,42 @@ export default function Home() {
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
   };
+
+  const navbarWeekLabel = useMemo(() => {
+    const findWeekForDate = (date: Date) =>
+      weeksForYear.find((week) =>
+        week.dayKeys.some((dayKey) => {
+          const [y, m, d] = dayKey.split("-").map(Number);
+          const keyDate = new Date(y!, m! - 1, d);
+          return (
+            keyDate.getFullYear() === date.getFullYear() &&
+            keyDate.getMonth() === date.getMonth() &&
+            keyDate.getDate() === date.getDate()
+          );
+        })
+      );
+
+    const activeWeek =
+      (selectedWeek !== null
+        ? weeksForYear.find((week) => week.weekNumber === selectedWeek)
+        : null) ?? findWeekForDate(new Date());
+
+    if (!activeWeek) {
+      return "Select a week";
+    }
+
+    const [firstDayKey] = activeWeek.dayKeys;
+    let labelYear = productivityYear;
+    if (firstDayKey) {
+      const [yearPart] = firstDayKey.split("-");
+      const parsedYear = Number(yearPart);
+      if (Number.isFinite(parsedYear)) {
+        labelYear = parsedYear;
+      }
+    }
+
+    return `${activeWeek.rangeLabel}, ${labelYear}`;
+  }, [weeksForYear, selectedWeek, productivityYear]);
 
   const toggleFocusEditor = () => {
     setIsEditingFocus((prev) => !prev);
@@ -2076,7 +2112,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             <img
               src="/app-logo.png"
               alt={`${APP_NAME} logo`}
-              className="h-10 w-auto"
+              className="h-8 w-auto"
             />
           </Link>
           <nav className="flex gap-2 text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
@@ -2105,7 +2141,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           </nav>
         </div>
         <div className="ml-auto text-right text-xs font-semibold uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_65%,transparent)]">
-          Dec 15–21, 2025
+          {navbarWeekLabel}
         </div>
       </header>
       <main className="flex flex-1 items-start justify-center px-4">
