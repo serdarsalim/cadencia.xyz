@@ -1185,10 +1185,6 @@ export default function Home() {
     setSelectedWeek(targetWeekNumber);
   };
 
-  const toggleFocusEditor = () => {
-    setIsEditingFocus((prev) => !prev);
-  };
-
   const generateId = () =>
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -2231,7 +2227,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
           {view === "productivity" && (
             <>
-              <section className="mx-auto mt-8 grid max-w-[1920px] gap-8 text-left lg:grid-cols-[1fr_1.2fr]">
+              <section className="mx-auto mt-8 grid max-w-480 gap-8 text-left lg:grid-cols-[1fr_1.2fr]">
                 <div className="space-y-4 order-2 lg:order-1">
                   <ProductivityGrid
                     year={productivityYear}
@@ -2301,7 +2297,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                           target.style.height = target.scrollHeight + 'px';
                         }}
                         placeholder="Behaviors to reinforce"
-                        className="min-h-[88px] resize-none overflow-hidden rounded-2xl border-none bg-transparent p-2 text-sm text-[#0f172a] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)]"
+                        className="min-h-22 resize-none overflow-hidden rounded-2xl border-none bg-transparent p-2 text-sm text-[#0f172a] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)]"
                         style={{ height: 'auto' }}
                       />
                     </label>
@@ -2325,7 +2321,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                           target.style.height = target.scrollHeight + 'px';
                         }}
                         placeholder="Behaviors to avoid"
-                        className="min-h-[88px] resize-none overflow-hidden rounded-2xl border-none bg-transparent p-2 text-sm text-[#0f172a] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)]"
+                        className="min-h-22 resize-none overflow-hidden rounded-2xl border-none bg-transparent p-2 text-sm text-[#0f172a] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)]"
                         style={{ height: 'auto' }}
                       />
                     </label>
