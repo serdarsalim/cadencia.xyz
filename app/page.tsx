@@ -1746,7 +1746,48 @@ const goalStatusBadge = (status: KeyResultStatus) => {
   }, [productivityGoals, productivityYear]);
 
   const selectedWeekKey = selectedWeek !== null ? `week-${productivityYear}-${selectedWeek}` : null;
-  const selectedWeekEntry = selectedWeekKey ? weeklyNotes[selectedWeekKey] ?? createWeeklyNoteEntry() : null;
+
+  // Get previous week's key for carryover logic
+  const getPreviousWeekKey = (year: number, week: number): string | null => {
+    if (week > 1) {
+      return `week-${year}-${week - 1}`;
+    } else if (year > 2000) {
+      // Get last week of previous year (approximate to 52, actual calculation would be more complex)
+      return `week-${year - 1}-52`;
+    }
+    return null;
+  };
+
+  const getWeekEntryWithCarryover = (weekKey: string | null): WeeklyNoteEntry | null => {
+    if (!weekKey) return null;
+
+    const currentEntry = weeklyNotes[weekKey];
+
+    // If current week has any saved data, return it as-is
+    if (currentEntry) {
+      return createWeeklyNoteEntry(currentEntry);
+    }
+
+    // Current week is empty, try to carry over from previous week
+    if (selectedWeek !== null) {
+      const prevWeekKey = getPreviousWeekKey(productivityYear, selectedWeek);
+      if (prevWeekKey) {
+        const prevEntry = weeklyNotes[prevWeekKey];
+        if (prevEntry && (prevEntry.dos || prevEntry.donts)) {
+          // Carry over dos and donts, but not content
+          return createWeeklyNoteEntry({
+            content: "",
+            dos: prevEntry.dos ?? "",
+            donts: prevEntry.donts ?? ""
+          });
+        }
+      }
+    }
+
+    return createWeeklyNoteEntry();
+  };
+
+  const selectedWeekEntry = getWeekEntryWithCarryover(selectedWeekKey);
 
   const selectedMonthLabel = useMemo(() => {
     if (!selectedMonth || !dateOfBirth) {
@@ -2441,7 +2482,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           <div className="min-w-[220px] text-center sm:text-left">
             <p className="text-base font-medium text-foreground">{APP_NAME}</p>
             <p className="text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-              Minimal goal, productivity, and schedule tracker
+              Personal goal and productivity tracker
             </p>
           </div>
 

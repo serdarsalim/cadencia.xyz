@@ -1,14 +1,14 @@
 export const APP_NAME = "SLMTRACK";
 
 export const APP_DESCRIPTION =
-  "SLMTRACK is a minimalist personal goal-setting workspace for designing your schedule, tracking productivity across every time horizon, and running focused personal OKRs.";
+  "SLMTRACK is a minimalist personal goal-setting workspace for setting up your goals and tracking productivity across every time horizon, and running focused personal OKRs.";
 
 export const APP_LONG_DESCRIPTION = `${APP_DESCRIPTION} Map your personal task and work schedule, track productivity across quarters, years, weeks, and days, and keep personal OKRs visible without adding weight to the minimalist interface.`;
 
 export const APP_TAGLINE = "Personal goal setting & tracking app";
 
 export const APP_FEATURES = [
-  "Schedule planning",
+
   "Productivity timeline",
   "Personal OKRs",
   "Minimal design",
