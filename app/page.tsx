@@ -727,47 +727,7 @@ export default function Home() {
           } catch (error) {
             console.error("Failed to update demo mode flag", error);
           }
-
-          // OPTIMISTIC LOADING: Load from localStorage cache first for instant display
-          try {
-            const cachedGoals = window.localStorage.getItem(storageKey + "-goals");
-            const cachedSchedule = window.localStorage.getItem(storageKey + "-schedule");
-            const cachedProductivity = window.localStorage.getItem(storageKey + "-productivity");
-            const cachedWeeklyNotes = window.localStorage.getItem(storageKey + "-weekly-notes");
-            const cachedFocusAreas = window.localStorage.getItem(storageKey + "-focus-areas");
-            const cachedMonthEntries = window.localStorage.getItem(storageKey + "-month-entries");
-            const cachedProfile = window.localStorage.getItem(storageKey + "-profile");
-
-            // Set cached data immediately
-            if (cachedGoals) {
-              const goals = JSON.parse(cachedGoals);
-              const uniqueGoals = goals.reduce((acc: Goal[], goal: Goal) => {
-                const isDuplicate = acc.some(g => g.title.toLowerCase() === goal.title.toLowerCase());
-                if (!isDuplicate) acc.push(goal);
-                return acc;
-              }, []);
-              setGoals(uniqueGoals);
-            }
-            if (cachedSchedule) setScheduleEntries(normalizeScheduleEntryColors(JSON.parse(cachedSchedule)));
-            if (cachedProductivity) setProductivityRatings(JSON.parse(cachedProductivity));
-            if (cachedWeeklyNotes) setWeeklyNotes(normalizeWeeklyNotes(JSON.parse(cachedWeeklyNotes)));
-            if (cachedFocusAreas) setFocusAreas(JSON.parse(cachedFocusAreas));
-            if (cachedMonthEntries) setMonthEntries(JSON.parse(cachedMonthEntries));
-            if (cachedProfile) {
-              const profile = JSON.parse(cachedProfile);
-              if (profile.personName) setPersonName(profile.personName);
-              if (profile.dateOfBirth) setDateOfBirth(profile.dateOfBirth);
-              if (profile.weekStartDay !== undefined) setWeekStartDay(profile.weekStartDay);
-              if (profile.recentYears) setRecentYears(profile.recentYears);
-            }
-
-            // Show UI immediately with cached data
-            setIsHydrated(true);
-          } catch (error) {
-            console.error("Failed to load cached data", error);
-          }
-
-          // Logged in - migrate and fetch from database in background
+          // Logged in - load from database
           await migrateFromLocalStorage();
           cleanupOldScheduleEntries();
 
@@ -812,7 +772,7 @@ export default function Home() {
           } catch (error) {
             console.error("Failed to update demo mode flag", error);
           }
-          // Guest - load demo data and show immediately
+          // Guest - load demo data
           setGoals(demoGoals);
           setScheduleEntries(normalizeScheduleEntryColors(demoScheduleEntries));
           setProductivityRatings(demoProductivityRatings);
@@ -824,7 +784,6 @@ export default function Home() {
           setWeekStartDay(demoProfile.weekStartDay as WeekdayIndex);
           setRecentYears(demoProfile.recentYears);
           setView("productivity");
-          setIsHydrated(true); // Show demo data immediately
         }
 
         // Also load UI preferences from localStorage (these are not in DB)
