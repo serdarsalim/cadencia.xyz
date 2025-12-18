@@ -1830,7 +1830,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
   const renderGoalsSection = (
     spacingClass = "mt-8",
-    sectionRef?: RefObject<HTMLDivElement>
+    sectionRef?: RefObject<HTMLDivElement | null>
   ) => (
     <section
       ref={sectionRef}
