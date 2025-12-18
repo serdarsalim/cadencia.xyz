@@ -2204,7 +2204,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   : "text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]"
               }`}
             >
-              Pr
+              Track
             </button>
             <button
               type="button"

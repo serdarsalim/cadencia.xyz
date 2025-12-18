@@ -40,13 +40,13 @@ body {
 
 /* Productivity colors for light mode */
 .productivity-low {
-  background-color: #ede8c5;
+  background-color: #fdfdf4;
 }
 .productivity-medium {
-  background-color: #99c699;
+  background-color: #b3df8f;
 }
 .productivity-high {
-  background-color: #66a866;
+  background-color: #84c400;
 }
 
 /* Productivity colors for dark mode */
