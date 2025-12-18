@@ -2674,6 +2674,12 @@ const ProductivityGrid = ({
   selectedWeek,
   setSelectedWeek,
 }: ProductivityGridProps) => {
+  const dayGridRef = useRef<HTMLDivElement | null>(null);
+  const [hoveredDayDisplay, setHoveredDayDisplay] = useState<{
+    label: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const days = Array.from({ length: 31 }, (_, idx) => idx + 1);
   const months = Array.from({ length: 12 }, (_, idx) => idx);
   const weeks = useMemo(() => buildWeeksForYear(year), [year]);
@@ -2758,6 +2764,47 @@ const ProductivityGrid = ({
     return new Date(targetYear, monthIndex + 1, 0).getDate();
   };
 
+  const handleDayHover = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    monthIndex: number,
+    dayOfMonth: number
+  ) => {
+    if (mode !== "day") return;
+    const containerRect = dayGridRef.current?.getBoundingClientRect();
+    if (!containerRect) {
+      setHoveredDayDisplay(null);
+      return;
+    }
+    const date = new Date(year, monthIndex, dayOfMonth);
+    const label = date.toLocaleDateString(undefined, {
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+    });
+    const tooltipWidth = 140;
+    const tooltipHeight = 36;
+    const padding = 8;
+    const relativeX = event.clientX - containerRect.left;
+    const relativeY = event.clientY - containerRect.top;
+    const clampedX = Math.min(
+      containerRect.width - padding,
+      Math.max(tooltipWidth + padding, relativeX)
+    );
+    const clampedY = Math.min(
+      containerRect.height - padding,
+      Math.max(tooltipHeight + padding, relativeY)
+    );
+    setHoveredDayDisplay({
+      label,
+      x: clampedX,
+      y: clampedY,
+    });
+  };
+
+  const clearDayHover = () => {
+    setHoveredDayDisplay(null);
+  };
+
   const renderDayGrid = () => (
     <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6">
       {toggleButton}
@@ -2782,7 +2829,25 @@ const ProductivityGrid = ({
           );
         })}
       </div>
-      <div className="mt-2">
+      <div
+        ref={dayGridRef}
+        className="relative mt-2"
+        onMouseLeave={clearDayHover}
+      >
+        {hoveredDayDisplay && (
+          <div
+            className="pointer-events-none absolute"
+            style={{
+              left: hoveredDayDisplay.x,
+              top: hoveredDayDisplay.y,
+              transform: "translate(-100%, -100%)",
+            }}
+          >
+            <span className="rounded-full border border-foreground bg-background px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-foreground shadow whitespace-nowrap">
+              {hoveredDayDisplay.label}
+            </span>
+          </div>
+        )}
         {days.map((dayOfMonth) => {
           return (
           <div
@@ -2859,6 +2924,9 @@ const ProductivityGrid = ({
                   type="button"
                   key={key}
                   onClick={() => handleCycle(monthIndex, dayOfMonth)}
+                  onMouseEnter={(event) =>
+                    handleDayHover(event, monthIndex, dayOfMonth)
+                  }
                   onKeyDown={(e) => {
                     if (e.key === "Delete" || e.key === "Backspace") {
                       e.preventDefault();
