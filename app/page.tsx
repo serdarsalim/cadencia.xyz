@@ -212,6 +212,7 @@ type Goal = {
   description?: string;
   keyResults: KeyResult[];
   statusOverride?: KeyResultStatus;
+  archived?: boolean;
 };
 
 type WeeklyNoteEntry = {
@@ -397,6 +398,8 @@ export default function Home() {
   >({});
   const [weekStartDay, setWeekStartDay] = useState<WeekdayIndex>(1);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [archivedGoals, setArchivedGoals] = useState<Goal[]>([]);
+  const [isViewingArchived, setIsViewingArchived] = useState(false);
   const [goalsSectionTitle, setGoalsSectionTitle] = useState("2026 GOALS");
   const [isEditingGoalsSectionTitle, setIsEditingGoalsSectionTitle] = useState(false);
   const [newGoalTitle, setNewGoalTitle] = useState("");
@@ -541,6 +544,21 @@ export default function Home() {
       }
     })();
   }, [userEmail, isDemoMode]);
+
+  const saveGoalsNow = useCallback((nextGoals: Goal[]) => {
+    if (!userEmail || isDemoMode || !hasLoadedServerDataRef.current) {
+      return;
+    }
+
+    pendingGoalsRef.current = nextGoals;
+
+    if (goalsSaveTimeoutRef.current) {
+      window.clearTimeout(goalsSaveTimeoutRef.current);
+      goalsSaveTimeoutRef.current = null;
+    }
+
+    triggerGoalsSave();
+  }, [userEmail, isDemoMode, triggerGoalsSave]);
 
   const triggerMonthEntriesSave = useCallback(() => {
     if (!userEmail || isDemoMode) {
@@ -741,7 +759,8 @@ export default function Home() {
             const uniqueGoals = (data.goals ?? []).reduce((acc: Goal[], goal: Goal) => {
               const isDuplicate = acc.some(g => g.title.toLowerCase() === goal.title.toLowerCase());
               if (!isDuplicate) {
-                acc.push(goal);
+                // Ensure archived field exists with default value
+                acc.push({ ...goal, archived: goal.archived ?? false });
               }
               return acc;
             }, []);
@@ -1299,8 +1318,13 @@ export default function Home() {
       title,
       timeframe: "",
       keyResults: [],
+      archived: false,
     };
-    setGoals((prev) => [...prev, nextGoal]);
+    setGoals((prev) => {
+      const updatedGoals = [...prev, nextGoal];
+      saveGoalsNow(updatedGoals);
+      return updatedGoals;
+    });
     setNewGoalTitle("");
     setIsAddingGoal(false);
   };
@@ -1315,6 +1339,71 @@ export default function Home() {
       delete next[goalId];
       return next;
     });
+  };
+
+  const handleArchiveGoal = async (goalId: string) => {
+    try {
+      const response = await fetch('/api/goals/archive', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goalId, archived: true })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to archive goal');
+      }
+
+      // Move goal from active to archived
+      const goalToArchive = goals.find(g => g.id === goalId);
+      if (goalToArchive) {
+        const updatedGoal = { ...goalToArchive, archived: true };
+        setGoals((prev) => prev.filter((goal) => goal.id !== goalId));
+        setArchivedGoals((prev) => [...prev, updatedGoal]);
+      }
+    } catch (error) {
+      console.error('Error archiving goal:', error);
+      alert('Failed to archive goal. Please try again.');
+    }
+  };
+
+  const handleUnarchiveGoal = async (goalId: string) => {
+    try {
+      const response = await fetch('/api/goals/archive', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goalId, archived: false })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to unarchive goal');
+      }
+
+      // Move goal from archived to active
+      const goalToUnarchive = archivedGoals.find(g => g.id === goalId);
+      if (goalToUnarchive) {
+        const updatedGoal = { ...goalToUnarchive, archived: false };
+        setArchivedGoals((prev) => prev.filter((goal) => goal.id !== goalId));
+        setGoals((prev) => [...prev, updatedGoal]);
+      }
+    } catch (error) {
+      console.error('Error unarchiving goal:', error);
+      alert('Failed to unarchive goal. Please try again.');
+    }
+  };
+
+  const fetchArchivedGoals = async () => {
+    if (!userEmail || isDemoMode) return;
+
+    try {
+      const response = await fetch('/api/goals/archive');
+      if (!response.ok) {
+        throw new Error('Failed to fetch archived goals');
+      }
+      const data = await response.json();
+      setArchivedGoals(data.goals || []);
+    } catch (error) {
+      console.error('Error fetching archived goals:', error);
+    }
   };
 
 const handleKrDraftChange = (goalId: string, value: string) => {
@@ -1599,13 +1688,15 @@ const beginKrFieldEdit = (
       title,
       status: "started",
     };
-    setGoals((prev) =>
-      prev.map((goal) =>
+    setGoals((prev) => {
+      const updatedGoals = prev.map((goal) =>
         goal.id === goalId
           ? { ...goal, keyResults: [...goal.keyResults, newKr] }
           : goal
-      )
-    );
+      );
+      saveGoalsNow(updatedGoals);
+      return updatedGoals;
+    });
     setKrDrafts((prev) => {
       const next = { ...prev };
       delete next[goalId];
@@ -1937,12 +2028,17 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             </h2>
           )}
         </div>
-        {goals.length === 0 && (
+        {!isViewingArchived && goals.length === 0 && (
           <p className="text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] text-center">
             No goals yet. Define your first objective above to start tracking OKRs.
           </p>
         )}
-        {goals.map((goal) => {
+        {isViewingArchived && archivedGoals.length === 0 && (
+          <p className="text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] text-center">
+            No archived goals yet.
+          </p>
+        )}
+        {(isViewingArchived ? archivedGoals : goals).map((goal) => {
           const draft = krDrafts[goal.id] ?? { title: "" };
           return (
             <div
@@ -1961,7 +2057,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex flex-1 flex-col">
                   {activeGoalFieldEdit?.goalId === goal.id &&
-                  activeGoalFieldEdit.field === "title" ? (
+                  activeGoalFieldEdit.field === "title" &&
+                  !isViewingArchived ? (
                     <input
                       type="text"
                       value={goalFieldDrafts[goal.id]?.title ?? goal.title}
@@ -1979,6 +2076,10 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                       autoFocus
                       className="w-full border-b border-transparent bg-transparent text-2xl font-light text-foreground outline-none focus:border-foreground"
                     />
+                  ) : isViewingArchived ? (
+                    <h3 className="text-left text-base sm:text-2xl font-light text-foreground">
+                      {goal.title}
+                    </h3>
                   ) : (
                     <button
                       type="button"
@@ -1991,14 +2092,35 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 </div>
                 <div className="flex items-center gap-3">
                   {activeGoalCardId === goal.id && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveGoal(goal.id)}
-                      className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
-                      aria-label="Remove goal"
-                    >
-                      ✕
-                    </button>
+                    <>
+                      {isViewingArchived ? (
+                        <button
+                          type="button"
+                          onClick={() => handleUnarchiveGoal(goal.id)}
+                          className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
+                          aria-label="Unarchive goal"
+                        >
+                          Unarchive
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleArchiveGoal(goal.id)}
+                          className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
+                          aria-label="Archive goal"
+                        >
+                          Archive
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveGoal(goal.id)}
+                        className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
+                        aria-label="Remove goal"
+                      >
+                        ✕
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -2009,7 +2131,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   const isEditingKrTitle =
                     activeKrFieldEdit?.goalId === goal.id &&
                     activeKrFieldEdit.krId === kr.id &&
-                    activeKrFieldEdit.field === "title";
+                    activeKrFieldEdit.field === "title" &&
+                    !isViewingArchived;
                   return (
                     <div key={kr.id} className="rounded-2xl px-3 py-1">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2041,6 +2164,10 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                               autoFocus
                               className="kr-apple-font w-full border-b border-transparent bg-transparent text-sm font-medium text-foreground outline-none focus:border-foreground"
                             />
+                          ) : isViewingArchived ? (
+                            <span className="kr-apple-font text-left text-sm font-medium text-foreground">
+                              {kr.title || "Untitled key result"}
+                            </span>
                           ) : (
                             <button
                               type="button"
@@ -2054,27 +2181,47 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              cycleKeyResultStatus(goal.id, kr.id)
-                            }
-                            className={`rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-base sm:text-lg ${goalStatusBadge(
-                              kr.status
-                            )}`}
-                            title={kr.status === "started"
-                              ? "Started"
+                          {!isViewingArchived && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                cycleKeyResultStatus(goal.id, kr.id)
+                              }
+                              className={`rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-base sm:text-lg ${goalStatusBadge(
+                                kr.status
+                              )}`}
+                              title={kr.status === "started"
+                                ? "Started"
+                                : kr.status === "on-hold"
+                                  ? "On hold"
+                                  : "Completed"}
+                            >
+                              {kr.status === "started"
+                              ? "▶️"
                               : kr.status === "on-hold"
-                                ? "On hold"
-                                : "Completed"}
-                          >
-                            {kr.status === "started"
-                            ? "▶️"
-                            : kr.status === "on-hold"
-                              ? "⏸️"
-                              : "✅"}
-                          </button>
-                          {activeGoalCardId === goal.id && (
+                                ? "⏸️"
+                                : "✅"}
+                            </button>
+                          )}
+                          {isViewingArchived && (
+                            <span
+                              className={`rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-base sm:text-lg ${goalStatusBadge(
+                                kr.status
+                              )}`}
+                              title={kr.status === "started"
+                                ? "Started"
+                                : kr.status === "on-hold"
+                                  ? "On hold"
+                                  : "Completed"}
+                            >
+                              {kr.status === "started"
+                              ? "▶️"
+                              : kr.status === "on-hold"
+                                ? "⏸️"
+                                : "✅"}
+                            </span>
+                          )}
+                          {activeGoalCardId === goal.id && !isViewingArchived && (
                             <button
                               type="button"
                               onClick={() =>
@@ -2122,7 +2269,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     </div>
                   </div>
                 )}
-                {activeGoalCardId === goal.id && activeKrDraftGoalId !== goal.id && (
+                {activeGoalCardId === goal.id && activeKrDraftGoalId !== goal.id && !isViewingArchived && (
                   <div className="pt-3">
                     <button
                       type="button"
@@ -2139,15 +2286,29 @@ const goalStatusBadge = (status: KeyResultStatus) => {
         })}
       </div>
 
-      <div className="mt-6 flex justify-center">
+      <div className="mt-6 flex justify-center gap-3">
         {!isAddingGoal ? (
-          <button
-            type="button"
-            onClick={startGoalDraft}
-            className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-          >
-            + Add OKR
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={startGoalDraft}
+              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
+            >
+              + Add OKR
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsViewingArchived(!isViewingArchived);
+                if (!isViewingArchived && archivedGoals.length === 0) {
+                  fetchArchivedGoals();
+                }
+              }}
+              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
+            >
+              {isViewingArchived ? 'Back to Active' : 'Archived'}
+            </button>
+          </>
         ) : (
           <div className="w-full max-w-3xl okr-card p-6">
             <div className="grid gap-4">

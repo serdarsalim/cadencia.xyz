@@ -10,9 +10,10 @@ export const keyResultSchema = z.object({
 export const goalSchema = z.object({
   id: z.string(),
   title: z.string().min(1).max(200),
-  timeframe: z.string().min(1).max(100),
+  timeframe: z.string().max(100),
   description: z.string().max(1000).optional(),
   statusOverride: z.string().max(50).optional().nullable(),
+  archived: z.boolean().optional(),
   keyResults: z.array(keyResultSchema)
 })
 

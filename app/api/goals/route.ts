@@ -1,6 +1,7 @@
 // Improved goals API route with validation and safer transactions
 
 import { NextRequest, NextResponse } from 'next/server'
+import { randomUUID } from 'crypto'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { goalsArraySchema } from '@/lib/schemas'
@@ -17,6 +18,9 @@ export async function GET() {
       where: { email: session.user.email },
       include: {
         goals: {
+          where: {
+            archived: false
+          },
           include: {
             keyResults: true
           },
@@ -55,6 +59,8 @@ export async function POST(request: NextRequest) {
     // Validate input
     const validationResult = goalsArraySchema.safeParse(body.goals)
     if (!validationResult.success) {
+      console.error('Goal validation failed:', JSON.stringify(validationResult.error.issues, null, 2))
+      console.error('Received goals:', JSON.stringify(body.goals, null, 2))
       return NextResponse.json(
         { error: 'Invalid goals data', details: validationResult.error.issues },
         { status: 400 }
@@ -63,44 +69,85 @@ export async function POST(request: NextRequest) {
 
     const goals = validationResult.data
 
-    // Use a transaction with proper error handling
     const result = await prisma.$transaction(async (tx) => {
       try {
-        // Step 1: Delete existing goals (cascades to key results)
-        await tx.goal.deleteMany({
-          where: { userId: user.id }
-        })
-
-        // Step 2: If no goals to create, return empty array
         if (!goals || goals.length === 0) {
+          // If no goals, delete all existing for this user
+          await tx.goal.deleteMany({
+            where: { userId: user.id }
+          })
           return []
         }
 
-        // Step 3: Create goals one by one to maintain proper relationship with key results
-        const createdGoals = []
-
+        const existingGoals = await tx.goal.findMany({
+          where: { userId: user.id },
+          select: { id: true, archived: true }
+        })
+        const processedGoalIds = new Set<string>()
         for (const goal of goals) {
-          const created = await tx.goal.create({
-            data: {
-              userId: user.id,
-              title: goal.title,
-              timeframe: goal.timeframe,
-              statusOverride: goal.statusOverride || null,
-              keyResults: {
-                create: goal.keyResults.map(kr => ({
-                  title: kr.title,
-                  status: kr.status
-                }))
-              }
+          const goalId = goal.id || randomUUID()
+          processedGoalIds.add(goalId)
+
+          const baseData = {
+            title: goal.title,
+            timeframe: goal.timeframe,
+            statusOverride: goal.statusOverride || null,
+            archived: (goal as any).archived || false,
+            userId: user.id
+          }
+
+          await tx.goal.upsert({
+            where: { id: goalId },
+            update: {
+              title: baseData.title,
+              timeframe: baseData.timeframe,
+              statusOverride: baseData.statusOverride,
+              archived: baseData.archived
             },
-            include: {
-              keyResults: true
+            create: {
+              id: goalId,
+              ...baseData
             }
           })
-          createdGoals.push(created)
+
+          await tx.keyResult.deleteMany({
+            where: { goalId }
+          })
+
+          if (goal.keyResults.length > 0) {
+            await tx.keyResult.createMany({
+              data: goal.keyResults.map(keyResult => ({
+                id: keyResult.id || randomUUID(),
+                goalId,
+                title: keyResult.title,
+                status: keyResult.status
+              }))
+            })
+          }
         }
 
-        return createdGoals
+        const goalIdsToDelete = existingGoals
+          .filter((existingGoal) => !existingGoal.archived && !processedGoalIds.has(existingGoal.id))
+          .map((goal) => goal.id)
+
+        if (goalIdsToDelete.length > 0) {
+          await tx.goal.deleteMany({
+            where: {
+              userId: user.id,
+              id: { in: goalIdsToDelete }
+            }
+          })
+        }
+
+        return tx.goal.findMany({
+          where: { userId: user.id },
+          include: {
+            keyResults: true
+          },
+          orderBy: {
+            createdAt: 'asc'
+          }
+        })
       } catch (txError) {
         console.error('Transaction error:', txError)
         throw txError

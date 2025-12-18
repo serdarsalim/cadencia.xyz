@@ -50,6 +50,7 @@ export const demoGoals = [
     title: "Launch New Product – Mar 2025",
     timeframe: "Q1 2025",
     description: "Ship beta version of our productivity app",
+    archived: false,
     keyResults: [
       { id: "kr1", title: "Complete user research (Jan 12)", status: "completed" as const },
       { id: "kr2", title: "Build MVP ready for review (Feb 10)", status: "started" as const },
@@ -61,6 +62,7 @@ export const demoGoals = [
     title: "Health & Fitness – 2025 Plan",
     timeframe: "2025",
     description: "Improve overall health and wellbeing",
+    archived: false,
     keyResults: [
       { id: "kr4", title: "Exercise 4x per week (tracked Feb)", status: "completed" as const },
       { id: "kr5", title: "Sleep 8 hours daily in March", status: "started" as const },

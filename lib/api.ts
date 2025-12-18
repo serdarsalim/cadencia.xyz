@@ -200,6 +200,7 @@ export async function loadAllData() {
 
 export async function saveGoals(goals: any[]) {
   try {
+    console.log('CLIENT: Saving goals:', JSON.stringify(goals, null, 2))
     const response = await fetch('/api/goals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -212,7 +213,8 @@ export async function saveGoals(goals: any[]) {
     }
 
     if (!response.ok) {
-      console.error('Error saving goals:', response.status, response.statusText)
+      const errorData = await response.json().catch(() => null)
+      console.error('Error saving goals:', response.status, response.statusText, errorData)
       return null
     }
 
