@@ -1907,7 +1907,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
   ) => (
     <section
       ref={sectionRef}
-      className={`mx-auto ${spacingClass} flex max-w-5xl flex-col gap-4 pt-16 text-left`}
+      className={`mx-auto ${spacingClass} flex max-w-4xl flex-col gap-4 pt-16 text-left`}
     >
       <div className="space-y-6 pt-6">
         <div className="text-center">
