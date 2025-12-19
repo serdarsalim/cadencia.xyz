@@ -1802,7 +1802,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
         className="flex flex-col gap-2 rounded-2xl p-3"
         style={{ backgroundColor: "#e8f5e9" }}
       >
-        <span className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
+        <span className="text-xs uppercase tracking-[0.3em] text-[#0f172a] dark:text-[#0f172a]">
           Do&apos;s
         </span>
         <textarea
@@ -1826,7 +1826,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
         className="flex flex-col gap-2 rounded-2xl p-3"
         style={{ backgroundColor: "#ffebee" }}
       >
-        <span className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
+        <span className="text-xs uppercase tracking-[0.3em] text-[#0f172a] dark:text-[#0f172a]">
           Don&apos;ts
         </span>
         <textarea
