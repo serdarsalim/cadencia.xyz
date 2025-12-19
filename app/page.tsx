@@ -211,9 +211,9 @@ const TinyEditor = dynamic(
 const TINYMCE_CDN =
   "https://cdnjs.cloudflare.com/ajax/libs/tinymce/8.1.2/tinymce.min.js";
 const PRODUCTIVITY_SCALE = [
-  { value: 0, label: "Not achieved", color: "productivity-low" },
-  { value: 1, label: "Partly achieved", color: "productivity-medium" },
-  { value: 2, label: "Achieved", color: "productivity-high" },
+  { value: 0, label: "<25%", color: "productivity-low" },
+  { value: 1, label: "25-50%", color: "productivity-medium" },
+  { value: 2, label: ">50%", color: "productivity-high" },
   // { value: 3, label: ">75%", color: "bg-[#66bd63]" }, // Hidden for now
 ];
 
@@ -2502,18 +2502,22 @@ type ProductivityLegendProps = {
 
 const ProductivityLegend = ({ className }: ProductivityLegendProps = {}) => (
   <div
-    className={`flex flex-wrap gap-3 rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-4 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:flex-nowrap ${className ?? ""}`}
+    className={`flex flex-col gap-2 rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-4 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${className ?? ""}`}
   >
-    {PRODUCTIVITY_SCALE.map((scale) => (
-      <div key={scale.value} className="flex items-center gap-2 whitespace-nowrap">
-        <span
-          className={`h-4 w-4 rounded ${scale.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]`}
-          aria-hidden="true"
-        />
-        <span>{scale.value}</span>
-        <span>{scale.label}</span>
-      </div>
-    ))}
+    <span className="text-[10px] uppercase tracking-[0.2em]">
+      Goals achieved (self-rated)
+    </span>
+    <div className="flex flex-wrap gap-3 sm:flex-nowrap">
+      {PRODUCTIVITY_SCALE.map((scale) => (
+        <div key={scale.value} className="flex items-center gap-2 whitespace-nowrap">
+          <span
+            className={`h-4 w-4 rounded ${scale.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]`}
+            aria-hidden="true"
+          />
+          <span>{scale.label}</span>
+        </div>
+      ))}
+    </div>
   </div>
 );
 
@@ -2557,17 +2561,89 @@ const ProductivityGrid = ({
       monthWeeks.sort((a, b) => a.weekNumber - b.weekNumber)
     );
   }, [weeks]);
+  const [isYearMenuOpen, setIsYearMenuOpen] = useState(false);
+  const yearMenuRef = useRef<HTMLDivElement | null>(null);
   const toggleLabel = mode === "week" ? "Week" : "Day";
-  const dayColumnWidth = "minmax(44px,max-content)";
   const toggleButton = (
     <button
       type="button"
       onClick={onToggleMode}
-      className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-2 py-0.5 text-[9px] uppercase text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
+      className="flex items-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
       aria-label={`Switch to ${mode === "week" ? "day" : "week"} view`}
     >
       {toggleLabel}
     </button>
+  );
+  const yearOptions = useMemo(() => [year - 1, year, year + 1], [year]);
+
+  useEffect(() => {
+    if (!isYearMenuOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (!yearMenuRef.current) return;
+      if (event.target instanceof Node && !yearMenuRef.current.contains(event.target)) {
+        setIsYearMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsYearMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isYearMenuOpen]);
+
+  const yearControl = (
+    <div ref={yearMenuRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setIsYearMenuOpen((prev) => !prev)}
+        className="flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
+        aria-label="Select year"
+        aria-expanded={isYearMenuOpen}
+      >
+        {year}
+        <svg
+          aria-hidden="true"
+          className={`h-3 w-3 transition ${isYearMenuOpen ? "rotate-180" : ""}`}
+          viewBox="0 0 20 20"
+          fill="none"
+        >
+          <path
+            d="M5 7l5 6 5-6"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      {isYearMenuOpen ? (
+        <div className="absolute right-0 z-10 mt-2 w-36 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-1 shadow-lg">
+          {yearOptions.map((optionYear) => (
+            <button
+              key={optionYear}
+              type="button"
+              onClick={() => {
+                setYear(optionYear);
+                setIsYearMenuOpen(false);
+              }}
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                optionYear === year
+                  ? "bg-foreground text-background"
+                  : "text-foreground hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
+              }`}
+            >
+              <span>{optionYear}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 
   const handleCycle = (monthIndex: number, day: number) => {
@@ -2816,35 +2892,24 @@ const ProductivityGrid = ({
         })}
       </div>
       <div className="mt-6 flex items-center justify-between text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
-        <div className="flex flex-wrap gap-3">
-          {PRODUCTIVITY_SCALE.map((scale) => (
-            <div key={scale.value} className="flex items-center gap-2 whitespace-nowrap">
-              <span
-                className={`h-4 w-4 rounded ${scale.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]`}
-                aria-hidden="true"
-              />
-              <span>{scale.label}</span>
-            </div>
-          ))}
+        <div className="flex flex-col gap-2">
+          <span className="text-[10px] uppercase tracking-[0.2em]">
+            Goals achieved (self-rated)
+          </span>
+          <div className="flex flex-wrap gap-3">
+            {PRODUCTIVITY_SCALE.map((scale) => (
+              <div key={scale.value} className="flex items-center gap-2 whitespace-nowrap">
+                <span
+                  className={`h-4 w-4 rounded ${scale.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]`}
+                  aria-hidden="true"
+                />
+                <span>{scale.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setYear(year - 1)}
-            className="rounded p-1 hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
-            aria-label="Previous year"
-          >
-            ←
-          </button>
-          <span className="font-semibold">{year}</span>
-          <button
-            type="button"
-            onClick={() => setYear(year + 1)}
-            className="rounded p-1 hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
-            aria-label="Next year"
-          >
-            →
-          </button>
+          {yearControl}
           {toggleButton}
         </div>
       </div>
@@ -2857,10 +2922,9 @@ const ProductivityGrid = ({
         <div
           className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
           style={{
-            gridTemplateColumns: `${dayColumnWidth} repeat(12, minmax(0, 1fr))`,
+            gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
           }}
         >
-          <div aria-hidden="true" />
           {months.map((monthIndex) => {
             const monthName = new Date(2020, monthIndex).toLocaleString(undefined, {
               month: "short",
@@ -2877,14 +2941,13 @@ const ProductivityGrid = ({
           })}
         </div>
         <div
-          className="mt-4 grid gap-3"
+          className="mt-4 grid gap-2 sm:gap-3"
           style={{
-            gridTemplateColumns: `${dayColumnWidth} repeat(12, minmax(0, 1fr))`,
+            gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
           }}
         >
-          <div aria-hidden="true" />
           {months.map((monthIndex) => (
-            <div key={`month-col-${monthIndex}`} className="space-y-2">
+            <div key={`month-col-${monthIndex}`} className="space-y-1 sm:space-y-2">
               {weeksByMonth[monthIndex]!.map((week) => {
                 const dayScores = week.dayKeys
                   .map((key) =>
@@ -2938,7 +3001,7 @@ const ProductivityGrid = ({
                           setRatings((prev) => ({ ...prev, [key]: null }));
                         }
                       }}
-                      className={`flex h-4 w-full items-center justify-center rounded-sm border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] ${
+                      className={`flex h-5 w-full items-center justify-center rounded-sm border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:h-4 ${
                         hasDayScores
                           ? "cursor-pointer"
                           : "hover:opacity-90"
@@ -2959,40 +3022,29 @@ const ProductivityGrid = ({
           ))}
         </div>
         <div className="mt-6 flex items-center justify-between text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
-          <div className="flex flex-wrap gap-3">
-            {PRODUCTIVITY_SCALE.map((scale) => (
-              <div key={scale.value} className="flex items-center gap-2 whitespace-nowrap">
-                <span
-                  className={`h-4 w-4 rounded ${scale.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]`}
-                  aria-hidden="true"
-                />
-                <span>{scale.label}</span>
-              </div>
-            ))}
+          <div className="flex flex-col gap-2">
+            <span className="text-[10px] uppercase tracking-[0.2em]">
+              Goals achieved (self-rated)
+            </span>
+            <div className="flex flex-wrap gap-3">
+              {PRODUCTIVITY_SCALE.map((scale) => (
+                <div key={scale.value} className="flex items-center gap-2 whitespace-nowrap">
+                  <span
+                    className={`h-4 w-4 rounded ${scale.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]`}
+                    aria-hidden="true"
+                  />
+                  <span>{scale.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setYear(year - 1)}
-              className="rounded p-1 hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
-              aria-label="Previous year"
-            >
-              ←
-            </button>
-            <span className="font-semibold">{year}</span>
-            <button
-              type="button"
-              onClick={() => setYear(year + 1)}
-              className="rounded p-1 hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
-              aria-label="Next year"
-            >
-              →
-            </button>
+            {yearControl}
             {toggleButton}
           </div>
         </div>
-      </div>
-    );
+    </div>
+  );
   };
 
   return mode === "day" ? renderDayGrid() : renderWeekGrid();
