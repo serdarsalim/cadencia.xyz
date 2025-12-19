@@ -72,7 +72,7 @@ export const demoGoals = [
 
 export const demoWeeklyNoteTemplate = {
   content:
-    "<p><em>This is an example. When you log in, you can set separate goals for each week as well as separate Do's and Don'ts lists.</em></p><p><em>Use the calendar grid to rate your performance against these goals, either weekly or daily.</em></p><ul><li><strong>Monday</strong> - Launch: Set the priorities for the team.</li><li><strong>Tuesday</strong> - Deep Dive: Fix the hardest technical or resource problems.</li><li><strong>Wednesday</strong> - Connect: Align with other departments (Marketing, Finance, etc.).</li><li><strong>Thursday</strong> - Report: Show your progress to the bosses/executives.</li><li><strong>Friday</strong> - Clean Up: Sync all tools and prep Monday's \"To-Do\" list.</li></ul>",
+    "<p><em>This is an example. When you log in, you can set separate goals for each week as well as separate Do's and Don'ts lists.</em></p><p><em>Use the calendar on the left side to rate your performance against these goals, either weekly or daily.</em></p>",
   dos: "Say hello to everyone\nStay present\nBe vulnerable\nStand up straight",
   donts:
     "Don't avoid eye contact\nDon't be late\nDon't set expectations that you can't meet\nDon't eat sugar",
