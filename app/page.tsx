@@ -24,7 +24,7 @@ import {
   demoScheduleEntries,
   demoProductivityRatings,
   demoGoals,
-  demoWeeklyNotes,
+  demoWeeklyNoteTemplate,
   demoProfile,
 } from "@/lib/demo-data";
 
@@ -771,7 +771,7 @@ export default function Home() {
           setGoals(demoGoals);
           setScheduleEntries(normalizeScheduleEntryColors(demoScheduleEntries));
           setProductivityRatings(demoProductivityRatings);
-          setWeeklyNotes(normalizeWeeklyNotes(demoWeeklyNotes));
+          setWeeklyNotes(normalizeWeeklyNotes(buildDemoWeeklyNotes(new Date().getFullYear())));
           setPersonName(demoProfile.personName);
           setDateOfBirth(demoProfile.dateOfBirth);
           setWeekStartDay(demoProfile.weekStartDay as WeekdayIndex);
@@ -1796,6 +1796,58 @@ const goalStatusBadge = (status: KeyResultStatus) => {
   };
 
   const selectedWeekEntry = getWeekEntryWithCarryover(selectedWeekKey);
+  const dosDontsPanel = selectedWeekKey ? (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <label
+        className="flex flex-col gap-2 rounded-2xl p-3"
+        style={{ backgroundColor: "#e8f5e9" }}
+      >
+        <span className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
+          Do&apos;s
+        </span>
+        <textarea
+          value={selectedWeekEntry?.dos ?? ""}
+          onChange={(event) => {
+            updateWeeklyNoteEntry(selectedWeekKey, { dos: event.target.value });
+            event.target.style.height = "auto";
+            event.target.style.height = event.target.scrollHeight + "px";
+          }}
+          onInput={(event) => {
+            const target = event.target as HTMLTextAreaElement;
+            target.style.height = "auto";
+            target.style.height = target.scrollHeight + "px";
+          }}
+          placeholder="Behaviors to reinforce"
+          className="min-h-22 resize-none overflow-hidden rounded-2xl border-none bg-transparent p-2 text-sm text-[#0f172a] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)]"
+          style={{ height: "auto" }}
+        />
+      </label>
+      <label
+        className="flex flex-col gap-2 rounded-2xl p-3"
+        style={{ backgroundColor: "#ffebee" }}
+      >
+        <span className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
+          Don&apos;ts
+        </span>
+        <textarea
+          value={selectedWeekEntry?.donts ?? ""}
+          onChange={(event) => {
+            updateWeeklyNoteEntry(selectedWeekKey, { donts: event.target.value });
+            event.target.style.height = "auto";
+            event.target.style.height = event.target.scrollHeight + "px";
+          }}
+          onInput={(event) => {
+            const target = event.target as HTMLTextAreaElement;
+            target.style.height = "auto";
+            target.style.height = target.scrollHeight + "px";
+          }}
+          placeholder="Behaviors to avoid"
+          className="min-h-22 resize-none overflow-hidden rounded-2xl border-none bg-transparent p-2 text-sm text-[#0f172a] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)]"
+          style={{ height: "auto" }}
+        />
+      </label>
+    </div>
+  ) : null;
 
   const parsedRecentYears = useMemo(() => {
     const parsed = Number.parseInt(recentYears, 10);
@@ -2253,6 +2305,9 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     selectedWeek={selectedWeek}
                     setSelectedWeek={setSelectedWeek}
                   />
+                  {productivityMode === "week" && dosDontsPanel ? (
+                    <div className="mt-4 hidden lg:block">{dosDontsPanel}</div>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-col rounded-3xl bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] p-4 order-1 lg:order-2">
@@ -2275,58 +2330,12 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     →
                   </button>
                 </div>
-                {selectedWeekKey && (
-                  <div className="mb-4 grid gap-4 sm:grid-cols-2">
-                    <label
-                      className="flex flex-col gap-2 rounded-2xl p-3"
-                      style={{ backgroundColor: "#e8f5e9" }}
-                    >
-                      <span className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-                        Do&apos;s
-                      </span>
-                      <textarea
-                        value={selectedWeekEntry?.dos ?? ""}
-                        onChange={(event) => {
-                          updateWeeklyNoteEntry(selectedWeekKey, { dos: event.target.value });
-                          event.target.style.height = 'auto';
-                          event.target.style.height = event.target.scrollHeight + 'px';
-                        }}
-                        onInput={(event) => {
-                          const target = event.target as HTMLTextAreaElement;
-                          target.style.height = 'auto';
-                          target.style.height = target.scrollHeight + 'px';
-                        }}
-                        placeholder="Behaviors to reinforce"
-                        className="min-h-22 resize-none overflow-hidden rounded-2xl border-none bg-transparent p-2 text-sm text-[#0f172a] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)]"
-                        style={{ height: 'auto' }}
-                      />
-                    </label>
-                    <label
-                      className="flex flex-col gap-2 rounded-2xl p-3"
-                      style={{ backgroundColor: "#ffebee" }}
-                    >
-                      <span className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-                        Don&apos;ts
-                        </span>
-                        <textarea
-                          value={selectedWeekEntry?.donts ?? ""}
-                        onChange={(event) => {
-                          updateWeeklyNoteEntry(selectedWeekKey, { donts: event.target.value });
-                          event.target.style.height = 'auto';
-                          event.target.style.height = event.target.scrollHeight + 'px';
-                        }}
-                        onInput={(event) => {
-                          const target = event.target as HTMLTextAreaElement;
-                          target.style.height = 'auto';
-                          target.style.height = target.scrollHeight + 'px';
-                        }}
-                        placeholder="Behaviors to avoid"
-                        className="min-h-22 resize-none overflow-hidden rounded-2xl border-none bg-transparent p-2 text-sm text-[#0f172a] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)]"
-                        style={{ height: 'auto' }}
-                      />
-                    </label>
-                  </div>
-                  )}
+                {productivityMode === "day" && dosDontsPanel ? (
+                  <div className="mb-4">{dosDontsPanel}</div>
+                ) : null}
+                {productivityMode === "week" && dosDontsPanel ? (
+                  <div className="mb-4 lg:hidden">{dosDontsPanel}</div>
+                ) : null}
                 <div
                   className="flex-1 rounded-2xl p-4"
                   style={{ backgroundColor: "var(--card-muted-bg)" }}
@@ -4188,4 +4197,12 @@ const normalizeWeeklyNotes = (
     normalized[key] = createWeeklyNoteEntry(entry);
   });
   return normalized;
+};
+
+const buildDemoWeeklyNotes = (year: number): Record<string, Partial<WeeklyNoteEntry>> => {
+  const notes: Record<string, Partial<WeeklyNoteEntry>> = {};
+  buildWeeksForYear(year).forEach((week) => {
+    notes[`week-${year}-${week.weekNumber}`] = demoWeeklyNoteTemplate;
+  });
+  return notes;
 };
