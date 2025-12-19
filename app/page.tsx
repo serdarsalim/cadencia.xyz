@@ -1892,12 +1892,12 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 }
               }}
               autoFocus
-              className="w-full border-b border-foreground bg-transparent text-center text-4xl sm:text-3xl font-light uppercase tracking-[0.4em] text-foreground outline-none"
+              className="w-full border-b border-foreground bg-transparent text-center text-2xl font-light uppercase tracking-[0.25em] text-foreground outline-none sm:text-3xl sm:tracking-[0.4em]"
             />
           ) : (
             <h2
               onClick={() => setIsEditingGoalsSectionTitle(true)}
-              className="text-4xl sm:text-3xl font-light uppercase tracking-[0.4em] text-foreground cursor-pointer transition hover:opacity-70"
+              className="text-2xl font-light uppercase tracking-[0.25em] text-foreground cursor-pointer transition hover:opacity-70 sm:text-3xl sm:tracking-[0.4em]"
             >
               {goalsSectionTitle}
             </h2>
