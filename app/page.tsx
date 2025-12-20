@@ -2320,7 +2320,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   >
                     ←
                   </button>
-                  <span className="font-semibold text-base sm:text-lg whitespace-nowrap">Week {navbarWeekLabel}</span>
+                  <span className="font-semibold text-base sm:text-lg whitespace-nowrap">{navbarWeekLabel}</span>
                   <button
                     type="button"
                     onClick={() => shiftSelectedWeek(1)}
