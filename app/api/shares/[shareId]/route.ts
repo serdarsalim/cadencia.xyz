@@ -29,6 +29,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
             goals: { include: { keyResults: true } },
             productivityRatings: true,
             weeklyNotes: true,
+            dayOffs: true,
           },
         },
         recipientUser: { select: { id: true, email: true } },
@@ -62,6 +63,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         },
       ])
     );
+    const dayOffs = Object.fromEntries(
+      share.owner.dayOffs.map((dayOff) => [dayOff.dayKey, true])
+    );
 
     return NextResponse.json({
       share: {
@@ -81,6 +85,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         },
         goals: share.owner.goals ?? [],
         productivityRatings,
+        dayOffs,
         weeklyNotes,
       },
     });

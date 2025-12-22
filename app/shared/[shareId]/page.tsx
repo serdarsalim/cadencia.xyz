@@ -55,6 +55,7 @@ type SharePayload = {
     };
     goals: SharedGoal[];
     productivityRatings: Record<string, number | null>;
+    dayOffs: Record<string, boolean>;
     weeklyNotes: Record<string, SharedWeeklyNote>;
   };
 };
@@ -168,6 +169,7 @@ type ProductivityGridProps = {
   year: number;
   setYear: React.Dispatch<React.SetStateAction<number>>;
   ratings: Record<string, number | null>;
+  dayOffs: Record<string, boolean>;
   scale: ProductivityScaleEntry[];
   mode: "day" | "week";
   showLegend: boolean;
@@ -181,6 +183,7 @@ const ProductivityGrid = ({
   year,
   setYear,
   ratings,
+  dayOffs,
   scale,
   mode,
   showLegend,
@@ -386,6 +389,7 @@ const ProductivityGrid = ({
                 storedValue !== null && storedValue !== undefined;
               const currentValue = hasValue ? Math.min(storedValue!, scale.length - 1) : 0;
               const scaleEntry = scale[currentValue];
+              const isDayOff = Boolean(dayOffs[key]);
               const validDay =
                 dayOfMonth <= daysInMonth(year, monthIndex);
 
@@ -476,9 +480,11 @@ const ProductivityGrid = ({
                     handleDayHover(event, monthIndex, dayOfMonth)
                   }
                   className={`h-4 w-full text-[10px] font-semibold text-transparent transition focus:text-transparent ${weekBorderClass} ${
-                    hasValue
-                      ? scaleEntry.color
-                      : "bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]"
+                    isDayOff
+                      ? "bg-[#8dc8e6]"
+                      : hasValue
+                        ? scaleEntry.color
+                        : "bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]"
                   } ${
                     isToday
                       ? "ring-2 ring-yellow-400 shadow-[0_0_12px_rgba(250,204,21,0.4)]"
@@ -603,16 +609,24 @@ const ProductivityGrid = ({
                     ? scale[colorIndex].color
                     : "bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]";
                 const isSelectedWeek = selectedWeekKey === week.weekKey;
+                const dayOffCount = week.dayKeys.reduce(
+                  (count, dayKey) => count + (dayOffs[dayKey] ? 1 : 0),
+                  0
+                );
+                const isFullWeekOff = dayOffCount === week.dayKeys.length;
+                const hasAnyDayOff = dayOffCount > 0;
+                const weekFillClass = isFullWeekOff ? "bg-[#8dc8e6]" : scaleClass;
+                const showPartialDayOff = !isFullWeekOff && hasAnyDayOff;
                 return (
                   <div key={`week-card-${week.weekNumber}`}>
                     <button
                       type="button"
                       onClick={() => setSelectedWeekKey(week.weekKey)}
-                      className={`flex h-5 w-full items-center justify-center rounded-sm border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:h-4 ${
+                      className={`relative flex h-5 w-full items-center justify-center rounded-sm border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:h-4 ${
                         hasDayScores
                           ? "cursor-pointer"
                           : "hover:opacity-90"
-                      } ${scaleClass} border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] ${
+                      } ${weekFillClass} border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] ${
                         isSelectedWeek ? "border-black" : ""
                       }`}
                       title={`${week.rangeLabel}${hasDayScores ? " (rating locked from daily view)" : ""}`}
@@ -622,6 +636,12 @@ const ProductivityGrid = ({
                           : `Week ${week.weekNumber} ${week.rangeLabel}, current score ${manualScore ?? "unset"}, click to select week`
                       }
                     >
+                      {showPartialDayOff ? (
+                        <span
+                          aria-hidden="true"
+                          className="absolute h-2 w-2 rounded-full bg-[#8dc8e6] ring-1 ring-white"
+                        />
+                      ) : null}
                       {displayValue}
                     </button>
                   </div>
@@ -813,6 +833,7 @@ export default function SharedPage({
                 year={productivityYear}
                 setYear={setProductivityYear}
                 ratings={data.productivityRatings}
+                dayOffs={data.dayOffs ?? {}}
                 scale={scale}
                 mode={productivityMode}
                 showLegend
