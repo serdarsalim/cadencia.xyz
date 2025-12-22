@@ -2886,6 +2886,26 @@ const ProductivityGrid = ({
                 const borderSides = "border-l border-r border-l-gray-400 border-r-gray-400";
 
                 weekBorderClass = `${borderTop} ${borderBottom} ${borderSides}`;
+
+                const isSelectedWeek = selectedWeek === currentWeek.weekNumber;
+                if (isSelectedWeek) {
+                  const isFirstDayOfWeek =
+                    currentWeek.dayKeys[0] === `${year}-${monthIndex + 1}-${dayOfMonth}`;
+                  const isLastDayOfWeek =
+                    currentWeek.dayKeys[currentWeek.dayKeys.length - 1] ===
+                    `${year}-${monthIndex + 1}-${dayOfMonth}`;
+                  let selectedWeekBorders = "";
+                  if (isFirstDayOfWeek) {
+                    selectedWeekBorders =
+                      "border-t-2 border-t-slate-700 border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
+                  } else if (isLastDayOfWeek) {
+                    selectedWeekBorders =
+                      "border-b-2 border-b-slate-700 border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
+                  } else {
+                    selectedWeekBorders = "border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
+                  }
+                  weekBorderClass = `${weekBorderClass} ${selectedWeekBorders}`;
+                }
               }
 
               return (
