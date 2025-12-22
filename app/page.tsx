@@ -2257,43 +2257,31 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
   return (
     <div className="app-shell flex min-h-screen flex-col text-foreground transition-colors">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-white/30 dark:bg-gray-900/25 px-4 py-3 text-sm backdrop-blur-xl">
-        <div className="flex flex-wrap items-center gap-4">
-          <Link href="/" className="block">
-            <div className="flex h-10 w-12 items-center justify-center rounded-2xl bg-[#111827]/90 shadow-[0_10px_30px_rgba(17,24,39,0.35)]">
-              <img
-                src="/app-logo.png"
-                alt={`${APP_NAME} logo`}
-                className="h-8 w-11 object-contain"
-              />
-            </div>
-          </Link>
-          <nav className="flex gap-2 text-sm font-bold uppercase tracking-[0.2em]">
-            <button
-              type="button"
-              onClick={() => {
-                setView("productivity");
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className="rounded-full px-4 py-1.5 transition text-foreground/60 hover:text-foreground"
-            >
-              Track
-            </button>
-            <button
-              type="button"
-              onClick={scrollToGoalsSection}
-              className="rounded-full px-4 py-1.5 transition text-foreground/60 hover:text-foreground"
-            >
-              Goals
-            </button>
-          </nav>
-        </div>
-        <div className="ml-auto">
-          <UserInfo />
-        </div>
-      </header>
       <main className="flex flex-1 items-start justify-center px-4">
         <div className="w-full py-2 text-center">
+          {view === "productivity" && (
+            <div className="mt-6 flex items-center justify-center gap-3 text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
+              <button
+                type="button"
+                onClick={() => shiftSelectedWeek(-1)}
+                className="rounded-full px-3 py-1 text-xs transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+                aria-label="Previous week"
+              >
+                ←
+              </button>
+              <h1 className="text-lg sm:text-xl font-semibold tracking-wide text-foreground">
+                {navbarWeekLabel}
+              </h1>
+              <button
+                type="button"
+                onClick={() => shiftSelectedWeek(1)}
+                className="rounded-full px-3 py-1 text-xs transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+                aria-label="Next week"
+              >
+                →
+              </button>
+            </div>
+          )}
           {view === "life" && (
             <section className="mt-8 space-y-6">
               <WeeklySchedule
@@ -2340,25 +2328,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 </div>
 
                 <div className="flex flex-col rounded-3xl bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] p-4 order-1 lg:order-2">
-                <div className="mb-4 flex items-center justify-center gap-2 sm:gap-4 text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
-                  <button
-                    type="button"
-                    onClick={() => shiftSelectedWeek(-1)}
-                    className="rounded-full px-2 py-1 text-xs transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)]"
-                    aria-label="Previous week"
-                  >
-                    ←
-                  </button>
-                  <span className="font-semibold text-base sm:text-lg whitespace-nowrap">{navbarWeekLabel}</span>
-                  <button
-                    type="button"
-                    onClick={() => shiftSelectedWeek(1)}
-                    className="rounded-full px-2 py-1 text-xs transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)]"
-                    aria-label="Next week"
-                  >
-                    →
-                  </button>
-                </div>
                 {productivityMode === "day" && dosDontsPanel ? (
                   <div className="mb-4">{dosDontsPanel}</div>
                 ) : null}
