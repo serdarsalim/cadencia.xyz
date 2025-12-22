@@ -161,3 +161,11 @@ body {
     "Segoe UI", "Helvetica Neue", sans-serif;
   letter-spacing: 0.015em;
 }
+
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}

@@ -2423,11 +2423,11 @@ const goalStatusBadge = (status: KeyResultStatus) => {
   return (
     <div className="app-shell flex min-h-screen flex-col text-foreground transition-colors">
       {!userEmail && isHydrated ? (
-        <div className="flex justify-end px-4 pt-4">
+        <div className="flex justify-end pl-6 pr-4 pt-4">
           <UserInfo />
         </div>
       ) : null}
-      <main className="flex flex-1 items-start justify-center px-4">
+      <main className="flex flex-1 items-start justify-center pl-6 pr-4">
         <div className="w-full py-2 text-center">
           {view === "productivity" && (
             <div className="mt-6 flex flex-col items-center gap-2 text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
@@ -2504,7 +2504,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   ) : null}
                 </div>
 
-                <div className="flex flex-col rounded-3xl p-4 order-1 lg:order-2">
+                <div className="flex flex-col rounded-3xl px-4 pb-4 pt-0 order-1 lg:order-2">
                 {productivityMode === "day" && dosDontsPanel ? (
                   <div className="mb-4">{dosDontsPanel}</div>
                 ) : null}
@@ -3181,10 +3181,10 @@ const ProductivityGrid = ({
             </div>
           </div>
         )}
-        <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <div className={`flex items-start gap-2 ${showLegend ? "flex-col sm:flex-row sm:items-center sm:gap-3" : "flex-row items-center"}`}>
           {yearControl}
-              {toggleButton}
-            </div>
+          {toggleButton}
+        </div>
           </div>
         </div>
   );
@@ -3297,24 +3297,26 @@ const ProductivityGrid = ({
             </div>
           ))}
         </div>
-        <div className="mt-6 flex items-center justify-between text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:text-xs">
-          <div className="flex flex-col gap-2">
-            <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
-              Goals achieved (self-rated)
-            </span>
-            <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
-              {scale.map((item) => (
-                <div key={item.value} className="flex items-center gap-2 whitespace-nowrap">
-                  <span
-                    className={`h-3 w-3 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4`}
-                    aria-hidden="true"
-                  />
-                  <span>{item.label}</span>
-                </div>
-              ))}
+        <div className={`mt-6 flex items-center text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:text-xs ${showLegend ? "justify-between" : "justify-end"}`}>
+          {showLegend && (
+            <div className="flex flex-col gap-2">
+              <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
+                Goals achieved (self-rated)
+              </span>
+              <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
+                {scale.map((item) => (
+                  <div key={item.value} className="flex items-center gap-2 whitespace-nowrap">
+                    <span
+                      className={`h-3 w-3 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4`}
+                      aria-hidden="true"
+                    />
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+          )}
+          <div className={`flex items-start gap-2 ${showLegend ? "flex-col sm:flex-row sm:items-center sm:gap-3" : "flex-row items-center"}`}>
             {yearControl}
             {toggleButton}
           </div>
