@@ -3041,6 +3041,7 @@ const ProductivityGrid = ({
                   colorIndex !== null && colorIndex !== undefined
                     ? scale[colorIndex].color
                     : "bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]";
+                const isSelectedWeek = selectedWeek === week.weekNumber;
                 return (
                   <div key={`week-card-${week.weekNumber}`}>
                     <button
@@ -3057,7 +3058,9 @@ const ProductivityGrid = ({
                         hasDayScores
                           ? "cursor-pointer"
                           : "hover:opacity-90"
-                      } ${scaleClass} border-[color-mix(in_srgb,var(--foreground)_12%,transparent)]`}
+                      } ${scaleClass} border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] ${
+                        isSelectedWeek ? "border-black" : ""
+                      }`}
                       title={`${week.rangeLabel}${hasDayScores ? " (rating locked from daily view)" : ""}`}
                       aria-label={
                         hasDayScores
