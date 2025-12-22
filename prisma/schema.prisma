@@ -7,7 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// NextAuth.js tables
 model Account {
   id                String  @id @default(cuid())
   userId            String
@@ -21,8 +20,7 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -36,23 +34,20 @@ model Session {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-
-  // User's app data
-  profile       UserProfile?
-  goals         Goal[]
-  scheduleEntries ScheduleEntry[]
+  id                  String               @id @default(cuid())
+  name                String?
+  email               String?              @unique
+  emailVerified       DateTime?
+  image               String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  accounts            Account[]
+  goals               Goal[]
   productivityRatings ProductivityRating[]
-  weeklyNotes   WeeklyNote[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  scheduleEntries     ScheduleEntry[]
+  sessions            Session[]
+  profile             UserProfile?
+  weeklyNotes         WeeklyNote[]
 }
 
 model VerificationToken {
@@ -63,90 +58,84 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// App-specific tables
 model UserProfile {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  personName    String?
-  dateOfBirth   String?
-  weekStartDay  Int      @default(0)
-  recentYears   String   @default("10")
-  goalsSectionTitle String @default("2026 GOALS")
-  productivityViewMode String @default("day")
-  productivityScaleMode String @default("3")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  personName            String?
+  dateOfBirth           String?
+  weekStartDay          Int      @default(0)
+  recentYears           String   @default("10")
+  goalsSectionTitle     String   @default("2026 GOALS")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  productivityViewMode  String   @default("day")
+  productivityScaleMode String   @default("3")
+  showLegend            Boolean  @default(true)
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Goal {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title       String
-  timeframe   String
+  id             String      @id @default(cuid())
+  userId         String
+  title          String
+  timeframe      String
   statusOverride String?
-  archived    Boolean  @default(false)
-  keyResults  KeyResult[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  archived       Boolean     @default(false)
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  keyResults     KeyResult[]
 }
 
 model KeyResult {
-  id     String @id @default(cuid())
-  goalId String
-  goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  title  String
-  status String @default("on-hold")
-
+  id        String   @id @default(cuid())
+  goalId    String
+  title     String
+  status    String   @default("on-hold")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
 }
 
 model ScheduleEntry {
-  id         String  @id @default(cuid())
+  id         String   @id @default(cuid())
   userId     String
-  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  dayKey     String  // Format: "YYYY-M-D"
+  dayKey     String
   time       String
   endTime    String?
   title      String
   color      String?
-  repeat     String? @default("none")
-  repeatDays String? // JSON array of weekday indices
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  repeat     String?  @default("none")
+  repeatDays String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, dayKey])
 }
 
 model ProductivityRating {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  key    String // Format: "YYYY-M-D" for days or "week-YYYY-W" for weeks
-  rating Int?
-
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  rating    Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, key])
 }
 
 model WeeklyNote {
-  id      String @id @default(cuid())
-  userId  String
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  weekKey String // Format: "week-YYYY-W"
-  content String
-  dos     String?
-  donts   String?
-
+  id        String   @id @default(cuid())
+  userId    String
+  weekKey   String
+  content   String
+  dos       String?
+  donts     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, weekKey])
 }

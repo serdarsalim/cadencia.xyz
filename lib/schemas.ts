@@ -47,7 +47,8 @@ export const profileSchema = z.object({
   recentYears: z.string().max(10),
   goalsSectionTitle: z.string().max(100).optional(),
   productivityViewMode: z.enum(['day', 'week']).optional(),
-  productivityScaleMode: z.enum(['3', '4']).optional()
+  productivityScaleMode: z.enum(['3', '4']).optional(),
+  showLegend: z.boolean().optional()
 })
 
 // Type exports

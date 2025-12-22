@@ -54,8 +54,11 @@ CREATE TABLE "UserProfile" (
     "dateOfBirth" TEXT,
     "weekStartDay" INTEGER NOT NULL DEFAULT 0,
     "recentYears" TEXT NOT NULL DEFAULT '10',
+    "goalsSectionTitle" TEXT NOT NULL DEFAULT '2026 GOALS',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "productivityViewMode" TEXT NOT NULL DEFAULT 'day',
+    "productivityScaleMode" TEXT NOT NULL DEFAULT '3',
 
     CONSTRAINT "UserProfile_pkey" PRIMARY KEY ("id")
 );
@@ -69,6 +72,7 @@ CREATE TABLE "Goal" (
     "statusOverride" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "archived" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "Goal_pkey" PRIMARY KEY ("id")
 );
@@ -78,7 +82,7 @@ CREATE TABLE "KeyResult" (
     "id" TEXT NOT NULL,
     "goalId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'pending',
+    "status" TEXT NOT NULL DEFAULT 'on-hold',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -120,35 +124,12 @@ CREATE TABLE "WeeklyNote" (
     "userId" TEXT NOT NULL,
     "weekKey" TEXT NOT NULL,
     "content" TEXT NOT NULL,
+    "dos" TEXT,
+    "donts" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "WeeklyNote_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "FocusArea" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "hours" TEXT NOT NULL,
-    "order" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "FocusArea_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "MonthEntry" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "monthKey" TEXT NOT NULL,
-    "content" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "MonthEntry_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -178,9 +159,6 @@ CREATE UNIQUE INDEX "ProductivityRating_userId_key_key" ON "ProductivityRating"(
 -- CreateIndex
 CREATE UNIQUE INDEX "WeeklyNote_userId_weekKey_key" ON "WeeklyNote"("userId", "weekKey");
 
--- CreateIndex
-CREATE UNIQUE INDEX "MonthEntry_userId_monthKey_key" ON "MonthEntry"("userId", "monthKey");
-
 -- AddForeignKey
 ALTER TABLE "Account" ADD CONSTRAINT "Account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -204,9 +182,3 @@ ALTER TABLE "ProductivityRating" ADD CONSTRAINT "ProductivityRating_userId_fkey"
 
 -- AddForeignKey
 ALTER TABLE "WeeklyNote" ADD CONSTRAINT "WeeklyNote_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "FocusArea" ADD CONSTRAINT "FocusArea_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "MonthEntry" ADD CONSTRAINT "MonthEntry_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

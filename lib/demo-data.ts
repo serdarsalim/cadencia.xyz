@@ -83,4 +83,5 @@ export const demoProfile = {
   dateOfBirth: "1990-01-01",
   weekStartDay: 1, // Monday
   recentYears: "2",
+  showLegend: true,
 };

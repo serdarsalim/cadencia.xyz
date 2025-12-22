@@ -766,6 +766,7 @@ export default function Home() {
   useEffect(() => {
     async function loadData() {
       let shouldOpenProfileModal: boolean | null = null;
+      let hasProfileLegend = false;
       try {
         // Check session first
         const sessionRes = await fetch("/api/auth/session");
@@ -818,6 +819,7 @@ export default function Home() {
             let nextPersonName = "";
             let nextDateOfBirth = "";
             let nextProductivityScaleMode: "3" | "4" = productivityScaleMode;
+            let nextShowLegend = showLegend;
 
             if (profile) {
               nextPersonName = profile.personName ?? "";
@@ -828,6 +830,11 @@ export default function Home() {
                 nextWeekStartDay = profile.weekStartDay as WeekdayIndex;
               }
               setWeekStartDay(nextWeekStartDay);
+              if (profile.showLegend !== undefined) {
+                nextShowLegend = Boolean(profile.showLegend);
+                setShowLegend(nextShowLegend);
+                hasProfileLegend = true;
+              }
               if (profile.recentYears) {
                 nextRecentYears = profile.recentYears;
                 setRecentYears(nextRecentYears);
@@ -885,7 +892,8 @@ export default function Home() {
               weekStartDay: nextWeekStartDay,
               recentYears: nextRecentYears,
               goalsSectionTitle: nextGoalsSectionTitle,
-              productivityScaleMode: nextProductivityScaleMode
+              productivityScaleMode: nextProductivityScaleMode,
+              showLegend: nextShowLegend
             };
             lastServerSavedProfileRef.current = JSON.stringify(profilePayload);
           }
@@ -910,6 +918,7 @@ export default function Home() {
           setDateOfBirth(demoProfile.dateOfBirth);
           setWeekStartDay(demoProfile.weekStartDay as WeekdayIndex);
           setRecentYears(demoProfile.recentYears);
+          setShowLegend(demoProfile.showLegend ?? true);
           setView("productivity");
         }
 
@@ -921,18 +930,6 @@ export default function Home() {
             setProductivityGoals(parsedGoals);
           }
         }
-        const storedShowLegend = window.localStorage.getItem("timespent-show-legend");
-        if (storedShowLegend === "true") {
-          setShowLegend(true);
-        } else if (storedShowLegend === "false") {
-          setShowLegend(false);
-        } else {
-          const storedLegendHidden = window.localStorage.getItem("timespent-hide-legend");
-          if (storedLegendHidden === "true") {
-            setShowLegend(false);
-          }
-        }
-
         const storedView = window.localStorage.getItem("timespent-active-view");
         if (storedView === "life" || storedView === "productivity") {
           if (isLoggedIn) {
@@ -942,6 +939,20 @@ export default function Home() {
           }
         } else if (!isLoggedIn) {
           setView("productivity");
+        }
+
+        if (!isLoggedIn || !hasProfileLegend) {
+          const storedShowLegend = window.localStorage.getItem("timespent-show-legend");
+          if (storedShowLegend === "true") {
+            setShowLegend(true);
+          } else if (storedShowLegend === "false") {
+            setShowLegend(false);
+          } else {
+            const storedLegendHidden = window.localStorage.getItem("timespent-hide-legend");
+            if (storedLegendHidden === "true") {
+              setShowLegend(false);
+            }
+          }
         }
 
         const storedProfileModalPreference = window.localStorage.getItem("timespent-profile-modal-open");
@@ -1005,7 +1016,8 @@ export default function Home() {
       weekStartDay,
       recentYears,
       goalsSectionTitle,
-      productivityScaleMode
+      productivityScaleMode,
+      showLegend
     };
     const serializedProfile = JSON.stringify(profilePayload);
     if (lastServerSavedProfileRef.current === serializedProfile) {
@@ -1020,7 +1032,7 @@ export default function Home() {
         console.error("Failed to save profile", error);
       }
     })();
-  }, [personName, dateOfBirth, email, weekStartDay, recentYears, goalsSectionTitle, productivityScaleMode, isHydrated, userEmail, isDemoMode]);
+  }, [personName, dateOfBirth, email, weekStartDay, recentYears, goalsSectionTitle, productivityScaleMode, showLegend, isHydrated, userEmail, isDemoMode]);
 
   useEffect(() => {
     try {

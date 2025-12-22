@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
           goalsSectionTitle: profile.goalsSectionTitle || '2026 GOALS',
           productivityViewMode: profile.productivityViewMode || 'day',
           productivityScaleMode: profile.productivityScaleMode || '3',
+          showLegend: profile.showLegend ?? true,
         }
       })
     } else {
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
           goalsSectionTitle: profile.goalsSectionTitle || '2026 GOALS',
           productivityViewMode: profile.productivityViewMode || 'day',
           productivityScaleMode: profile.productivityScaleMode || '3',
+          showLegend: profile.showLegend ?? true,
         }
       })
     }
