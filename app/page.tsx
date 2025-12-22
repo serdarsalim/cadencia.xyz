@@ -469,6 +469,7 @@ export default function Home() {
   const [productivityGoals, setProductivityGoals] = useState<
     Record<number, string>
   >({});
+  const [showLegend, setShowLegend] = useState(true);
   const [productivityMode, setProductivityMode] =
     useState<"day" | "week">("week");
   const [productivityScaleMode, setProductivityScaleMode] =
@@ -920,6 +921,17 @@ export default function Home() {
             setProductivityGoals(parsedGoals);
           }
         }
+        const storedShowLegend = window.localStorage.getItem("timespent-show-legend");
+        if (storedShowLegend === "true") {
+          setShowLegend(true);
+        } else if (storedShowLegend === "false") {
+          setShowLegend(false);
+        } else {
+          const storedLegendHidden = window.localStorage.getItem("timespent-hide-legend");
+          if (storedLegendHidden === "true") {
+            setShowLegend(false);
+          }
+        }
 
         const storedView = window.localStorage.getItem("timespent-active-view");
         if (storedView === "life" || storedView === "productivity") {
@@ -1069,6 +1081,15 @@ export default function Home() {
       console.error("Failed to cache productivity goals", error);
     }
   }, [productivityGoals]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      window.localStorage.setItem("timespent-show-legend", showLegend ? "true" : "false");
+    } catch (error) {
+      console.error("Failed to cache legend preference", error);
+    }
+  }, [showLegend, isHydrated]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -2445,6 +2466,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     setRatings={setProductivityRatings}
                     scale={productivityScale}
                     mode={productivityMode}
+                    showLegend={showLegend}
                     onToggleMode={() => {
                       const newMode = productivityMode === "day" ? "week" : "day";
                       setProductivityMode(newMode);
@@ -2610,6 +2632,20 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 </div>
               </label>
               <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                Show legend
+                <div className="mt-1 flex items-center justify-between rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2">
+                  <span className="text-sm normal-case tracking-normal text-foreground">
+                    Show goals achieved legend
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={showLegend}
+                    onChange={(event) => setShowLegend(event.target.checked)}
+                    className="h-4 w-4 accent-foreground"
+                  />
+                </div>
+              </label>
+              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
                 Week starts on
                 <div className="mt-1 flex items-center gap-2">
                   {[0, 1].map((day) => (
@@ -2719,6 +2755,7 @@ type ProductivityGridProps = {
   setRatings: React.Dispatch<React.SetStateAction<Record<string, number | null>>>;
   scale: ProductivityScaleEntry[];
   mode: "day" | "week";
+  showLegend: boolean;
   onToggleMode: () => void;
   selectedWeekKey: string | null;
   setSelectedWeekKey: React.Dispatch<React.SetStateAction<string | null>>;
@@ -2732,6 +2769,7 @@ const ProductivityGrid = ({
   setRatings,
   scale,
   mode,
+  showLegend,
   onToggleMode,
   selectedWeekKey,
   setSelectedWeekKey,
@@ -3112,29 +3150,31 @@ const ProductivityGrid = ({
         );
         })}
       </div>
-      <div className="mt-6 flex items-center justify-between text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:text-xs">
-        <div className="flex flex-col gap-2">
-          <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
-            Goals achieved (self-rated)
-          </span>
-          <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
-            {scale.map((item) => (
-              <div key={item.value} className="flex items-center gap-2 whitespace-nowrap">
-                <span
-                  className={`h-3 w-3 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4`}
-                  aria-hidden="true"
-                />
-                <span>{item.label}</span>
-              </div>
-            ))}
+      <div className={`mt-6 flex items-center text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:text-xs ${showLegend ? "justify-between" : "justify-end"}`}>
+        {showLegend && (
+          <div className="flex flex-col gap-2">
+            <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
+              Goals achieved (self-rated)
+            </span>
+            <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
+              {scale.map((item) => (
+                <div key={item.value} className="flex items-center gap-2 whitespace-nowrap">
+                  <span
+                    className={`h-3 w-3 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4`}
+                    aria-hidden="true"
+                  />
+                  <span>{item.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
         <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
           {yearControl}
-          {toggleButton}
+              {toggleButton}
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
   );
 
   const renderWeekGrid = () => {
