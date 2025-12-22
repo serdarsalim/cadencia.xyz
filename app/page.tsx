@@ -3929,8 +3929,7 @@ const ProductivityGrid = ({
                 const isFullWeekOff = dayOffCount === week.dayKeys.length;
                 const hasAnyDayOff = dayOffCount > 0;
                 const weekFillClass = isFullWeekOff ? "bg-[#8dc8e6]" : scaleClass;
-                const dayOffIndicatorClass =
-                  !isFullWeekOff && hasAnyDayOff ? "border-l-2 border-l-[#8dc8e6]" : "";
+                const showPartialDayOff = !isFullWeekOff && hasAnyDayOff;
                 return (
                   <div key={`week-card-${week.weekNumber}`}>
                     <button
@@ -3943,11 +3942,11 @@ const ProductivityGrid = ({
                           setRatings((prev) => ({ ...prev, [key]: null }));
                         }
                       }}
-                      className={`flex h-5 w-full items-center justify-center rounded-sm border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:h-4 ${
+                      className={`relative flex h-5 w-full items-center justify-center border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:h-4 ${
                         hasDayScores
                           ? "cursor-pointer"
                           : "hover:opacity-90"
-                      } ${weekFillClass} border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] ${dayOffIndicatorClass} ${
+                      } ${weekFillClass} border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] ${
                         isSelectedWeek ? "border-black" : ""
                       }`}
                       title={`${week.rangeLabel}${hasDayScores ? " (rating locked from daily view)" : ""}`}
@@ -3957,6 +3956,12 @@ const ProductivityGrid = ({
                           : `Week ${week.weekNumber} ${week.rangeLabel}, current score ${manualScore ?? "unset"}, click to cycle rating`
                       }
                     >
+                      {showPartialDayOff ? (
+                        <span
+                          aria-hidden="true"
+                          className="absolute h-2 w-2 rounded-full bg-[#8dc8e6] ring-1 ring-white"
+                        />
+                      ) : null}
                       {displayValue}
                     </button>
                   </div>
