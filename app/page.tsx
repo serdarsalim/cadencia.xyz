@@ -2945,10 +2945,12 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         statusbar: false,
                         height: 430,
                         license_key: "gpl",
-                        plugins: "lists quickbars link",
+                        plugins: "lists quickbars link autoresize",
                         skin: theme === "dark" ? "oxide-dark" : "oxide",
                         content_css: false,
                         toolbar: false,
+                        autoresize_bottom_margin: 8,
+                        min_height: 260,
                         quickbars_selection_toolbar: "bold italic bullist numlist link",
                         quickbars_insert_toolbar: false,
                         content_style: `
