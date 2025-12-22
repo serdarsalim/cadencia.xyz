@@ -2327,7 +2327,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   ) : null}
                 </div>
 
-                <div className="flex flex-col rounded-3xl bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] p-4 order-1 lg:order-2">
+                <div className="flex flex-col rounded-3xl p-4 order-1 lg:order-2">
                 {productivityMode === "day" && dosDontsPanel ? (
                   <div className="mb-4">{dosDontsPanel}</div>
                 ) : null}
