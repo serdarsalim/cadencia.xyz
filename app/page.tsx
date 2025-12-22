@@ -49,6 +49,10 @@ type ShareListItem = {
   recipientEmail?: string;
   owner?: { email?: string | null; profile?: { personName?: string | null } | null };
   recipientUser?: { email?: string | null };
+  showSelfRating?: boolean;
+  showDosDonts?: boolean;
+  showWeeklyGoals?: boolean;
+  showOkrs?: boolean;
 };
 
 type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -510,6 +514,20 @@ export default function Home() {
   const [isLoadingShares, setIsLoadingShares] = useState(false);
   const [sharedWithMe, setSharedWithMe] = useState<ShareListItem[]>([]);
   const [sharedByMe, setSharedByMe] = useState<ShareListItem[]>([]);
+  const [shareOptions, setShareOptions] = useState({
+    showSelfRating: true,
+    showDosDonts: true,
+    showWeeklyGoals: true,
+    showOkrs: true,
+  });
+  const [isShareOptionsOpen, setIsShareOptionsOpen] = useState(false);
+  const [activeShareOptionsId, setActiveShareOptionsId] = useState<string | null>(null);
+  const [shareEditOptions, setShareEditOptions] = useState({
+    showSelfRating: true,
+    showDosDonts: true,
+    showWeeklyGoals: true,
+    showOkrs: true,
+  });
   const [productivityMode, setProductivityMode] =
     useState<"day" | "week">("week");
   const [productivityScaleMode, setProductivityScaleMode] =
@@ -895,6 +913,32 @@ export default function Home() {
       void fetchShares();
     }
   }, [isEditingProfile, isShareEditorVisible, fetchShares]);
+
+  useEffect(() => {
+    if (!isShareOptionsOpen) return;
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsShareOptionsOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isShareOptionsOpen]);
+
+  useEffect(() => {
+    if (!activeShareOptionsId) return;
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveShareOptionsId(null);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeShareOptionsId]);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -1629,6 +1673,7 @@ export default function Home() {
     const optimisticShare: ShareListItem = {
       id: optimisticId,
       recipientEmail: trimmedEmail,
+      ...shareOptions,
     };
     setSharedByMe((prev) => [optimisticShare, ...prev]);
     setShareEmail("");
@@ -1636,7 +1681,7 @@ export default function Home() {
       const response = await fetch("/api/shares", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipientEmail: trimmedEmail }),
+        body: JSON.stringify({ recipientEmail: trimmedEmail, options: shareOptions }),
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
@@ -1648,6 +1693,48 @@ export default function Home() {
     } catch (error) {
       setShareError("Unable to share right now.");
       setSharedByMe((prev) => prev.filter((share) => share.id !== optimisticId));
+    }
+  };
+
+  const handleEditShareOptions = (share: ShareListItem) => {
+    if (activeShareOptionsId === share.id) {
+      setActiveShareOptionsId(null);
+      return;
+    }
+    setActiveShareOptionsId(share.id);
+    setShareEditOptions({
+      showSelfRating: share.showSelfRating !== false,
+      showDosDonts: share.showDosDonts !== false,
+      showWeeklyGoals: share.showWeeklyGoals !== false,
+      showOkrs: share.showOkrs !== false,
+    });
+  };
+
+  const handleUpdateShareOptions = async (shareId: string) => {
+    setShareError(null);
+    const previousShares = sharedByMe;
+    setSharedByMe((prev) =>
+      prev.map((share) =>
+        share.id === shareId
+          ? { ...share, ...shareEditOptions }
+          : share
+      )
+    );
+    setActiveShareOptionsId(null);
+    try {
+      const response = await fetch(`/api/shares/${shareId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ options: shareEditOptions }),
+      });
+      if (!response.ok) {
+        setShareError("Unable to update share options.");
+        setSharedByMe(previousShares);
+        return;
+      }
+    } catch (error) {
+      setShareError("Unable to update share options.");
+      setSharedByMe(previousShares);
     }
   };
 
@@ -3113,6 +3200,13 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   />
                   <button
                     type="button"
+                    onClick={() => setIsShareOptionsOpen(true)}
+                    className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:border-foreground"
+                  >
+                    Options
+                  </button>
+                  <button
+                    type="button"
                     onClick={handleCreateShare}
                     className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
                   >
@@ -3134,26 +3228,33 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     <span className="block text-[11px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
                       Goals you're sharing
                     </span>
-                    {sharedByMe.map((share) => (
-                      <div key={share.id} className="flex flex-wrap items-center gap-2">
-                        <span>{share.recipientUser?.email || share.recipientEmail}</span>
-                        <Link
-                          href={`/shared/${share.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
-                        >
-                          Preview
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => handleRevokeShare(share.id)}
-                          className="text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
-                        >
-                          Revoke
-                        </button>
-                      </div>
-                    ))}
+                        {sharedByMe.map((share) => (
+                          <div key={share.id} className="flex flex-wrap items-center gap-2">
+                            <span>{share.recipientUser?.email || share.recipientEmail}</span>
+                            <Link
+                              href={`/shared/${share.id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
+                            >
+                              Preview
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => handleEditShareOptions(share)}
+                              className="text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
+                            >
+                              Options
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRevokeShare(share.id)}
+                              className="text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
+                            >
+                              Revoke
+                            </button>
+                          </div>
+                        ))}
                   </div>
                 )}
                 {sharedWithMe.length > 0 && (
@@ -3185,6 +3286,126 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           </div>
         </div>
       )}
+
+      {activeShareOptionsId ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          onClick={() => setActiveShareOptionsId(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                Share includes
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveShareOptionsId(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-2 text-sm text-foreground">
+              {[
+                { key: "showSelfRating", label: "Self rating" },
+                { key: "showDosDonts", label: "Do's & Don'ts" },
+                { key: "showWeeklyGoals", label: "Weekly goals" },
+                { key: "showOkrs", label: "OKRs" },
+              ].map((option) => (
+                <label
+                  key={option.key}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] px-4 py-3"
+                >
+                  <span>{option.label}</span>
+                  <input
+                    type="checkbox"
+                    checked={shareEditOptions[option.key as keyof typeof shareEditOptions]}
+                    onChange={(event) =>
+                      setShareEditOptions((prev) => ({
+                        ...prev,
+                        [option.key]: event.target.checked,
+                      }))
+                    }
+                    className="h-4 w-4 accent-foreground"
+                  />
+                </label>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => handleUpdateShareOptions(activeShareOptionsId)}
+              className="mt-5 w-full rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.3em] text-foreground transition hover:border-foreground"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {isShareOptionsOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          onClick={() => setIsShareOptionsOpen(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                Share includes
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsShareOptionsOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-2 text-sm text-foreground">
+              {[
+                { key: "showSelfRating", label: "Self rating" },
+                { key: "showDosDonts", label: "Do's & Don'ts" },
+                { key: "showWeeklyGoals", label: "Weekly goals" },
+                { key: "showOkrs", label: "OKRs" },
+              ].map((option) => (
+                <label
+                  key={option.key}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] px-4 py-3"
+                >
+                  <span>{option.label}</span>
+                  <input
+                    type="checkbox"
+                    checked={shareOptions[option.key as keyof typeof shareOptions]}
+                    onChange={(event) =>
+                      setShareOptions((prev) => ({
+                        ...prev,
+                        [option.key]: event.target.checked,
+                      }))
+                    }
+                    className="h-4 w-4 accent-foreground"
+                  />
+                </label>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsShareOptionsOpen(false)}
+              className="mt-5 w-full rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.3em] text-foreground transition hover:border-foreground"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <footer className="mt-24 bg-slate-900 text-white px-6 md:px-24 py-8 text-sm">
         <div className="flex flex-col items-center gap-8 text-center">

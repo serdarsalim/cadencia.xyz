@@ -166,6 +166,10 @@ model Share {
   recipientUser    User?    @relation("SharesReceived", fields: [recipientUserId], references: [id], onDelete: SetNull)
   createdAt        DateTime @default(now())
   revokedAt        DateTime?
+  showSelfRating   Boolean  @default(true)
+  showDosDonts     Boolean  @default(true)
+  showWeeklyGoals  Boolean  @default(true)
+  showOkrs         Boolean  @default(true)
 
   @@unique([ownerId, recipientEmail])
   @@index([recipientEmail])

@@ -20,7 +20,10 @@ export async function GET() {
     const [sharedWithMe, sharedByMe] = await Promise.all([
       prisma.share.findMany({
         where: { recipientEmail: user.email, revokedAt: null },
-        include: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          recipientEmail: true,
           owner: {
             select: {
               id: true,
@@ -28,13 +31,24 @@ export async function GET() {
               profile: { select: { personName: true } },
             },
           },
+          showSelfRating: true,
+          showDosDonts: true,
+          showWeeklyGoals: true,
+          showOkrs: true,
+          createdAt: true,
         },
-        orderBy: { createdAt: "desc" },
       }),
       prisma.share.findMany({
         where: { ownerId: user.id, revokedAt: null },
-        include: {
+        select: {
+          id: true,
+          recipientEmail: true,
           recipientUser: { select: { email: true } },
+          showSelfRating: true,
+          showDosDonts: true,
+          showWeeklyGoals: true,
+          showOkrs: true,
+          createdAt: true,
         },
         orderBy: { createdAt: "desc" },
       }),
@@ -62,7 +76,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const { recipientEmail } = await request.json();
+    const { recipientEmail, options } = await request.json();
     const trimmedEmail = String(recipientEmail || "").trim().toLowerCase();
     if (!trimmedEmail || !trimmedEmail.includes("@")) {
       return NextResponse.json({ error: "Invalid recipient email" }, { status: 400 });
@@ -70,6 +84,12 @@ export async function POST(request: NextRequest) {
     if (trimmedEmail === user.email) {
       return NextResponse.json({ error: "Cannot share with yourself" }, { status: 400 });
     }
+    const normalizedOptions = {
+      showSelfRating: options?.showSelfRating !== false,
+      showDosDonts: options?.showDosDonts !== false,
+      showWeeklyGoals: options?.showWeeklyGoals !== false,
+      showOkrs: options?.showOkrs !== false,
+    };
 
     const recipientUser = await prisma.user.findUnique({
       where: { email: trimmedEmail },
@@ -83,11 +103,13 @@ export async function POST(request: NextRequest) {
       update: {
         recipientUserId: recipientUser?.id ?? null,
         revokedAt: null,
+        ...normalizedOptions,
       },
       create: {
         ownerId: user.id,
         recipientEmail: trimmedEmail,
         recipientUserId: recipientUser?.id ?? null,
+        ...normalizedOptions,
       },
     });
 

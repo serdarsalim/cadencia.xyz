@@ -41,6 +41,10 @@ type SharePayload = {
   share: {
     id: string;
     viewerIsOwner: boolean;
+    showSelfRating: boolean;
+    showDosDonts: boolean;
+    showWeeklyGoals: boolean;
+    showOkrs: boolean;
     owner: {
       id: string;
       email?: string | null;
@@ -788,7 +792,13 @@ export default function SharedPage({
     data.profile.productivityScaleMode === "4"
       ? PRODUCTIVITY_SCALE_FOUR
       : PRODUCTIVITY_SCALE_THREE;
-  const dosDontsPanel = (
+  const showSelfRating = data.showSelfRating !== false;
+  const showDosDonts = data.showDosDonts !== false;
+  const showWeeklyGoals = data.showWeeklyGoals !== false;
+  const showOkrs = data.showOkrs !== false;
+  const showWeeklyPanel = showDosDonts || showWeeklyGoals;
+  const visibleRatings = showSelfRating ? data.productivityRatings : {};
+  const dosDontsPanel = showDosDonts ? (
     <div className="grid gap-4 sm:grid-cols-2">
       <div className="flex flex-col gap-2 rounded-2xl p-3" style={{ backgroundColor: "#e8f5e9" }}>
         <span className="text-xs uppercase tracking-[0.3em] text-[#0f172a]">Do&apos;s</span>
@@ -803,7 +813,7 @@ export default function SharedPage({
         </p>
       </div>
     </div>
-  );
+  ) : null;
 
   return (
     <div className="app-shell flex min-h-screen flex-col text-foreground">
@@ -827,16 +837,20 @@ export default function SharedPage({
               </h1>
             </div>
           )}
-          <section className="mx-auto grid max-w-480 gap-8 text-left lg:grid-cols-[1fr_1.2fr]">
+          <section
+            className={`mx-auto grid max-w-480 gap-8 text-left ${
+              showWeeklyPanel ? "lg:grid-cols-[1fr_1.2fr]" : "lg:grid-cols-1"
+            }`}
+          >
             <div className="space-y-4 order-2 lg:order-1">
               <ProductivityGrid
                 year={productivityYear}
                 setYear={setProductivityYear}
-                ratings={data.productivityRatings}
+                ratings={visibleRatings}
                 dayOffs={data.dayOffs ?? {}}
                 scale={scale}
                 mode={productivityMode}
-                showLegend
+                showLegend={showSelfRating}
                 selectedWeekKey={selectedWeekKey}
                 setSelectedWeekKey={setSelectedWeekKey}
                 weekStartDay={data.profile.weekStartDay}
@@ -844,106 +858,112 @@ export default function SharedPage({
                   setProductivityMode((prev) => (prev === "day" ? "week" : "day"))
                 }
               />
-              {productivityMode === "week" ? (
+              {productivityMode === "week" && dosDontsPanel ? (
                 <div className="mt-4 hidden lg:block">{dosDontsPanel}</div>
               ) : null}
             </div>
-            <div className="flex flex-col rounded-3xl px-4 pb-4 pt-0 order-1 lg:order-2">
-              {productivityMode === "day" ? (
-                <div className="mb-4">{dosDontsPanel}</div>
-              ) : null}
-              {productivityMode === "week" ? (
-                <div className="mb-4 lg:hidden">{dosDontsPanel}</div>
-              ) : null}
-              <div className="flex-1 rounded-2xl px-4 pt-4 pb-4" style={{ backgroundColor: "var(--card-muted-bg)" }}>
-                <span className="block text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-                  Weekly goals
-                </span>
-                <TinyEditor
-                  key={selectedWeekKey ? `shared-week-notes-${selectedWeekKey}` : "shared-week-notes"}
-                  tinymceScriptSrc={TINYMCE_CDN}
-                  value={selectedWeekEntry?.content ?? ""}
-                  init={
-                    {
-                      menubar: false,
-                      statusbar: false,
-                      height: 430,
-                      license_key: "gpl",
-                      plugins: "lists",
-                      readonly: true,
-                      skin: "oxide",
-                      content_css: false,
-                      toolbar: false,
-                      quickbars_selection_toolbar: false,
-                      quickbars_insert_toolbar: false,
-                      content_style: `
-                        body {
-                          background-color: #f1e9e5 !important;
-                          color: #0f172a !important;
-                          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                          font-size: 15px;
-                          padding: 10px 10px 10px 22px;
-                          margin: 0;
-                        }
-                        .mce-content-body {
-                          padding-left: 22px !important;
-                        }
-                        .mce-content-body:before {
-                          left: 22px !important;
-                        }
-                        @media (min-width: 640px) {
-                          body {
-                            padding: 10px 25px;
-                          }
-                        }
-                        * {
-                          background-color: transparent !important;
-                        }
-                      `,
-                      branding: false,
-                    } as Record<string, unknown>
-                  }
-                />
+            {showWeeklyPanel ? (
+              <div className="flex flex-col rounded-3xl px-4 pb-4 pt-0 order-1 lg:order-2">
+                {productivityMode === "day" && dosDontsPanel ? (
+                  <div className="mb-4">{dosDontsPanel}</div>
+                ) : null}
+                {productivityMode === "week" && dosDontsPanel ? (
+                  <div className="mb-4 lg:hidden">{dosDontsPanel}</div>
+                ) : null}
+                {showWeeklyGoals ? (
+                  <div className="flex-1 rounded-2xl px-4 pt-4 pb-4" style={{ backgroundColor: "var(--card-muted-bg)" }}>
+                    <span className="block text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
+                      Weekly goals
+                    </span>
+                    <TinyEditor
+                      key={selectedWeekKey ? `shared-week-notes-${selectedWeekKey}` : "shared-week-notes"}
+                      tinymceScriptSrc={TINYMCE_CDN}
+                      value={selectedWeekEntry?.content ?? ""}
+                      init={
+                        {
+                          menubar: false,
+                          statusbar: false,
+                          height: 430,
+                          license_key: "gpl",
+                          plugins: "lists",
+                          readonly: true,
+                          skin: "oxide",
+                          content_css: false,
+                          toolbar: false,
+                          quickbars_selection_toolbar: false,
+                          quickbars_insert_toolbar: false,
+                          content_style: `
+                            body {
+                              background-color: #f1e9e5 !important;
+                              color: #0f172a !important;
+                              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                              font-size: 15px;
+                              padding: 10px 10px 10px 22px;
+                              margin: 0;
+                            }
+                            .mce-content-body {
+                              padding-left: 22px !important;
+                            }
+                            .mce-content-body:before {
+                              left: 22px !important;
+                            }
+                            @media (min-width: 640px) {
+                              body {
+                                padding: 10px 25px;
+                              }
+                            }
+                            * {
+                              background-color: transparent !important;
+                            }
+                          `,
+                          branding: false,
+                        } as Record<string, unknown>
+                      }
+                    />
+                  </div>
+                ) : null}
               </div>
-            </div>
+            ) : null}
           </section>
-          <section className="mx-auto mt-12 max-w-5xl text-left">
-            <h2 className="text-sm uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-              {data.profile.goalsSectionTitle || "Goals"}
-            </h2>
-            <div className="mt-4 grid gap-4">
-              {data.goals.map((goal) => (
-                <div
-                  key={goal.id}
-                  className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-white/70 p-4 shadow-[0_20px_40px_color-mix(in_srgb,var(--foreground)_8%,transparent)]"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-base font-semibold text-foreground">{goal.title}</p>
-                    </div>
-                    {goal.archived ? (
-                      <span className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                        Archived
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {goal.keyResults.map((kr) => (
-                      <div
-                        key={kr.id}
-                        className="flex items-center justify-between rounded-2xl px-3 py-2 text-sm text-foreground"
-                      >
-                        <span>{kr.title}</span>
-                        <span className="text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]">
-                          {kr.status}
-                        </span>
+          {showOkrs ? (
+            <section className="mx-auto mt-12 max-w-5xl text-left">
+              <h2 className="text-sm uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                {data.profile.goalsSectionTitle || "Goals"}
+              </h2>
+              <div className="mt-4 grid gap-4">
+                {data.goals.map((goal) => (
+                  <div
+                    key={goal.id}
+                    className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-white/70 p-4 shadow-[0_20px_40px_color-mix(in_srgb,var(--foreground)_8%,transparent)]"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-base font-semibold text-foreground">{goal.title}</p>
                       </div>
-                    ))}
+                      {goal.archived ? (
+                        <span className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                          Archived
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {goal.keyResults.map((kr) => (
+                        <div
+                          key={kr.id}
+                          className="flex items-center justify-between rounded-2xl px-3 py-2 text-sm text-foreground"
+                        >
+                          <span>{kr.title}</span>
+                          <span className="text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]">
+                            {kr.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </section>
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
       </main>
     </div>

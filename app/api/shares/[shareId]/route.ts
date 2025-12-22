@@ -71,6 +71,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       share: {
         id: share.id,
         viewerIsOwner: isOwner,
+        showSelfRating: share.showSelfRating,
+        showDosDonts: share.showDosDonts,
+        showWeeklyGoals: share.showWeeklyGoals,
+        showOkrs: share.showOkrs,
         owner: {
           id: share.owner.id,
           email: share.owner.email,
@@ -125,6 +129,55 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error revoking share:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  try {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { shareId } = await params;
+    const { options } = await request.json();
+
+    const share = await prisma.share.findUnique({
+      where: { id: shareId },
+      select: { owner: { select: { email: true } } },
+    });
+
+    if (!share) {
+      return NextResponse.json({ error: "Share not found" }, { status: 404 });
+    }
+
+    if (normalizeEmail(share.owner.email) !== normalizeEmail(session.user.email)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const normalizedOptions = {
+      showSelfRating: options?.showSelfRating !== false,
+      showDosDonts: options?.showDosDonts !== false,
+      showWeeklyGoals: options?.showWeeklyGoals !== false,
+      showOkrs: options?.showOkrs !== false,
+    };
+
+    const updated = await prisma.share.update({
+      where: { id: shareId },
+      data: normalizedOptions,
+      select: {
+        id: true,
+        showSelfRating: true,
+        showDosDonts: true,
+        showWeeklyGoals: true,
+        showOkrs: true,
+      },
+    });
+
+    return NextResponse.json({ share: updated });
+  } catch (error) {
+    console.error("Error updating share:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
