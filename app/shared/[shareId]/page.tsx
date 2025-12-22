@@ -39,6 +39,7 @@ type SharedGoal = {
 type SharePayload = {
   share: {
     id: string;
+    viewerIsOwner: boolean;
     owner: {
       id: string;
       email?: string | null;
@@ -317,10 +318,69 @@ const ProductivityGrid = ({
                 );
               }
 
+              const today = new Date();
+              const isToday =
+                today.getFullYear() === year &&
+                today.getMonth() === monthIndex &&
+                today.getDate() === dayOfMonth;
+
+              const isPreviousDayToday =
+                today.getFullYear() === year &&
+                today.getMonth() === monthIndex &&
+                today.getDate() === dayOfMonth - 1;
+
+              let weekBorderClass = "";
               const currentWeek = weeks.find((week) =>
                 week.dayKeys.includes(`${year}-${monthIndex + 1}-${dayOfMonth}`)
               );
-              const isSelectedWeek = currentWeek && selectedWeekKey === currentWeek.weekKey;
+
+              if (currentWeek) {
+                const isFirstInMonth = !currentWeek.dayKeys.some((dayKey) => {
+                  const [y, m, d] = dayKey.split("-").map(Number);
+                  return y === year && m === monthIndex + 1 && d! < dayOfMonth;
+                });
+
+                const nextDayInWeek =
+                  dayOfMonth < daysInMonth(year, monthIndex) &&
+                  currentWeek.dayKeys.includes(
+                    `${year}-${monthIndex + 1}-${dayOfMonth + 1}`
+                  );
+
+                const borderTop = isPreviousDayToday
+                  ? "border-t-2 border-t-yellow-400"
+                  : isFirstInMonth
+                    ? "border-t border-t-gray-400"
+                    : "border-t-[0.5px] border-t-gray-300";
+                const borderBottom = !nextDayInWeek
+                  ? "border-b border-b-gray-400"
+                  : "border-b-[0.5px] border-b-gray-300";
+                const borderSides =
+                  "border-l border-r border-l-gray-400 border-r-gray-400";
+
+                weekBorderClass = `${borderTop} ${borderBottom} ${borderSides}`;
+
+                const isSelectedWeek = selectedWeekKey === currentWeek.weekKey;
+                if (isSelectedWeek) {
+                  const isFirstDayOfWeek =
+                    currentWeek.dayKeys[0] ===
+                    `${year}-${monthIndex + 1}-${dayOfMonth}`;
+                  const isLastDayOfWeek =
+                    currentWeek.dayKeys[currentWeek.dayKeys.length - 1] ===
+                    `${year}-${monthIndex + 1}-${dayOfMonth}`;
+                  let selectedWeekBorders = "";
+                  if (isFirstDayOfWeek) {
+                    selectedWeekBorders =
+                      "border-t-2 border-t-slate-700 border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
+                  } else if (isLastDayOfWeek) {
+                    selectedWeekBorders =
+                      "border-b-2 border-b-slate-700 border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
+                  } else {
+                    selectedWeekBorders =
+                      "border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
+                  }
+                  weekBorderClass = `${weekBorderClass} ${selectedWeekBorders}`;
+                }
+              }
 
               return (
                 <button
@@ -334,14 +394,14 @@ const ProductivityGrid = ({
                   onMouseEnter={(event) =>
                     handleDayHover(event, monthIndex, dayOfMonth)
                   }
-                  className={`h-4 w-full text-[10px] font-semibold text-transparent transition focus:text-transparent ${
-                    isSelectedWeek
-                      ? "border-l-2 border-r-2 border-l-slate-700 border-r-slate-700"
-                      : "border-l border-r border-l-gray-400 border-r-gray-400"
-                  } ${
+                  className={`h-4 w-full text-[10px] font-semibold text-transparent transition focus:text-transparent ${weekBorderClass} ${
                     hasValue
                       ? scaleEntry.color
                       : "bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]"
+                  } ${
+                    isToday
+                      ? "ring-2 ring-yellow-400 shadow-[0_0_12px_rgba(250,204,21,0.4)]"
+                      : ""
                   }`}
                   aria-label={`Day ${dayOfMonth} of ${new Date(2020, monthIndex).toLocaleString(undefined, {
                     month: "long",
@@ -656,6 +716,11 @@ export default function SharedPage({
 
   return (
     <div className="app-shell flex min-h-screen flex-col text-foreground">
+      {data.viewerIsOwner && (
+        <div className="w-full border-b border-[color-mix(in_srgb,var(--foreground)_18%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] px-4 py-3 text-center text-[11px] uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
+          Preview — this is what your recipient sees
+        </div>
+      )}
       <main className="flex flex-1 items-start justify-center px-4">
         <div className="w-full py-6 text-center">
           <div className="mb-6 text-sm uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">

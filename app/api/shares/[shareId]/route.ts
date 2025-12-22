@@ -66,6 +66,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({
       share: {
         id: share.id,
+        viewerIsOwner: isOwner,
         owner: {
           id: share.owner.id,
           email: share.owner.email,

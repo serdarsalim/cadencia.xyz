@@ -2958,16 +2958,18 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 {sharedByMe.length > 0 && (
                   <div className="space-y-2 text-xs normal-case tracking-normal text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
                     <span className="block text-[11px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-                      Sharing with
+                      Goals you're sharing
                     </span>
                     {sharedByMe.map((share) => (
                       <div key={share.id} className="flex flex-wrap items-center gap-2">
                         <span>{share.recipientUser?.email || share.recipientEmail}</span>
                         <Link
                           href={`/shared/${share.id}`}
+                          target="_blank"
+                          rel="noreferrer"
                           className="text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
                         >
-                          Open
+                          Preview
                         </Link>
                         <button
                           type="button"
@@ -2983,7 +2985,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 {sharedWithMe.length > 0 && (
                   <div className="space-y-2 text-xs normal-case tracking-normal text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
                     <span className="block text-[11px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-                      Shared with me
+                      Goals shared with me
                     </span>
                     {sharedWithMe.map((share) => (
                       <div key={share.id} className="flex flex-wrap items-center gap-2">
@@ -2994,6 +2996,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         </span>
                         <Link
                           href={`/shared/${share.id}`}
+                          target="_blank"
+                          rel="noreferrer"
                           className="text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
                         >
                           Open
