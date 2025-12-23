@@ -180,13 +180,13 @@ export default function SharedPage({
   const visibleRatings = showSelfRating ? data.productivityRatings : {};
   const dosDontsPanel = showDosDonts ? (
     <div className="grid gap-4 sm:grid-cols-2">
-      <div className="flex flex-col gap-2 rounded-2xl p-3 dos-card-bg">
+      <div className="flex flex-col gap-2 p-3 dos-card-bg">
         <span className="text-xs uppercase tracking-[0.3em] dos-label-color">Do&apos;s</span>
         <p className="text-[13px] sm:text-sm whitespace-pre-wrap textarea-text-color">
           {selectedWeekEntry?.dos ?? ""}
         </p>
       </div>
-      <div className="flex flex-col gap-2 rounded-2xl p-3 donts-card-bg">
+      <div className="flex flex-col gap-2 p-3 donts-card-bg">
         <span className="text-xs uppercase tracking-[0.3em] donts-label-color">Don&apos;ts</span>
         <p className="text-[13px] sm:text-sm whitespace-pre-wrap textarea-text-color">
           {selectedWeekEntry?.donts ?? ""}
@@ -291,7 +291,7 @@ export default function SharedPage({
                   <div className="mb-4 lg:hidden">{dosDontsPanel}</div>
                 ) : null}
                 {showWeeklyGoals ? (
-                  <div className="flex-1 rounded-2xl px-4 pt-4 pb-4 weekly-goals-bg">
+                  <div className="flex-1 px-4 pt-4 pb-4 weekly-goals-bg">
                     <span className="block text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
                       Weekly goals
                     </span>

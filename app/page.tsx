@@ -2961,7 +2961,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   ) : null}
                 </div>
 
-                <div className="flex flex-col rounded-3xl px-4 pb-4 pt-0 order-1 lg:order-2">
+                <div className="flex flex-col rounded-3xl px-0 pb-4 pt-0 order-1 lg:order-2 lg:px-4">
                 {productivityMode === "day" && dosDontsPanel ? (
                   <div
                     className="mb-4"
@@ -4393,6 +4393,25 @@ const ProductivityGrid = ({
                 const hasAnyDayOff = dayOffCount > 0;
                 const weekFillClass = isFullWeekOff ? "bg-[#8dc8e6]" : scaleClass;
                 const showPartialDayOff = !isFullWeekOff && hasAnyDayOff;
+                // Check if this week contains today
+                const today = new Date();
+                const isThisWeek = week.dayKeys.some((dayKey) => {
+                  const [y, m, d] = dayKey.split("-").map(Number);
+                  const keyDate = new Date(y!, m! - 1, d);
+                  return (
+                    keyDate.getFullYear() === today.getFullYear() &&
+                    keyDate.getMonth() === today.getMonth() &&
+                    keyDate.getDate() === today.getDate()
+                  );
+                });
+                const isThisWeekSelected = isThisWeek && isSelectedWeek;
+                // Determine if this is the first or last week in the month
+                const monthWeeks = weeksByMonth[monthIndex]!;
+                const weekIndexInMonth = monthWeeks.findIndex(w => w.weekKey === week.weekKey);
+                const isFirstWeekInMonth = weekIndexInMonth === 0;
+                const isLastWeekInMonth = weekIndexInMonth === monthWeeks.length - 1;
+                // Build selected week border classes
+                const selectedWeekBorderClass = isSelectedWeek ? "border-black" : "";
                 return (
                   <div key={`week-card-${week.weekNumber}`}>
                     <button
@@ -4409,9 +4428,7 @@ const ProductivityGrid = ({
                         hasDayScores
                           ? "cursor-pointer"
                           : "hover:opacity-90"
-                      } ${weekFillClass} border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] ${
-                        isSelectedWeek ? "border-black" : ""
-                      }`}
+                      } ${weekFillClass} border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] ${selectedWeekBorderClass}`}
                       title={`${week.rangeLabel}${hasDayScores ? " (rating locked from daily view)" : ""}`}
                       aria-label={
                         hasDayScores
@@ -4419,6 +4436,9 @@ const ProductivityGrid = ({
                           : `Week ${week.weekNumber} ${week.rangeLabel}, current score ${manualScore ?? "unset"}, click to cycle rating`
                       }
                     >
+                      {isThisWeek && (
+                        <span className={`absolute right-0.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-red-500 rounded-full ${isThisWeekSelected ? 'today-dot' : ''}`} />
+                      )}
                       {displayValue}
                     </button>
                   </div>
