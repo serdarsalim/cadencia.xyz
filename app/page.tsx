@@ -4268,26 +4268,28 @@ const ProductivityGrid = ({
         );
         })}
       </div>
-      <div className={`mt-6 flex flex-col gap-4 text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:text-xs ${showLegend ? "sm:flex-row sm:items-center sm:justify-between" : "sm:justify-end"}`}>
-        {showLegend && (
-          <div className="flex flex-col gap-2">
-            <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
-              Goals achieved (self-rated)
-            </span>
-            <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
-              {scale.map((item) => (
-                <div key={item.value} className="flex items-center gap-2 whitespace-nowrap">
-                  <span
-                    className={`h-3 w-3 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4`}
-                    aria-hidden="true"
-                  />
-                  <span>{item.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        <div className="flex flex-row items-center gap-2 sm:gap-3">
+      <div className="mt-6 flex flex-col gap-4 text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:flex-row sm:items-center sm:justify-between sm:text-xs">
+        <div className="flex flex-col gap-2">
+          {showLegend && (
+            <>
+              <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
+                Goals achieved (self-rated)
+              </span>
+              <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
+                {scale.map((item) => (
+                  <div key={item.value} className="flex items-center gap-2 whitespace-nowrap">
+                    <span
+                      className={`h-3 w-3 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4`}
+                      aria-hidden="true"
+                    />
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="flex flex-row items-center justify-end gap-2 sm:gap-3">
           {/* {yearControl} */}
           {toggleButton}
           {!readOnly && dayOffControl}
@@ -4412,26 +4414,28 @@ const ProductivityGrid = ({
             </div>
           ))}
         </div>
-        <div className={`mt-6 flex flex-col gap-4 text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:text-xs ${showLegend ? "sm:flex-row sm:items-center sm:justify-between" : "sm:justify-end"}`}>
-          {showLegend && (
-            <div className="flex flex-col gap-2">
-              <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
-                Goals achieved (self-rated)
-              </span>
-              <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
-                {scale.map((item) => (
-                  <div key={item.value} className="flex items-center gap-2 whitespace-nowrap">
-                    <span
-                      className={`h-3 w-3 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4`}
-                      aria-hidden="true"
-                    />
-                    <span>{item.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        <div className="flex flex-row items-center gap-2 sm:gap-3">
+        <div className="mt-6 flex flex-col gap-4 text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:flex-row sm:items-center sm:justify-between sm:text-xs">
+          <div className="flex flex-col gap-2">
+            {showLegend && (
+              <>
+                <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
+                  Goals achieved (self-rated)
+                </span>
+                <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
+                  {scale.map((item) => (
+                    <div key={item.value} className="flex items-center gap-2 whitespace-nowrap">
+                      <span
+                        className={`h-3 w-3 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4`}
+                        aria-hidden="true"
+                      />
+                      <span>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        <div className="flex flex-row items-center justify-end gap-2 sm:gap-3">
           {/* {yearControl} */}
           {toggleButton}
           {!readOnly && dayOffControl}
