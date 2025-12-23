@@ -507,6 +507,7 @@ export default function Home() {
     "<p><strong>What I want to accomplish this week:</strong></p><ul><li>Monday</li><li>Tuesday</li><li>Wednesday</li><li>Thursday</li><li>Friday</li><li>Saturday</li><li>Sunday</li></ul>"
   );
   const [dayOffAllowance, setDayOffAllowance] = useState(15);
+  const [workDays, setWorkDays] = useState<WeekdayIndex[]>([0, 1, 2, 3, 4, 5, 6]);
   const [dayOffs, setDayOffs] = useState<Record<string, boolean>>({});
   const [isDayOffMode, setIsDayOffMode] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
@@ -545,14 +546,24 @@ export default function Home() {
   );
   const dayOffsUsed = useMemo(() => {
     return Object.keys(dayOffs).reduce((count, key) => {
-      const [yearPart] = key.split("-");
+      const [yearPart, monthPart, dayPart] = key.split("-");
       const year = Number(yearPart);
       if (Number.isFinite(year) && year === productivityYear) {
-        return count + 1;
+        // Parse the date to get the day of week
+        const month = Number(monthPart);
+        const day = Number(dayPart);
+        if (Number.isFinite(month) && Number.isFinite(day)) {
+          const date = new Date(year, month - 1, day);
+          const dayOfWeek = date.getDay() as WeekdayIndex;
+          // Only count PTO on work days
+          if (workDays.includes(dayOfWeek)) {
+            return count + 1;
+          }
+        }
       }
       return count;
     }, 0);
-  }, [dayOffs, productivityYear]);
+  }, [dayOffs, productivityYear, workDays]);
   const dayOffsRemaining = Math.max(0, dayOffAllowance - dayOffsUsed);
   const [scheduleEntries, setScheduleEntries] = useState<
     Record<string, ScheduleEntry[]>
@@ -1035,6 +1046,10 @@ export default function Home() {
                 nextDayOffAllowance = Number(profile.dayOffAllowance);
                 setDayOffAllowance(nextDayOffAllowance);
               }
+              if (profile.workDays) {
+                const parsedWorkDays = profile.workDays.split(',').map((d: string) => Number(d)).filter((d: number) => d >= 0 && d <= 6) as WeekdayIndex[];
+                setWorkDays(parsedWorkDays.length > 0 ? parsedWorkDays : [0, 1, 2, 3, 4, 5, 6]);
+              }
               if (profile.recentYears) {
                 nextRecentYears = profile.recentYears;
                 setRecentYears(nextRecentYears);
@@ -1102,7 +1117,8 @@ export default function Home() {
               productivityScaleMode: nextProductivityScaleMode,
               showLegend: nextShowLegend,
               weeklyGoalsTemplate: nextWeeklyGoalsTemplate,
-              dayOffAllowance: nextDayOffAllowance
+              dayOffAllowance: nextDayOffAllowance,
+              workDays: [0, 1, 2, 3, 4, 5, 6].join(',')
             };
             lastServerSavedProfileRef.current = JSON.stringify(profilePayload);
           }
@@ -2906,6 +2922,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                           showLegend,
                           weeklyGoalsTemplate,
                           dayOffAllowance,
+                          workDays: workDays.join(','),
                           productivityViewMode: newMode,
                         });
                       }
@@ -3125,8 +3142,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   />
                 </div>
               </label>
-              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] lg:col-span-2">
-                <div className="mt-1 flex flex-wrap items-center gap-2">
+              <label className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
                     Week starts
                   </span>
@@ -3137,7 +3154,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                       onClick={() => setWeekStartDay(day as WeekdayIndex)}
                       className={`rounded-full border px-3 py-1 text-[10px] transition sm:px-4 sm:py-1.5 sm:text-xs ${
                         weekStartDay === day
-                          ? "border-foreground text-foreground"
+                          ? "border-foreground bg-foreground text-background"
                           : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:border-foreground"
                       }`}
                     >
@@ -3146,6 +3163,47 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   ))}
                 </div>
               </label>
+              <div className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] lg:col-span-2 flex flex-wrap items-center gap-2 justify-between sm:justify-start">
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                  Work days
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => {
+                        const newWorkDays = workDays.includes(day as WeekdayIndex)
+                          ? workDays.filter(d => d !== day)
+                          : [...workDays, day as WeekdayIndex].sort((a, b) => a - b);
+                        setWorkDays(newWorkDays as WeekdayIndex[]);
+                        if (!isDemoMode) {
+                          saveProfile({
+                            personName,
+                            dateOfBirth,
+                            weekStartDay,
+                            recentYears,
+                            goalsSectionTitle,
+                            productivityScaleMode,
+                            showLegend,
+                            weeklyGoalsTemplate,
+                            dayOffAllowance,
+                            workDays: newWorkDays.join(','),
+                            productivityViewMode: productivityMode,
+                          });
+                        }
+                      }}
+                      className={`rounded-full border px-3 py-1 text-[10px] transition sm:px-3 sm:py-1 sm:text-[10px] ${
+                        workDays.includes(day as WeekdayIndex)
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:border-foreground"
+                      }`}
+                    >
+                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day]}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] lg:col-span-2">
                 Weekly goals template
                 <div className="mt-2 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent p-2">
@@ -3228,7 +3286,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     value={shareEmail}
                     onChange={(event) => setShareEmail(event.target.value)}
                     placeholder="Email address"
-                    className="flex-1 min-w-[220px] rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-2 text-sm normal-case tracking-normal text-foreground outline-none focus:border-foreground"
+                    className="flex-1 min-w-55 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-2 text-sm normal-case tracking-normal text-foreground outline-none focus:border-foreground"
                   />
                   <button
                     type="button"
@@ -4143,7 +4201,7 @@ const ProductivityGrid = ({
         );
         })}
       </div>
-      <div className={`mt-6 flex items-center text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:text-xs ${showLegend ? "justify-between" : "justify-end"}`}>
+      <div className={`mt-6 flex flex-col gap-4 text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:text-xs ${showLegend ? "sm:flex-row sm:items-center sm:justify-between" : "sm:justify-end"}`}>
         {showLegend && (
           <div className="flex flex-col gap-2">
             <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
@@ -4162,7 +4220,7 @@ const ProductivityGrid = ({
             </div>
           </div>
         )}
-        <div className={`flex items-start gap-2 ${showLegend ? "flex-col sm:flex-row sm:items-center sm:gap-3" : "flex-row items-center"}`}>
+        <div className="flex flex-row items-center gap-2 sm:gap-3">
           {yearControl}
           {toggleButton}
           {dayOffControl}
@@ -4279,12 +4337,6 @@ const ProductivityGrid = ({
                           : `Week ${week.weekNumber} ${week.rangeLabel}, current score ${manualScore ?? "unset"}, click to cycle rating`
                       }
                     >
-                      {showPartialDayOff ? (
-                        <span
-                          aria-hidden="true"
-                          className="absolute h-2 w-2 rounded-full bg-[#8dc8e6] ring-1 ring-white"
-                        />
-                      ) : null}
                       {displayValue}
                     </button>
                   </div>
@@ -4293,7 +4345,7 @@ const ProductivityGrid = ({
             </div>
           ))}
         </div>
-        <div className={`mt-6 flex items-center text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:text-xs ${showLegend ? "justify-between" : "justify-end"}`}>
+        <div className={`mt-6 flex flex-col gap-4 text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:text-xs ${showLegend ? "sm:flex-row sm:items-center sm:justify-between" : "sm:justify-end"}`}>
           {showLegend && (
             <div className="flex flex-col gap-2">
               <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
@@ -4312,7 +4364,7 @@ const ProductivityGrid = ({
               </div>
             </div>
           )}
-        <div className={`flex items-start gap-2 ${showLegend ? "flex-col sm:flex-row sm:items-center sm:gap-3" : "flex-row items-center"}`}>
+        <div className="flex flex-row items-center gap-2 sm:gap-3">
           {yearControl}
           {toggleButton}
           {dayOffControl}

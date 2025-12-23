@@ -76,6 +76,7 @@ model UserProfile {
   showLegend            Boolean  @default(true)
   weeklyGoalsTemplate   String   @default("")
   dayOffAllowance       Int      @default(15)
+  workDays              String   @default("0,1,2,3,4,5,6")
   user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
