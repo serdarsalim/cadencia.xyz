@@ -4200,10 +4200,23 @@ const ProductivityGrid = ({
                 // Check if next day in this month is in same week
                 const nextDayInWeek = dayOfMonth < daysInMonth(year, monthIndex) && currentWeek.dayKeys.includes(`${year}-${monthIndex + 1}-${dayOfMonth + 1}`);
 
-                // Top border: first day of week (stronger) or between days (visible divider)
-                const borderTop = isFirstInMonth ? "border-t border-t-gray-400" : "border-t-[0.5px] border-t-gray-300";
-                // Bottom border: last day of week (stronger) or between days (visible divider)
-                const borderBottom = !nextDayInWeek ? "border-b border-b-gray-400" : "border-b-[0.5px] border-b-gray-300";
+                // Check if current day or previous day has a rating/color or is a day off
+                const currentDayHasColor = (ratings[key] !== null && ratings[key] !== undefined) || dayOffs[key];
+                const previousDayKey = `${year}-${monthIndex + 1}-${dayOfMonth - 1}`;
+                const previousDayHasColor = (ratings[previousDayKey] !== null && ratings[previousDayKey] !== undefined) || dayOffs[previousDayKey];
+
+                // Check if current day or next day has a rating/color or is a day off
+                const nextDayKey = `${year}-${monthIndex + 1}-${dayOfMonth + 1}`;
+                const nextDayHasColor = (ratings[nextDayKey] !== null && ratings[nextDayKey] !== undefined) || dayOffs[nextDayKey];
+
+                // Top border: if first in month and (current or previous has color/PTO), make it darker
+                const borderTop = isFirstInMonth
+                  ? (currentDayHasColor || previousDayHasColor ? "border-t border-t-gray-600" : "border-t border-t-gray-400")
+                  : "border-t-[0.5px] border-t-gray-300";
+                // Bottom border: if last in week and (current or next has color/PTO), make it darker
+                const borderBottom = !nextDayInWeek
+                  ? (currentDayHasColor || nextDayHasColor ? "border-b border-b-gray-600" : "border-b border-b-gray-400")
+                  : "border-b-[0.5px] border-b-gray-300";
                 // Left and right borders: always on for week grouping
                 const borderSides = "border-l border-r border-l-gray-400 border-r-gray-400";
 
