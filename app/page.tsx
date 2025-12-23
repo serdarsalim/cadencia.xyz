@@ -2683,7 +2683,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                               onClick={() =>
                                 cycleKeyResultStatus(goal.id, kr.id)
                               }
-                              className={`rounded-full px-2 sm:px-2.5 py-0.5 sm:py-0.5 text-base sm:text-lg ${goalStatusBadge(
+                              className={`rounded-full px-2 sm:px-2.5 py-0 sm:py-0 text-base sm:text-lg ${goalStatusBadge(
                                 kr.status
                               )}`}
                               title={kr.status === "started"
@@ -2710,7 +2710,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                           )}
                           {isViewingArchived && (
                             <span
-                              className={`rounded-full px-2 sm:px-2.5 py-0.5 sm:py-0.5 text-base sm:text-lg ${goalStatusBadge(
+                              className={`rounded-full px-2 sm:px-2.5 py-0 sm:py-0 text-base sm:text-lg ${goalStatusBadge(
                                 kr.status
                               )}`}
                               title={kr.status === "started"
