@@ -489,7 +489,7 @@ export default function Home() {
   const [view, setView] = useState<ViewMode>(() => {
     // Initialize from localStorage if available
     if (typeof window !== "undefined") {
-      const stored = window.localStorage.getItem("timespent-active-view");
+      const stored = window.localStorage.getItem(storageKey("active-view"));
       if (stored === "productivity") {
         return stored;
       }
@@ -992,7 +992,7 @@ export default function Home() {
         if (isLoggedIn) {
           setIsDemoMode(false);
           try {
-            window.localStorage.setItem("timespent-demo-mode", "false");
+            window.localStorage.setItem(storageKey("demo-mode"), "false");
           } catch (error) {
             console.error("Failed to update demo mode flag", error);
           }
@@ -1089,7 +1089,7 @@ export default function Home() {
               setWeekStartDay(1);
             }
 
-            const migrationKey = `timespent-weekkey-migration-done-${session?.user?.email ?? "unknown"}`;
+            const migrationKey = storageKey(`weekkey-migration-done-${session?.user?.email ?? "unknown"}`);
             const hasMigratedWeekKeys =
               window.localStorage.getItem(migrationKey) === "true";
 
@@ -1143,7 +1143,7 @@ export default function Home() {
         } else {
           setIsDemoMode(true);
           try {
-            window.localStorage.setItem("timespent-demo-mode", "true");
+            window.localStorage.setItem(storageKey("demo-mode"), "true");
           } catch (error) {
             console.error("Failed to update demo mode flag", error);
           }
@@ -1170,14 +1170,14 @@ export default function Home() {
         }
 
         // Also load UI preferences from localStorage (these are not in DB)
-        const storedProductivityGoal = window.localStorage.getItem("timespent-productivity-goals");
+        const storedProductivityGoal = window.localStorage.getItem(storageKey("productivity-goals"));
         if (storedProductivityGoal) {
           const parsedGoals = JSON.parse(storedProductivityGoal) as Record<number, string>;
           if (parsedGoals && typeof parsedGoals === "object") {
             setProductivityGoals(parsedGoals);
           }
         }
-        const storedView = window.localStorage.getItem("timespent-active-view");
+        const storedView = window.localStorage.getItem(storageKey("active-view"));
         if (storedView === "life" || storedView === "productivity") {
           if (isLoggedIn) {
             setView(storedView);
@@ -1189,13 +1189,13 @@ export default function Home() {
         }
 
         if (!isLoggedIn || !hasProfileLegend) {
-          const storedShowLegend = window.localStorage.getItem("timespent-show-legend");
+          const storedShowLegend = window.localStorage.getItem(storageKey("show-legend"));
           if (storedShowLegend === "true") {
             setShowLegend(true);
           } else if (storedShowLegend === "false") {
             setShowLegend(false);
           } else {
-            const storedLegendHidden = window.localStorage.getItem("timespent-hide-legend");
+            const storedLegendHidden = window.localStorage.getItem(legacyStorageKey("hide-legend"));
             if (storedLegendHidden === "true") {
               setShowLegend(false);
             }
@@ -1203,14 +1203,14 @@ export default function Home() {
         }
 
         if (!isLoggedIn || !hasProfileWeeklyTemplate) {
-          const storedWeeklyTemplate = window.localStorage.getItem("timespent-weekly-goals-template");
+          const storedWeeklyTemplate = window.localStorage.getItem(storageKey("weekly-goals-template"));
           if (storedWeeklyTemplate) {
             setWeeklyGoalsTemplate(normalizeWeeklyGoalsTemplate(storedWeeklyTemplate));
           }
         }
 
         if (!isLoggedIn) {
-          const storedDayOffs = window.localStorage.getItem("timespent-day-offs");
+          const storedDayOffs = window.localStorage.getItem(storageKey("day-offs"));
           if (storedDayOffs) {
             try {
               const parsedDayOffs = JSON.parse(storedDayOffs) as Record<string, boolean>;
@@ -1223,7 +1223,7 @@ export default function Home() {
           }
         }
 
-        const storedProfileModalPreference = window.localStorage.getItem("timespent-profile-modal-open");
+        const storedProfileModalPreference = window.localStorage.getItem(storageKey("profile-modal-open"));
         if (storedProfileModalPreference === "true") {
           shouldOpenProfileModal = true;
         } else if (storedProfileModalPreference === "false") {
@@ -1248,7 +1248,7 @@ export default function Home() {
     }
     try {
       window.localStorage.setItem(
-        "timespent-profile-modal-open",
+        storageKey("profile-modal-open"),
         isEditingProfile ? "true" : "false"
       );
     } catch (error) {
@@ -1262,7 +1262,7 @@ export default function Home() {
     try {
       // Save to localStorage as backup
       window.localStorage.setItem(
-        "timespent-profile",
+        storageKey("profile"),
         JSON.stringify({
           name: personName,
           dateOfBirth,
@@ -1309,7 +1309,7 @@ export default function Home() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem("timespent-active-view", view);
+      window.localStorage.setItem(storageKey("active-view"), view);
     } catch (error) {
       console.error("Failed to cache active view", error);
     }
@@ -1326,7 +1326,7 @@ export default function Home() {
 
     if (!userEmail) {
       try {
-        window.localStorage.setItem("timespent-productivity-ratings", serialized);
+        window.localStorage.setItem(storageKey("productivity-ratings"), serialized);
       } catch (error) {
         console.error("Failed to cache productivity ratings", error);
       }
@@ -1367,7 +1367,7 @@ export default function Home() {
 
     if (!userEmail) {
       try {
-        window.localStorage.setItem("timespent-day-offs", serialized);
+        window.localStorage.setItem(storageKey("day-offs"), serialized);
       } catch (error) {
         console.error("Failed to cache day offs", error);
       }
@@ -1400,7 +1400,7 @@ export default function Home() {
   useEffect(() => {
     try {
       window.localStorage.setItem(
-        "timespent-productivity-goals",
+        storageKey("productivity-goals"),
         JSON.stringify(productivityGoals)
       );
     } catch (error) {
@@ -1411,7 +1411,7 @@ export default function Home() {
   useEffect(() => {
     if (!isHydrated) return;
     try {
-      window.localStorage.setItem("timespent-show-legend", showLegend ? "true" : "false");
+      window.localStorage.setItem(storageKey("show-legend"), showLegend ? "true" : "false");
     } catch (error) {
       console.error("Failed to cache legend preference", error);
     }
@@ -1420,7 +1420,7 @@ export default function Home() {
   useEffect(() => {
     if (!isHydrated) return;
     try {
-      window.localStorage.setItem("timespent-weekly-goals-template", weeklyGoalsTemplate);
+      window.localStorage.setItem(storageKey("weekly-goals-template"), weeklyGoalsTemplate);
     } catch (error) {
       console.error("Failed to cache weekly goals template", error);
     }
@@ -1441,7 +1441,7 @@ export default function Home() {
 
       // Save to localStorage as backup with quota error handling
       const saved = safeLocalStorageSetItem(
-        "timespent-schedule-entries",
+        storageKey("schedule-entries"),
         JSON.stringify(recentEntries),
         () => {
           // If quota is still exceeded after filtering, try to clear and retry
@@ -1495,7 +1495,7 @@ export default function Home() {
 
     if (!userEmail) {
       try {
-        window.localStorage.setItem("timespent-goals", serializedGoals);
+        window.localStorage.setItem(storageKey("goals"), serializedGoals);
       } catch (error) {
         console.error("Failed to cache goals for guest", error);
       }
@@ -1531,7 +1531,7 @@ export default function Home() {
     try {
       // Save to localStorage as backup
       window.localStorage.setItem(
-        "timespent-week-start",
+        storageKey("week-start"),
         String(weekStartDay)
       );
       // weekStartDay is saved as part of profile in the database
@@ -1551,7 +1551,7 @@ export default function Home() {
 
     if (!userEmail) {
       try {
-        window.localStorage.setItem("timespent-weekly-notes", serialized);
+        window.localStorage.setItem(storageKey("weekly-notes"), serialized);
       } catch (error) {
         console.error("Failed to cache weekly notes", error);
       }
@@ -4317,11 +4317,11 @@ const ProductivityGrid = ({
 
                 // Top border: if first in month and (current or previous has color/PTO), make it darker
                 const borderTop = isFirstInMonth
-                  ? (currentDayHasColor || previousDayHasColor ? "border-t border-t-gray-600" : "border-t border-t-gray-400")
+                  ? (currentDayHasColor || previousDayHasColor ? "border-t border-t-gray-500" : "border-t border-t-gray-400")
                   : "border-t-[0.5px] border-t-gray-300";
                 // Bottom border: if last in week and (current or next has color/PTO), make it darker
                 const borderBottom = !nextDayInWeek
-                  ? (currentDayHasColor || nextDayHasColor ? "border-b border-b-gray-600" : "border-b border-b-gray-400")
+                  ? (currentDayHasColor || nextDayHasColor ? "border-b border-b-gray-500" : "border-b border-b-gray-400")
                   : "border-b-[0.5px] border-b-gray-300";
                 // Left and right borders: always on for week grouping
                 const borderSides = "border-l border-r border-l-gray-400 border-r-gray-400";

@@ -48,7 +48,7 @@ export default function AboutPage() {
             </ul>
           </div>
           <p>
-            SLMTRACK is built for personal clarity and accountability. Perfect for New Year's resolutions—the year view runs January to December. It is a personal workspace and does not provide professional advice. By using the product you acknowledge it is provided as-is.
+            {APP_NAME} is built for personal clarity and accountability. Perfect for New Year's resolutions—the year view runs January to December. It is a personal workspace and does not provide professional advice. By using the product you acknowledge it is provided as-is.
           </p>
         </div>
         <Link

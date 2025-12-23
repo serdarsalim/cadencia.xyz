@@ -3,14 +3,14 @@ import { redirect } from "next/navigation";
 import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 
-const ADMIN_COOKIE = "timespent-admin-auth";
+const ADMIN_COOKIE = "cadencia-admin-auth";
 const ADMIN_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 
 const getAdminHash = () => {
   const password = process.env.ADMIN_PASSWORD;
   if (!password) return null;
   return createHash("sha256")
-    .update(`timespent-admin:${password}`)
+    .update(`cadencia-admin:${password}`)
     .digest("hex");
 };
 

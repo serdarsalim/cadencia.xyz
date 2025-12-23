@@ -14,28 +14,29 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Goal Tracker App",
+  title: "Cadencia - Find Your Productive Rhythm",
   description: APP_DESCRIPTION,
   applicationName: APP_NAME,
   keywords: [
-    "SLMTRACK",
+    "Cadencia",
     "personal goal setting",
     "productivity tracker",
     "personal OKRs",
     "weekly schedule planner",
     "minimalist planning app",
+    "productivity rhythm",
   ],
   authors: [{ name: APP_NAME }],
   category: "productivity",
   openGraph: {
-    title: "Goal Tracker App",
+    title: "Cadencia - Find Your Productive Rhythm",
     description: APP_DESCRIPTION,
     siteName: APP_NAME,
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Goal Tracker App",
+    title: "Cadencia - Find Your Productive Rhythm",
     description: APP_DESCRIPTION,
   },
 };

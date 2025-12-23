@@ -86,7 +86,9 @@ export function safeLocalStorageSetItem(
  */
 export function cleanupOldScheduleEntries(): void {
   try {
-    const stored = window.localStorage.getItem("timespent-schedule-entries");
+    // Try new key first, fall back to legacy key
+    const stored = window.localStorage.getItem("cadencia-schedule-entries") ||
+                   window.localStorage.getItem("timespent-schedule-entries");
     if (!stored) return;
 
     const parsed = JSON.parse(stored) as Record<string, any>;
@@ -101,7 +103,7 @@ export function cleanupOldScheduleEntries(): void {
         `Cleaned up schedule entries: ${originalSize} → ${filteredSize} days (removed ${originalSize - filteredSize} old days)`
       );
       window.localStorage.setItem(
-        "timespent-schedule-entries",
+        "cadencia-schedule-entries",
         JSON.stringify(filtered)
       );
     }
@@ -114,23 +116,24 @@ export function cleanupOldScheduleEntries(): void {
         error.name === "NS_ERROR_DOM_QUOTA_REACHED")
     ) {
       console.warn("Removing corrupted schedule entries from localStorage");
-      window.localStorage.removeItem("timespent-schedule-entries");
+      window.localStorage.removeItem("cadencia-schedule-entries");
+      window.localStorage.removeItem("timespent-schedule-entries"); // Clean up legacy
     }
   }
 }
 
 /**
- * Emergency cleanup - removes all timespent localStorage data
+ * Emergency cleanup - removes all Cadencia localStorage data
  * Use this when localStorage is completely corrupted
  */
 export function emergencyCleanup(): void {
   const keys = Object.keys(window.localStorage);
-  const timespentKeys = keys.filter(key =>
-    key.startsWith("timespent-") || key.startsWith("slmtrack-")
+  const appKeys = keys.filter(key =>
+    key.startsWith("cadencia-") || key.startsWith("timespent-") || key.startsWith("slmtrack-")
   );
 
-  console.warn(`Emergency cleanup: removing ${timespentKeys.length} localStorage keys`);
-  timespentKeys.forEach(key => {
+  console.warn(`Emergency cleanup: removing ${appKeys.length} localStorage keys`);
+  appKeys.forEach(key => {
     window.localStorage.removeItem(key);
     console.log(`Removed: ${key}`);
   });
