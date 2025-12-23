@@ -231,3 +231,12 @@ body {
     font-size: 16px;
   }
 }
+
+/* Remove TinyMCE editor border or match it to background */
+.tox-tinymce {
+  border: none !important;
+}
+
+.tox .tox-edit-area__iframe {
+  border: none !important;
+}

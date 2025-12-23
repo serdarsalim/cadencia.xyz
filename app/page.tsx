@@ -4112,8 +4112,8 @@ const ProductivityGrid = ({
           });
           const quarterColor =
             Math.floor(monthIndex / 3) % 2 === 0
-              ? "text-[#5B8FF9]"
-              : "text-[#9b59b6]";
+              ? "text-amber-600"
+              : "text-cyan-600";
           return (
             <span key={`month-${monthIndex}`} className={`text-center font-medium sm:font-bold ${quarterColor}`}>
               {monthName}
@@ -4326,8 +4326,8 @@ const ProductivityGrid = ({
             });
             const quarterColor =
               Math.floor(monthIndex / 3) % 2 === 0
-                ? "text-[#5B8FF9]"
-                : "text-[#9b59b6]";
+                ? "text-amber-600"
+                : "text-cyan-600";
             return (
               <span key={`week-month-${monthIndex}`} className={`text-center font-medium sm:font-bold ${quarterColor}`}>
                 {monthName}
