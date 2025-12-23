@@ -3,24 +3,21 @@
 import dynamic from "next/dynamic";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-
-type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-
-type ProductivityScaleEntry = {
-  value: number;
-  label: string;
-  color: string;
-};
-
-type WeekMeta = {
-  weekNumber: number;
-  months: number[];
-  dayKeys: string[];
-  primaryMonth: number;
-  rangeLabel: string;
-  weekKey: string;
-  weekStart: Date;
-};
+import {
+  ProductivityGrid,
+  buildWeeksForYear,
+  getWeekStart,
+  formatWeekKey,
+  formatDayKey,
+  PRODUCTIVITY_SCALE_THREE,
+  PRODUCTIVITY_SCALE_FOUR,
+  type ProductivityScaleEntry,
+  type WeekMeta,
+  type WeekdayIndex,
+  type Goal,
+  type KeyResult,
+  type WeeklyNoteEntry,
+} from "@/app/page";
 
 type SharedWeeklyNote = {
   content: string;
@@ -71,625 +68,8 @@ const TinyEditor = dynamic(
 const TINYMCE_CDN =
   "https://cdnjs.cloudflare.com/ajax/libs/tinymce/8.1.2/tinymce.min.js";
 
-const PRODUCTIVITY_SCALE_THREE: ProductivityScaleEntry[] = [
-  { value: 0, label: "<25%", color: "productivity-low" },
-  { value: 1, label: "25-50%", color: "productivity-medium" },
-  { value: 2, label: ">50%", color: "productivity-high" },
-];
+// ProductivityGrid and helper functions are now imported from main page
 
-const PRODUCTIVITY_SCALE_FOUR: ProductivityScaleEntry[] = [
-  { value: 0, label: "<25%", color: "productivity-low" },
-  { value: 1, label: "25-50%", color: "productivity-medium" },
-  { value: 2, label: "50-75%", color: "productivity-high" },
-  { value: 3, label: ">75%", color: "productivity-top" },
-];
-
-const formatDayKey = (date: Date) =>
-  `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-
-const formatWeekKey = (weekStart: Date, weekStartDay: WeekdayIndex) =>
-  `week-${weekStartDay}-${formatDayKey(weekStart)}`;
-
-const getWeekStart = (date: Date, weekStartDay: WeekdayIndex = 1) => {
-  const start = new Date(date);
-  const day = start.getDay();
-  const diff = (day - weekStartDay + 7) % 7;
-  start.setDate(start.getDate() - diff);
-  start.setHours(0, 0, 0, 0);
-  return start;
-};
-
-const formatRangeLabel = (start: Date, end: Date) => {
-  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
-  const startLabel = `${start.toLocaleString(undefined, {
-    month: "short",
-  })} ${start.getDate()}`;
-  const endLabel = `${end.toLocaleString(undefined, {
-    month: "short",
-  })} ${end.getDate()}`;
-  return sameMonth ? `${startLabel}–${end.getDate()}` : `${startLabel} – ${endLabel}`;
-};
-
-const buildWeeksForYear = (year: number, weekStartDay: WeekdayIndex): WeekMeta[] => {
-  const weeks: WeekMeta[] = [];
-  const yearStart = new Date(year, 0, 1);
-  const yearEnd = new Date(year, 11, 31);
-  let currentStart = getWeekStart(yearStart, weekStartDay);
-  let weekCounter = 1;
-
-  while (currentStart <= yearEnd) {
-    const weekStart = new Date(currentStart);
-    const dayKeys: string[] = [];
-    const monthSet = new Set<number>();
-    const inYearDays: Date[] = [];
-    for (let i = 0; i < 7; i += 1) {
-      const day = new Date(weekStart);
-      day.setDate(weekStart.getDate() + i);
-      if (day.getFullYear() !== year) {
-        continue;
-      }
-      const monthIndex = day.getMonth();
-      monthSet.add(monthIndex);
-      dayKeys.push(`${year}-${monthIndex + 1}-${day.getDate()}`);
-      inYearDays.push(new Date(day));
-    }
-
-    if (dayKeys.length > 0) {
-      const monthCounts: Record<number, number> = {};
-      dayKeys.forEach((key) => {
-        const [, monthPart] = key.split("-");
-        const monthIndex = Number(monthPart) - 1;
-        if (!Number.isFinite(monthIndex)) {
-          return;
-        }
-        monthCounts[monthIndex] = (monthCounts[monthIndex] ?? 0) + 1;
-      });
-      const primaryMonth =
-        Object.entries(monthCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
-      const rangeLabel =
-        inYearDays.length > 0
-          ? formatRangeLabel(inYearDays[0]!, inYearDays[inYearDays.length - 1]!)
-          : "";
-      weeks.push({
-        weekNumber: weekCounter,
-        months: Array.from(monthSet.values()).sort((a, b) => a - b),
-        dayKeys,
-        primaryMonth: Number(primaryMonth),
-        rangeLabel,
-        weekKey: formatWeekKey(weekStart, weekStartDay),
-        weekStart: new Date(weekStart),
-      });
-      weekCounter += 1;
-    }
-
-    currentStart = new Date(weekStart);
-    currentStart.setDate(weekStart.getDate() + 7);
-  }
-
-  return weeks;
-};
-
-type ProductivityGridProps = {
-  year: number;
-  setYear: React.Dispatch<React.SetStateAction<number>>;
-  ratings: Record<string, number | null>;
-  dayOffs: Record<string, boolean>;
-  scale: ProductivityScaleEntry[];
-  mode: "day" | "week";
-  showLegend: boolean;
-  selectedWeekKey: string | null;
-  setSelectedWeekKey: React.Dispatch<React.SetStateAction<string | null>>;
-  weekStartDay: WeekdayIndex;
-  onToggleMode: () => void;
-};
-
-const ProductivityGrid = ({
-  year,
-  setYear,
-  ratings,
-  dayOffs,
-  scale,
-  mode,
-  showLegend,
-  selectedWeekKey,
-  setSelectedWeekKey,
-  weekStartDay,
-  onToggleMode,
-}: ProductivityGridProps) => {
-  const dayGridRef = useRef<HTMLDivElement | null>(null);
-  const [hoveredDayDisplay, setHoveredDayDisplay] = useState<{
-    label: string;
-    x: number;
-    y: number;
-  } | null>(null);
-  const days = Array.from({ length: 31 }, (_, idx) => idx + 1);
-  const months = Array.from({ length: 12 }, (_, idx) => idx);
-  const weeks = useMemo(() => buildWeeksForYear(year, weekStartDay), [year, weekStartDay]);
-  const weeksByMonth = useMemo(() => {
-    const grouped = Array.from({ length: 12 }, () => [] as WeekMeta[]);
-    weeks.forEach((week) => {
-      const bucket = Math.min(Math.max(week.primaryMonth, 0), 11);
-      grouped[bucket]!.push(week);
-    });
-    return grouped.map((monthWeeks) =>
-      monthWeeks.sort((a, b) => a.weekNumber - b.weekNumber)
-    );
-  }, [weeks]);
-  const [isYearMenuOpen, setIsYearMenuOpen] = useState(false);
-  const yearMenuRef = useRef<HTMLDivElement | null>(null);
-  const yearOptions = useMemo(() => [year - 1, year, year + 1], [year]);
-
-  useEffect(() => {
-    if (!isYearMenuOpen) return;
-    const handleClick = (event: MouseEvent) => {
-      if (!yearMenuRef.current) return;
-      if (event.target instanceof Node && !yearMenuRef.current.contains(event.target)) {
-        setIsYearMenuOpen(false);
-      }
-    };
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsYearMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isYearMenuOpen]);
-
-  const yearControl = (
-    <div ref={yearMenuRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsYearMenuOpen((prev) => !prev)}
-        className="flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-        aria-label="Select year"
-        aria-expanded={isYearMenuOpen}
-      >
-        {year}
-        <svg
-          aria-hidden="true"
-          className={`h-3 w-3 transition ${isYearMenuOpen ? "rotate-180" : ""}`}
-          viewBox="0 0 20 20"
-          fill="none"
-        >
-          <path
-            d="M5 7l5 6 5-6"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
-      {isYearMenuOpen ? (
-        <div className="absolute right-0 z-10 mt-2 w-36 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-1 shadow-lg">
-          {yearOptions.map((optionYear) => (
-            <button
-              key={optionYear}
-              type="button"
-              onClick={() => {
-                setYear(optionYear);
-                setIsYearMenuOpen(false);
-              }}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                optionYear === year
-                  ? "bg-foreground text-background"
-                  : "text-foreground hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
-              }`}
-            >
-              <span>{optionYear}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-
-  const daysInMonth = (targetYear: number, monthIndex: number) => {
-    return new Date(targetYear, monthIndex + 1, 0).getDate();
-  };
-
-  const handleDayHover = (
-    event: React.MouseEvent<HTMLButtonElement>,
-    monthIndex: number,
-    dayOfMonth: number
-  ) => {
-    if (mode !== "day") return;
-    const containerRect = dayGridRef.current?.getBoundingClientRect();
-    if (!containerRect) {
-      setHoveredDayDisplay(null);
-      return;
-    }
-    const date = new Date(year, monthIndex, dayOfMonth);
-    const label = date.toLocaleDateString(undefined, {
-      weekday: "short",
-      day: "2-digit",
-      month: "short",
-    });
-    const tooltipWidth = 140;
-    const tooltipHeight = 36;
-    const padding = 8;
-    const relativeX = event.clientX - containerRect.left;
-    const relativeY = event.clientY - containerRect.top;
-    const clampedX = Math.min(
-      containerRect.width - padding,
-      Math.max(tooltipWidth + padding, relativeX)
-    );
-    const clampedY = Math.min(
-      containerRect.height - padding,
-      Math.max(tooltipHeight + padding, relativeY)
-    );
-    setHoveredDayDisplay({
-      label,
-      x: clampedX,
-      y: clampedY,
-    });
-  };
-
-  const clearDayHover = () => {
-    setHoveredDayDisplay(null);
-  };
-
-  const renderDayGrid = () => (
-    <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6">
-      <div
-        className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
-        style={{
-          gridTemplateColumns: `repeat(12, minmax(0, 1fr))`,
-        }}
-      >
-        {months.map((monthIndex) => {
-          const monthName = new Date(2020, monthIndex).toLocaleString(undefined, {
-            month: "short",
-          });
-          const quarterColor =
-            Math.floor(monthIndex / 3) % 2 === 0
-              ? "text-[#5B8FF9]"
-              : "text-[#9b59b6]";
-          return (
-            <span key={`month-${monthIndex}`} className={`text-center font-medium sm:font-bold ${quarterColor}`}>
-              {monthName}
-            </span>
-          );
-        })}
-      </div>
-      <div
-        ref={dayGridRef}
-        className="relative mt-2"
-        onMouseLeave={clearDayHover}
-      >
-        {hoveredDayDisplay && (
-          <div
-            className="pointer-events-none absolute"
-            style={{
-              left: hoveredDayDisplay.x,
-              top: hoveredDayDisplay.y,
-              transform: "translate(-100%, -100%)",
-            }}
-          >
-            <span className="rounded-full border border-foreground bg-background px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-foreground shadow whitespace-nowrap">
-              {hoveredDayDisplay.label}
-            </span>
-          </div>
-        )}
-        {days.map((dayOfMonth) => {
-          return (
-          <div
-            key={`row-${dayOfMonth}`}
-            className="grid items-center"
-            style={{
-              gridTemplateColumns: `repeat(12, minmax(0, 1fr))`,
-              columnGap: "0.5rem",
-            }}
-          >
-            {months.map((monthIndex) => {
-              const key = `${year}-${monthIndex + 1}-${dayOfMonth}`;
-              const storedValue = ratings[key];
-              const hasValue =
-                storedValue !== null && storedValue !== undefined;
-              const currentValue = hasValue ? Math.min(storedValue!, scale.length - 1) : 0;
-              const scaleEntry = scale[currentValue];
-              const isDayOff = Boolean(dayOffs[key]);
-              const validDay =
-                dayOfMonth <= daysInMonth(year, monthIndex);
-
-              if (!validDay) {
-                return (
-                  <span
-                    key={`${key}-empty`}
-                    className="h-4 w-full rounded-sm border border-dashed border-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
-                    aria-hidden="true"
-                  />
-                );
-              }
-
-              const today = new Date();
-              const isToday =
-                today.getFullYear() === year &&
-                today.getMonth() === monthIndex &&
-                today.getDate() === dayOfMonth;
-
-              const isPreviousDayToday =
-                today.getFullYear() === year &&
-                today.getMonth() === monthIndex &&
-                today.getDate() === dayOfMonth - 1;
-
-              let weekBorderClass = "";
-              const currentWeek = weeks.find((week) =>
-                week.dayKeys.includes(`${year}-${monthIndex + 1}-${dayOfMonth}`)
-              );
-
-              if (currentWeek) {
-                const isFirstInMonth = !currentWeek.dayKeys.some((dayKey) => {
-                  const [y, m, d] = dayKey.split("-").map(Number);
-                  return y === year && m === monthIndex + 1 && d! < dayOfMonth;
-                });
-
-                const nextDayInWeek =
-                  dayOfMonth < daysInMonth(year, monthIndex) &&
-                  currentWeek.dayKeys.includes(
-                    `${year}-${monthIndex + 1}-${dayOfMonth + 1}`
-                  );
-
-                const borderTop = isPreviousDayToday
-                  ? "border-t-2 border-t-yellow-400"
-                  : isFirstInMonth
-                    ? "border-t border-t-gray-400"
-                    : "border-t-[0.5px] border-t-gray-300";
-                const borderBottom = !nextDayInWeek
-                  ? "border-b border-b-gray-400"
-                  : "border-b-[0.5px] border-b-gray-300";
-                const borderSides =
-                  "border-l border-r border-l-gray-400 border-r-gray-400";
-
-                weekBorderClass = `${borderTop} ${borderBottom} ${borderSides}`;
-
-                const isSelectedWeek = selectedWeekKey === currentWeek.weekKey;
-                if (isSelectedWeek) {
-                  const isFirstDayOfWeek =
-                    currentWeek.dayKeys[0] ===
-                    `${year}-${monthIndex + 1}-${dayOfMonth}`;
-                  const isLastDayOfWeek =
-                    currentWeek.dayKeys[currentWeek.dayKeys.length - 1] ===
-                    `${year}-${monthIndex + 1}-${dayOfMonth}`;
-                  let selectedWeekBorders = "";
-                  if (isFirstDayOfWeek) {
-                    selectedWeekBorders =
-                      "border-t-2 border-t-slate-700 border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
-                  } else if (isLastDayOfWeek) {
-                    selectedWeekBorders =
-                      "border-b-2 border-b-slate-700 border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
-                  } else {
-                    selectedWeekBorders =
-                      "border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
-                  }
-                  weekBorderClass = `${weekBorderClass} ${selectedWeekBorders}`;
-                }
-              }
-
-              return (
-                <button
-                  type="button"
-                  key={key}
-                  onClick={() => {
-                    if (currentWeek) {
-                      setSelectedWeekKey(currentWeek.weekKey);
-                    }
-                  }}
-                  onMouseEnter={(event) =>
-                    handleDayHover(event, monthIndex, dayOfMonth)
-                  }
-                  className={`h-4 w-full text-[10px] font-semibold text-transparent transition focus:text-transparent ${weekBorderClass} ${
-                    isDayOff
-                      ? "bg-[#8dc8e6]"
-                      : hasValue
-                        ? scaleEntry.color
-                        : "bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]"
-                  } ${
-                    isToday
-                      ? "ring-2 ring-yellow-400 shadow-[0_0_12px_rgba(250,204,21,0.4)]"
-                      : ""
-                  }`}
-                  aria-label={`Day ${dayOfMonth} of ${new Date(2020, monthIndex).toLocaleString(undefined, {
-                    month: "long",
-                  })}, rating ${scaleEntry.label}`}
-                >
-                  {hasValue ? currentValue : ""}
-                </button>
-              );
-            })}
-          </div>
-        );
-        })}
-      </div>
-      <div className={`mt-6 flex items-center text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:text-xs ${showLegend ? "justify-between" : "justify-end"}`}>
-        {showLegend && (
-          <div className="flex flex-col gap-2">
-            <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
-              Goals achieved (self-rated)
-            </span>
-            <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
-              {scale.map((item) => (
-                <div key={item.value} className="flex items-center gap-2 whitespace-nowrap">
-                  <span
-                    className={`h-3 w-3 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4`}
-                    aria-hidden="true"
-                  />
-                  <span>{item.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        <div className={`flex items-start gap-2 ${showLegend ? "flex-col sm:flex-row sm:items-center sm:gap-3" : "flex-row items-center"}`}>
-          {yearControl}
-          <button
-            type="button"
-            onClick={onToggleMode}
-            className="flex items-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-          >
-            {mode === "week" ? "Week" : "Day"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderWeekGrid = () => {
-    return (
-      <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6">
-        <div
-          className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
-          style={{
-            gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
-          }}
-        >
-          {months.map((monthIndex) => {
-            const monthName = new Date(2020, monthIndex).toLocaleString(undefined, {
-              month: "short",
-            });
-            const quarterColor =
-              Math.floor(monthIndex / 3) % 2 === 0
-                ? "text-[#5B8FF9]"
-                : "text-[#9b59b6]";
-            return (
-              <span key={`week-month-${monthIndex}`} className={`text-center font-medium sm:font-bold ${quarterColor}`}>
-                {monthName}
-              </span>
-            );
-          })}
-        </div>
-        <div
-          className="mt-4 grid gap-2 sm:gap-3"
-          style={{
-            gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
-          }}
-        >
-          {months.map((monthIndex) => (
-            <div key={`month-col-${monthIndex}`} className="space-y-1 sm:space-y-2">
-              {weeksByMonth[monthIndex]!.map((week) => {
-                const dayScores = week.dayKeys
-                  .map((key) =>
-                    ratings[key] !== null && ratings[key] !== undefined
-                      ? (ratings[key] as number)
-                      : null
-                  )
-                  .filter((value): value is number => value !== null);
-                const hasDayScores = dayScores.length > 0;
-                const dayAverage = hasDayScores
-                  ? Number(
-                      (
-                        dayScores.reduce((sum, value) => sum + value, 0) /
-                        dayScores.length
-                      ).toFixed(1)
-                    )
-                  : null;
-                const manualWeekKey = week.weekKey;
-                const manualScoreRaw = ratings[manualWeekKey];
-                const manualScore =
-                  manualScoreRaw !== null && manualScoreRaw !== undefined
-                    ? (manualScoreRaw as number)
-                    : null;
-                const displayValue = hasDayScores
-                  ? ""
-                  : manualScore ?? "";
-                const colorIndex = hasDayScores
-                  ? Math.max(
-                      0,
-                      Math.min(
-                        scale.length - 1,
-                        Math.round(dayAverage ?? 0)
-                      )
-                    )
-                  : manualScore !== null && manualScore !== undefined
-                    ? Math.min(manualScore, scale.length - 1)
-                    : null;
-                const scaleClass =
-                  colorIndex !== null && colorIndex !== undefined
-                    ? scale[colorIndex].color
-                    : "bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]";
-                const isSelectedWeek = selectedWeekKey === week.weekKey;
-                const dayOffCount = week.dayKeys.reduce(
-                  (count, dayKey) => count + (dayOffs[dayKey] ? 1 : 0),
-                  0
-                );
-                const isFullWeekOff = dayOffCount === week.dayKeys.length;
-                const hasAnyDayOff = dayOffCount > 0;
-                const weekFillClass = isFullWeekOff ? "bg-[#8dc8e6]" : scaleClass;
-                const showPartialDayOff = !isFullWeekOff && hasAnyDayOff;
-                return (
-                  <div key={`week-card-${week.weekNumber}`}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedWeekKey(week.weekKey)}
-                      className={`relative flex h-5 w-full items-center justify-center rounded-sm border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:h-4 ${
-                        hasDayScores
-                          ? "cursor-pointer"
-                          : "hover:opacity-90"
-                      } ${weekFillClass} border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] ${
-                        isSelectedWeek ? "border-black" : ""
-                      }`}
-                      title={`${week.rangeLabel}${hasDayScores ? " (rating locked from daily view)" : ""}`}
-                      aria-label={
-                        hasDayScores
-                          ? `Week ${week.weekNumber} ${week.rangeLabel}, averaged score ${dayAverage}, click to select week`
-                          : `Week ${week.weekNumber} ${week.rangeLabel}, current score ${manualScore ?? "unset"}, click to select week`
-                      }
-                    >
-                      {showPartialDayOff ? (
-                        <span
-                          aria-hidden="true"
-                          className="absolute h-2 w-2 rounded-full bg-[#8dc8e6] ring-1 ring-white"
-                        />
-                      ) : null}
-                      {displayValue}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-        <div className={`mt-6 flex items-center text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:text-xs ${showLegend ? "justify-between" : "justify-end"}`}>
-          {showLegend && (
-            <div className="flex flex-col gap-2">
-              <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
-                Goals achieved (self-rated)
-              </span>
-              <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
-                {scale.map((item) => (
-                  <div key={item.value} className="flex items-center gap-2 whitespace-nowrap">
-                    <span
-                      className={`h-3 w-3 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4`}
-                      aria-hidden="true"
-                    />
-                    <span>{item.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        <div className={`flex items-start gap-2 ${showLegend ? "flex-col sm:flex-row sm:items-center sm:gap-3" : "flex-row items-center"}`}>
-          {yearControl}
-          <button
-            type="button"
-            onClick={onToggleMode}
-            className="flex items-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-            >
-              {mode === "week" ? "Week" : "Day"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  return mode === "day" ? renderDayGrid() : renderWeekGrid();
-};
 
 export default function SharedPage({
   params,
@@ -823,18 +203,62 @@ export default function SharedPage({
         </div>
       )}
       <main className="flex flex-1 items-start justify-center px-4">
-        <div className="w-full py-6 text-center">
+        <div className="w-full py-6 text-center mb-[200px]">
           <div className="mb-6 text-sm uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
             Shared by {data.owner.personName || data.owner.email || "Account"}
           </div>
           {selectedWeek && (
-            <div className="mb-6">
-              <div className="text-[10px] uppercase tracking-[0.4em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-                Week of
+            <div className="mb-6 flex items-center justify-center gap-4">
+              <button
+                type="button"
+                onClick={() => {
+                  const currentIndex = weeksForYear.findIndex(w => w.weekKey === selectedWeekKey);
+                  if (currentIndex > 0) {
+                    setSelectedWeekKey(weeksForYear[currentIndex - 1]!.weekKey);
+                  } else {
+                    // Go to last week of previous year
+                    setProductivityYear(prev => prev - 1);
+                    const prevYear = productivityYear - 1;
+                    const prevYearWeeks = buildWeeksForYear(prevYear, data.profile.weekStartDay);
+                    if (prevYearWeeks.length > 0) {
+                      setSelectedWeekKey(prevYearWeeks[prevYearWeeks.length - 1]!.weekKey);
+                    }
+                  }
+                }}
+                className="rounded-full px-2 py-1 text-xs transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+                aria-label="Previous week"
+              >
+                ←
+              </button>
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.4em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
+                  Week of
+                </div>
+                <h1 className="text-base sm:text-lg font-semibold uppercase tracking-[0.3em] text-foreground">
+                  {selectedWeek.rangeLabel}, {selectedWeek.weekStart.getFullYear()}
+                </h1>
               </div>
-              <h1 className="text-base sm:text-lg font-semibold uppercase tracking-[0.3em] text-foreground">
-                {selectedWeek.rangeLabel}
-              </h1>
+              <button
+                type="button"
+                onClick={() => {
+                  const currentIndex = weeksForYear.findIndex(w => w.weekKey === selectedWeekKey);
+                  if (currentIndex < weeksForYear.length - 1) {
+                    setSelectedWeekKey(weeksForYear[currentIndex + 1]!.weekKey);
+                  } else {
+                    // Go to first week of next year
+                    setProductivityYear(prev => prev + 1);
+                    const nextYear = productivityYear + 1;
+                    const nextYearWeeks = buildWeeksForYear(nextYear, data.profile.weekStartDay);
+                    if (nextYearWeeks.length > 0) {
+                      setSelectedWeekKey(nextYearWeeks[0]!.weekKey);
+                    }
+                  }
+                }}
+                className="rounded-full px-2 py-1 text-xs transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+                aria-label="Next week"
+              >
+                →
+              </button>
             </div>
           )}
           <section
@@ -857,6 +281,7 @@ export default function SharedPage({
                 onToggleMode={() =>
                   setProductivityMode((prev) => (prev === "day" ? "week" : "day"))
                 }
+                readOnly={true}
               />
               {productivityMode === "week" && dosDontsPanel ? (
                 <div className="mt-4 hidden lg:block">{dosDontsPanel}</div>

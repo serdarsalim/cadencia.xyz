@@ -3667,20 +3667,21 @@ type ProductivityGridProps = {
   year: number;
   setYear: React.Dispatch<React.SetStateAction<number>>;
   ratings: Record<string, number | null>;
-  setRatings: React.Dispatch<React.SetStateAction<Record<string, number | null>>>;
+  setRatings?: React.Dispatch<React.SetStateAction<Record<string, number | null>>>;
   dayOffs: Record<string, boolean>;
-  setDayOffs: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  setDayOffs?: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   scale: ProductivityScaleEntry[];
   mode: "day" | "week";
   showLegend: boolean;
   onToggleMode: () => void;
-  dayOffMode: boolean;
-  setDayOffMode: React.Dispatch<React.SetStateAction<boolean>>;
-  dayOffsRemaining: number;
-  dayOffAllowance: number;
+  dayOffMode?: boolean;
+  setDayOffMode?: React.Dispatch<React.SetStateAction<boolean>>;
+  dayOffsRemaining?: number;
+  dayOffAllowance?: number;
   selectedWeekKey: string | null;
   setSelectedWeekKey: React.Dispatch<React.SetStateAction<string | null>>;
   weekStartDay: WeekdayIndex;
+  readOnly?: boolean;
 };
 
 const ProductivityGrid = ({
@@ -3694,13 +3695,14 @@ const ProductivityGrid = ({
   mode,
   showLegend,
   onToggleMode,
-  dayOffMode,
+  dayOffMode = false,
   setDayOffMode,
-  dayOffsRemaining,
-  dayOffAllowance,
+  dayOffsRemaining = 0,
+  dayOffAllowance = 0,
   selectedWeekKey,
   setSelectedWeekKey,
   weekStartDay,
+  readOnly = false,
 }: ProductivityGridProps) => {
   const dayGridRef = useRef<HTMLDivElement | null>(null);
   const [hoveredDayDisplay, setHoveredDayDisplay] = useState<{
@@ -3867,7 +3869,7 @@ const ProductivityGrid = ({
           </div>
           <button
             type="button"
-            onClick={() => setDayOffMode((prev) => !prev)}
+            onClick={() => setDayOffMode?.((prev) => !prev)}
             className={`mt-3 w-full rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
               dayOffMode
                 ? "border-[#8dc8e6] bg-[#eef7fc] text-[#3f6f88]"
@@ -3899,7 +3901,10 @@ const ProductivityGrid = ({
       }
     }
 
-    if (dayOffMode) {
+    // Don't allow editing in read-only mode
+    if (readOnly) return;
+
+    if (dayOffMode && setDayOffs) {
       setDayOffs((prev) => {
         const next = { ...prev };
         const hasRating = ratings[key] !== null && ratings[key] !== undefined;
@@ -3917,19 +3922,21 @@ const ProductivityGrid = ({
       return;
     }
 
-    setRatings((prev) => {
-      const current = prev[key];
-      let next: number | null;
-      if (current === undefined || current === null) {
-        next = 0;
-      } else if (current >= scale.length - 1) {
-        next = null;
-      } else {
-        next = (current + 1) as number;
-      }
+    if (setRatings) {
+      setRatings((prev) => {
+        const current = prev[key];
+        let next: number | null;
+        if (current === undefined || current === null) {
+          next = 0;
+        } else if (current >= scale.length - 1) {
+          next = null;
+        } else {
+          next = (current + 1) as number;
+        }
 
-      return { ...prev, [key]: next };
-    });
+        return { ...prev, [key]: next };
+      });
+    }
   };
 
   const handleWeekCycle = (weekKey: string, hasDayScores: boolean) => {
@@ -3939,7 +3946,9 @@ const ProductivityGrid = ({
       return;
     }
 
-    if (dayOffMode) {
+    if (readOnly) return;
+
+    if (dayOffMode && setDayOffs) {
       const targetWeek = weeks.find((week) => week.weekKey === weekKey);
       if (!targetWeek) {
         return;
@@ -3968,7 +3977,7 @@ const ProductivityGrid = ({
     }
 
     // Only cycle rating if there are no day scores
-    if (!hasDayScores) {
+    if (!hasDayScores && setRatings) {
       setRatings((prev) => {
         const current = prev[key];
         let next: number | null;
@@ -4173,7 +4182,7 @@ const ProductivityGrid = ({
                     handleDayHover(event, monthIndex, dayOfMonth)
                   }
                   onKeyDown={(e) => {
-                    if (e.key === "Delete" || e.key === "Backspace") {
+                    if (!readOnly && setRatings && (e.key === "Delete" || e.key === "Backspace")) {
                       e.preventDefault();
                       setRatings((prev) => ({ ...prev, [key]: null }));
                     }
@@ -4221,9 +4230,9 @@ const ProductivityGrid = ({
           </div>
         )}
         <div className="flex flex-row items-center gap-2 sm:gap-3">
-          {yearControl}
+          {/* {yearControl} */}
           {toggleButton}
-          {dayOffControl}
+          {!readOnly && dayOffControl}
         </div>
           </div>
         </div>
@@ -4317,7 +4326,7 @@ const ProductivityGrid = ({
                       type="button"
                       onClick={() => handleWeekCycle(week.weekKey, hasDayScores)}
                       onKeyDown={(e) => {
-                        if (!hasDayScores && (e.key === "Delete" || e.key === "Backspace")) {
+                        if (!readOnly && setRatings && !hasDayScores && (e.key === "Delete" || e.key === "Backspace")) {
                           e.preventDefault();
                           const key = week.weekKey;
                           setRatings((prev) => ({ ...prev, [key]: null }));
@@ -4365,9 +4374,9 @@ const ProductivityGrid = ({
             </div>
           )}
         <div className="flex flex-row items-center gap-2 sm:gap-3">
-          {yearControl}
+          {/* {yearControl} */}
           {toggleButton}
-          {dayOffControl}
+          {!readOnly && dayOffControl}
         </div>
         </div>
     </div>
@@ -5527,3 +5536,7 @@ const buildDemoWeeklyNotes = (
   });
   return notes;
 };
+
+// Export for shared page
+export { ProductivityGrid, buildWeeksForYear, getWeekStart, formatWeekKey, parseWeekKey, formatDayKey, PRODUCTIVITY_SCALE_THREE, PRODUCTIVITY_SCALE_FOUR };
+export type { ProductivityGridProps, ProductivityScaleEntry, WeekMeta, WeekdayIndex, KeyResult, KeyResultStatus, Goal, WeeklyNoteEntry };
