@@ -4254,9 +4254,23 @@ const ProductivityGrid = ({
                     handleDayHover(event, monthIndex, dayOfMonth)
                   }
                   onKeyDown={(e) => {
-                    if (!readOnly && setRatings && (e.key === "Delete" || e.key === "Backspace")) {
-                      e.preventDefault();
-                      setRatings((prev) => ({ ...prev, [key]: null }));
+                    if (!readOnly && setRatings) {
+                      // Handle Delete/Backspace to clear rating
+                      if (e.key === "Delete" || e.key === "Backspace") {
+                        e.preventDefault();
+                        setRatings((prev) => ({ ...prev, [key]: null }));
+                      }
+                      // Handle number keys 1-4 to set rating directly
+                      else if (e.key >= "1" && e.key <= "4") {
+                        const ratingValue = parseInt(e.key) - 1; // Map 1→0, 2→1, 3→2, 4→3
+                        // Only allow if within the current scale range
+                        if (ratingValue < scale.length) {
+                          e.preventDefault();
+                          if (!dayOffs[key]) { // Don't allow rating if day is marked as day off
+                            setRatings((prev) => ({ ...prev, [key]: ratingValue }));
+                          }
+                        }
+                      }
                     }
                   }}
                   className={`h-4 w-full text-[10px] font-semibold text-transparent transition focus:text-transparent relative ${weekBorderClass} ${
@@ -4418,10 +4432,22 @@ const ProductivityGrid = ({
                       type="button"
                       onClick={() => handleWeekCycle(week.weekKey, hasDayScores)}
                       onKeyDown={(e) => {
-                        if (!readOnly && setRatings && !hasDayScores && (e.key === "Delete" || e.key === "Backspace")) {
-                          e.preventDefault();
+                        if (!readOnly && setRatings && !hasDayScores) {
                           const key = week.weekKey;
-                          setRatings((prev) => ({ ...prev, [key]: null }));
+                          // Handle Delete/Backspace to clear rating
+                          if (e.key === "Delete" || e.key === "Backspace") {
+                            e.preventDefault();
+                            setRatings((prev) => ({ ...prev, [key]: null }));
+                          }
+                          // Handle number keys 1-4 to set rating directly
+                          else if (e.key >= "1" && e.key <= "4") {
+                            const ratingValue = parseInt(e.key) - 1; // Map 1→0, 2→1, 3→2, 4→3
+                            // Only allow if within the current scale range
+                            if (ratingValue < scale.length) {
+                              e.preventDefault();
+                              setRatings((prev) => ({ ...prev, [key]: ratingValue }));
+                            }
+                          }
                         }
                       }}
                       className={`relative flex h-5 w-full items-center justify-center border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:h-4 ${
