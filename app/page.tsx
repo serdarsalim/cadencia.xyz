@@ -2443,7 +2443,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             resizeTextareaToFit(target);
           }}
           placeholder="Behaviors to reinforce"
-          className="min-h-22 resize-none overflow-hidden border-none bg-transparent p-2 text-[13px] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)] sm:text-sm textarea-text-color"
+          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)] sm:px-2 sm:text-sm textarea-text-color"
           style={{ height: "auto" }}
         />
       </label>
@@ -2463,7 +2463,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             resizeTextareaToFit(target);
           }}
           placeholder="Behaviors to avoid"
-          className="min-h-22 resize-none overflow-hidden border-none bg-transparent p-2 text-[13px] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)] sm:text-sm textarea-text-color"
+          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)] sm:px-2 sm:text-sm textarea-text-color"
           style={{ height: "auto" }}
         />
       </label>
