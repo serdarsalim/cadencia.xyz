@@ -483,6 +483,7 @@ export default function Home() {
   const [email, setEmail] = useState<string>("");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isShareEditorVisible, setIsShareEditorVisible] = useState(false);
+  const [isWeeklyTemplateEditorOpen, setIsWeeklyTemplateEditorOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>("light");
   const [recentYears, setRecentYears] = useState<string>("10");
   const [view, setView] = useState<ViewMode>(() => {
@@ -2812,7 +2813,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           </>
         ) : (
           <div className="w-full max-w-3xl okr-card p-6">
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-6 lg:grid-cols-2">
               <input
                 type="text"
                 value={newGoalTitle}
@@ -2979,19 +2980,30 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     <span className="block text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
                       Weekly goals
                     </span>
-                    {selectedWeekKey && isWeeklyGoalsEmpty && templateContentText ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateWeeklyNoteEntry(selectedWeekKey, {
-                            content: weeklyGoalsTemplate,
-                          })
-                        }
-                        className="text-[10px] uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:text-foreground"
-                      >
-                        Use template
-                      </button>
-                    ) : null}
+                    <div className="flex items-center gap-3">
+                      {selectedWeekKey && isWeeklyGoalsEmpty && templateContentText ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateWeeklyNoteEntry(selectedWeekKey, {
+                              content: weeklyGoalsTemplate,
+                            })
+                          }
+                          className="text-[10px] uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:text-foreground"
+                        >
+                          Use template
+                        </button>
+                      ) : null}
+                      {selectedWeekKey && isWeeklyGoalsEmpty && templateContentText ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsWeeklyTemplateEditorOpen(true)}
+                          className="text-[10px] uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:text-foreground"
+                        >
+                          (Edit)
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                   <TinyEditor
                     key={selectedWeekKey ? `week-notes-${selectedWeekKey}` : `productivity-goal-${productivityYear}`}
@@ -3156,27 +3168,29 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 </div>
               </label>
               <label className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col gap-2 sm:items-start">
                   <span className="text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
                     Week starts
                   </span>
-                  {[0, 1].map((day) => (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => setWeekStartDay(day as WeekdayIndex)}
-                      className={`rounded-full border px-3 py-1 text-[10px] transition sm:px-4 sm:py-1.5 sm:text-xs ${
-                        weekStartDay === day
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:border-foreground"
-                      }`}
-                    >
-                      {day === 0 ? "Sunday" : "Monday"}
-                    </button>
-                  ))}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[0, 1].map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => setWeekStartDay(day as WeekdayIndex)}
+                        className={`rounded-full border px-3 py-1 text-[10px] transition sm:px-4 sm:py-1.5 sm:text-xs ${
+                          weekStartDay === day
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:border-foreground"
+                        }`}
+                      >
+                        {day === 0 ? "Sunday" : "Monday"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </label>
-              <div className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] lg:col-span-2 flex flex-wrap items-center gap-2 justify-between sm:justify-start">
+              <div className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] lg:col-span-2 flex flex-col gap-2 sm:flex-col sm:items-start">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
                   Work days
                 </span>
@@ -3217,46 +3231,72 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   ))}
                 </div>
               </div>
-              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] lg:col-span-2">
-                Weekly goals template
-                <div className="mt-2 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent p-2">
-                  <TinyEditor
-                    tinymceScriptSrc={TINYMCE_CDN}
-                    value={weeklyGoalsTemplate}
-                    init={
-                      {
-                        menubar: false,
-                        statusbar: false,
-                        height: 300,
-                        license_key: "gpl",
-                        plugins: "lists quickbars link",
-                        skin: theme === "dark" ? "oxide-dark" : "oxide",
-                        content_css: false,
-                        toolbar: false,
-                        quickbars_selection_toolbar: "bold italic bullist numlist link",
-                        quickbars_insert_toolbar: false,
-                        content_style: `
-                          body {
-                            background-color: transparent !important;
-                            color: #0f172a !important;
-                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                            font-size: 15px;
-                            padding: 8px;
-                            margin: 0;
-                          }
-                          * {
-                            background-color: transparent !important;
-                          }
-                        `,
-                        branding: false,
-                      } as Record<string, unknown>
-                    }
-                    onEditorChange={(content) =>
-                      setWeeklyGoalsTemplate(normalizeWeeklyGoalsTemplate(content))
-                    }
-                  />
-                </div>
-              </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isWeeklyTemplateEditorOpen && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4 overflow-y-auto"
+          onClick={() => setIsWeeklyTemplateEditorOpen(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 text-left shadow-2xl my-8 max-h-[90vh] overflow-y-auto"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                  Weekly goals template
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWeeklyTemplateEditorOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent p-2">
+              <TinyEditor
+                tinymceScriptSrc={TINYMCE_CDN}
+                value={weeklyGoalsTemplate}
+                init={
+                  {
+                    menubar: false,
+                    statusbar: false,
+                    height: 300,
+                    license_key: "gpl",
+                    plugins: "lists quickbars link",
+                    skin: theme === "dark" ? "oxide-dark" : "oxide",
+                    content_css: false,
+                    toolbar: false,
+                    quickbars_selection_toolbar: "bold italic bullist numlist link",
+                    quickbars_insert_toolbar: false,
+                    content_style: `
+                      body {
+                        background-color: transparent !important;
+                        color: #0f172a !important;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                        font-size: 15px;
+                        padding: 8px;
+                        margin: 0;
+                      }
+                      * {
+                        background-color: transparent !important;
+                      }
+                    `,
+                    branding: false,
+                  } as Record<string, unknown>
+                }
+                onEditorChange={(content) =>
+                  setWeeklyGoalsTemplate(normalizeWeeklyGoalsTemplate(content))
+                }
+              />
             </div>
           </div>
         </div>
