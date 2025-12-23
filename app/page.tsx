@@ -2929,6 +2929,10 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   className="space-y-4 order-2 lg:order-1"
                   data-print-hidden={printOptions.showCalendar ? "false" : "true"}
                 >
+                  <div
+                    className="rounded-3xl p-6"
+                    style={{ backgroundColor: theme === "dark" ? "#1a1412" : "#fef8f0" }}
+                  >
                   <ProductivityGrid
                     year={productivityYear}
                     setYear={setProductivityYear}
@@ -2967,6 +2971,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     setSelectedWeekKey={setSelectedWeekKey}
                     weekStartDay={weekStartDay}
                   />
+                  </div>
                   {productivityMode === "week" && dosDontsPanel ? (
                     <div className="mt-4 hidden lg:block">{dosDontsPanel}</div>
                   ) : null}
