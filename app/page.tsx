@@ -521,6 +521,7 @@ export default function Home() {
   );
   const [dayOffAllowance, setDayOffAllowance] = useState(15);
   const [workDays, setWorkDays] = useState<WeekdayIndex[]>([0, 1, 2, 3, 4, 5, 6]);
+  const [autoMarkWeekendsOff, setAutoMarkWeekendsOff] = useState(false);
   const [dayOffs, setDayOffs] = useState<Record<string, boolean>>({});
   const [isDayOffMode, setIsDayOffMode] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
@@ -1062,6 +1063,9 @@ export default function Home() {
               if (profile.workDays) {
                 const parsedWorkDays = profile.workDays.split(',').map((d: string) => Number(d)).filter((d: number) => d >= 0 && d <= 6) as WeekdayIndex[];
                 setWorkDays(parsedWorkDays.length > 0 ? parsedWorkDays : [0, 1, 2, 3, 4, 5, 6]);
+              }
+              if (profile.autoMarkWeekendsOff !== undefined && profile.autoMarkWeekendsOff !== null) {
+                setAutoMarkWeekendsOff(profile.autoMarkWeekendsOff);
               }
               if (profile.recentYears) {
                 nextRecentYears = profile.recentYears;
@@ -2955,6 +2959,17 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     selectedWeekKey={selectedWeekKey}
                     setSelectedWeekKey={setSelectedWeekKey}
                     weekStartDay={weekStartDay}
+                    autoMarkWeekendsOff={autoMarkWeekendsOff}
+                    setAutoMarkWeekendsOff={setAutoMarkWeekendsOff}
+                    workDays={workDays}
+                    isDemoMode={isDemoMode}
+                    personName={personName}
+                    dateOfBirth={dateOfBirth}
+                    recentYears={recentYears}
+                    goalsSectionTitle={goalsSectionTitle}
+                    productivityScaleMode={productivityScaleMode}
+                    weeklyGoalsTemplate={weeklyGoalsTemplate}
+                    productivityMode={productivityMode}
                   />
                   {productivityMode === "week" && dosDontsPanel ? (
                     <div className="mt-4 hidden lg:block">{dosDontsPanel}</div>
@@ -3741,6 +3756,17 @@ type ProductivityGridProps = {
   setSelectedWeekKey: React.Dispatch<React.SetStateAction<string | null>>;
   weekStartDay: WeekdayIndex;
   readOnly?: boolean;
+  autoMarkWeekendsOff?: boolean;
+  setAutoMarkWeekendsOff?: React.Dispatch<React.SetStateAction<boolean>>;
+  workDays?: WeekdayIndex[];
+  isDemoMode?: boolean;
+  personName?: string;
+  dateOfBirth?: string;
+  recentYears?: string;
+  goalsSectionTitle?: string;
+  productivityScaleMode?: string;
+  weeklyGoalsTemplate?: string;
+  productivityMode?: "day" | "week";
 };
 
 const ProductivityGrid = ({
@@ -3762,6 +3788,17 @@ const ProductivityGrid = ({
   setSelectedWeekKey,
   weekStartDay,
   readOnly = false,
+  autoMarkWeekendsOff = false,
+  setAutoMarkWeekendsOff,
+  workDays = [0, 1, 2, 3, 4, 5, 6],
+  isDemoMode = false,
+  personName = "",
+  dateOfBirth = "",
+  recentYears = "10",
+  goalsSectionTitle = "2026 GOALS",
+  productivityScaleMode = "3",
+  weeklyGoalsTemplate = "",
+  productivityMode = "day",
 }: ProductivityGridProps) => {
   const dayGridRef = useRef<HTMLDivElement | null>(null);
   const [hoveredDayDisplay, setHoveredDayDisplay] = useState<{
@@ -3769,6 +3806,27 @@ const ProductivityGrid = ({
     x: number;
     y: number;
   } | null>(null);
+
+  // Helper function to check if a day is a weekend (not in workDays)
+  const isWeekend = (yearVal: number, monthIndex: number, dayOfMonth: number): boolean => {
+    const date = new Date(yearVal, monthIndex, dayOfMonth);
+    const dayOfWeek = date.getDay() as WeekdayIndex;
+    return !workDays.includes(dayOfWeek);
+  };
+
+  // Helper function to check if a day should be marked as day off
+  const isDayOffComputed = (key: string, yearVal: number, monthIndex: number, dayOfMonth: number): boolean => {
+    // Manual day-off always takes precedence
+    if (dayOffs[key] !== undefined) {
+      return dayOffs[key];
+    }
+    // If auto-mark weekends is enabled and this is a weekend, mark it as day off
+    if (autoMarkWeekendsOff && isWeekend(yearVal, monthIndex, dayOfMonth)) {
+      return true;
+    }
+    return false;
+  };
+
   const days = Array.from({ length: 31 }, (_, idx) => idx + 1);
   const months = Array.from({ length: 12 }, (_, idx) => idx);
   const weeks = useMemo(() => buildWeeksForYear(year, weekStartDay), [year, weekStartDay]);
@@ -3937,6 +3995,34 @@ const ProductivityGrid = ({
           >
             {dayOffMode ? "Stop selecting" : "Add/remove day off"}
           </button>
+          <label className="mt-3 flex cursor-pointer items-center gap-2 text-[11px] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]">
+            <input
+              type="checkbox"
+              checked={autoMarkWeekendsOff}
+              onChange={(e) => {
+                const newValue = e.target.checked;
+                setAutoMarkWeekendsOff?.(newValue);
+                if (!isDemoMode) {
+                  saveProfile({
+                    personName,
+                    dateOfBirth,
+                    weekStartDay,
+                    recentYears,
+                    goalsSectionTitle,
+                    productivityScaleMode,
+                    showLegend,
+                    weeklyGoalsTemplate,
+                    dayOffAllowance,
+                    workDays: workDays.join(','),
+                    productivityViewMode: productivityMode,
+                    autoMarkWeekendsOff: newValue,
+                  });
+                }
+              }}
+              className="h-3.5 w-3.5 cursor-pointer rounded border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] accent-[#3f6f88]"
+            />
+            <span>Auto-mark weekends as time off</span>
+          </label>
         </div>
       ) : null}
     </div>
@@ -3977,7 +4063,9 @@ const ProductivityGrid = ({
       return;
     }
 
-    if (dayOffs[key]) {
+    // Check if day is marked as day off (manual or auto-weekend)
+    const isCurrentDayOff = isDayOffComputed(key, year, monthIndex, day);
+    if (isCurrentDayOff) {
       return;
     }
 
@@ -4157,7 +4245,7 @@ const ProductivityGrid = ({
                 storedValue !== null && storedValue !== undefined;
               const currentValue = hasValue ? Math.min(storedValue!, scale.length - 1) : 0;
               const scaleEntry = scale[currentValue];
-              const isDayOff = Boolean(dayOffs[key]);
+              const isDayOff = isDayOffComputed(key, year, monthIndex, dayOfMonth);
               const validDay =
                 dayOfMonth <= daysInMonth(year, monthIndex);
 
@@ -4201,13 +4289,13 @@ const ProductivityGrid = ({
                 const nextDayInWeek = dayOfMonth < daysInMonth(year, monthIndex) && currentWeek.dayKeys.includes(`${year}-${monthIndex + 1}-${dayOfMonth + 1}`);
 
                 // Check if current day or previous day has a rating/color or is a day off
-                const currentDayHasColor = (ratings[key] !== null && ratings[key] !== undefined) || dayOffs[key];
+                const currentDayHasColor = (ratings[key] !== null && ratings[key] !== undefined) || isDayOffComputed(key, year, monthIndex, dayOfMonth);
                 const previousDayKey = `${year}-${monthIndex + 1}-${dayOfMonth - 1}`;
-                const previousDayHasColor = (ratings[previousDayKey] !== null && ratings[previousDayKey] !== undefined) || dayOffs[previousDayKey];
+                const previousDayHasColor = (ratings[previousDayKey] !== null && ratings[previousDayKey] !== undefined) || isDayOffComputed(previousDayKey, year, monthIndex, dayOfMonth - 1);
 
                 // Check if current day or next day has a rating/color or is a day off
                 const nextDayKey = `${year}-${monthIndex + 1}-${dayOfMonth + 1}`;
-                const nextDayHasColor = (ratings[nextDayKey] !== null && ratings[nextDayKey] !== undefined) || dayOffs[nextDayKey];
+                const nextDayHasColor = (ratings[nextDayKey] !== null && ratings[nextDayKey] !== undefined) || isDayOffComputed(nextDayKey, year, monthIndex, dayOfMonth + 1);
 
                 // Top border: if first in month and (current or previous has color/PTO), make it darker
                 const borderTop = isFirstInMonth
@@ -4266,7 +4354,8 @@ const ProductivityGrid = ({
                         // Only allow if within the current scale range
                         if (ratingValue < scale.length) {
                           e.preventDefault();
-                          if (!dayOffs[key]) { // Don't allow rating if day is marked as day off
+                          // Don't allow rating if day is marked as day off (manual or auto-weekend)
+                          if (!isDayOffComputed(key, year, monthIndex, dayOfMonth)) {
                             setRatings((prev) => ({ ...prev, [key]: ratingValue }));
                           }
                         }
