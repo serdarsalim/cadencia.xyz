@@ -40,9 +40,10 @@ export const metadata: Metadata = {
     description: APP_DESCRIPTION,
     siteName: APP_NAME,
     type: "website",
+    url: "https://cadencia.xyz",
     images: [
       {
-        url: "/websitecard.png",
+        url: "https://cadencia.xyz/websitecard.png",
         width: 1200,
         height: 630,
         alt: "Cadencia - Achieve your goals",
@@ -53,7 +54,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Cadencia - Achieve your goals",
     description: APP_DESCRIPTION,
-    images: ["/websitecard.png"],
+    images: ["https://cadencia.xyz/websitecard.png"],
   },
 };
 
