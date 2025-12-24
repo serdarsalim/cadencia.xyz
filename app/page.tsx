@@ -2913,7 +2913,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 >
                   ←
                 </button>
-                <h1 className="text-xl sm:text-2xl font-semibold uppercase tracking-[0.3em] text-foreground">
+                <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
                   {navbarWeekLabel}
                 </h1>
                 <button
@@ -3000,24 +3000,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 </div>
 
                 <div className="flex flex-col rounded-3xl px-0 pb-4 pt-0 order-1 lg:order-2 lg:px-4">
-                {productivityMode === "day" && dosDontsPanel ? (
-                  <div
-                    className="mb-4"
-                    data-print-hidden={printOptions.showDosDonts ? "false" : "true"}
-                  >
-                    {dosDontsPanel}
-                  </div>
-                ) : null}
-                {productivityMode === "week" && dosDontsPanel ? (
-                  <div
-                    className="mb-4 lg:hidden"
-                    data-print-hidden={printOptions.showDosDonts ? "false" : "true"}
-                  >
-                    {dosDontsPanel}
-                  </div>
-                ) : null}
                 <div
-                  className="flex-1 px-0 pt-4 pb-0 weekly-goals-bg sm:px-4 sm:pb-4 rounded-md"
+                  className="flex-1 px-0 pt-4 pb-0 weekly-goals-bg sm:px-4 sm:pb-4 rounded-md mb-4"
                   data-print-hidden={printOptions.showWeeklyGoals ? "false" : "true"}
                 >
                   <div className="mb-2 flex items-center justify-between gap-3 px-4 sm:px-0">
@@ -3107,6 +3091,22 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     }
                   />
                 </div>
+                {productivityMode === "day" && dosDontsPanel ? (
+                  <div
+                    className="mb-4"
+                    data-print-hidden={printOptions.showDosDonts ? "false" : "true"}
+                  >
+                    {dosDontsPanel}
+                  </div>
+                ) : null}
+                {productivityMode === "week" && dosDontsPanel ? (
+                  <div
+                    className="mb-4 lg:hidden"
+                    data-print-hidden={printOptions.showDosDonts ? "false" : "true"}
+                  >
+                    {dosDontsPanel}
+                  </div>
+                ) : null}
                 </div>
               </section>
               <div data-print-hidden={printOptions.showOkrs ? "false" : "true"}>
