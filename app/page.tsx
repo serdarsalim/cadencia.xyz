@@ -4405,7 +4405,7 @@ const ProductivityGrid = ({
                 if (isSelectedWeek) {
                   borderSides = theme === "dark"
                     ? "border-l border-r border-l-white border-r-white"
-                    : "border-l border-r border-l-slate-700 border-r-slate-700";
+                    : "border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
                 } else {
                   borderSides = "border-l border-r border-l-gray-400 border-r-gray-400";
                 }
