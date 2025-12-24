@@ -272,8 +272,18 @@ body {
 /* Remove TinyMCE editor border or match it to background */
 .tox-tinymce {
   border: none !important;
+  background-color: #faf7f4 !important;
+}
+
+:root[data-theme="dark"] .tox-tinymce {
+  background-color: #0a0a0a !important;
 }
 
 .tox .tox-edit-area__iframe {
   border: none !important;
+  background-color: #faf7f4 !important;
+}
+
+:root[data-theme="dark"] .tox .tox-edit-area__iframe {
+  background-color: #0a0a0a !important;
 }

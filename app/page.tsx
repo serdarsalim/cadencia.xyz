@@ -3075,6 +3075,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                       ) : null}
                     </div>
                   </div>
+                  <div className={theme === "dark" ? "bg-[#0a0a0a]" : "bg-[#faf7f4]"}>
                   <TinyEditor
                     key={selectedWeekKey ? `week-notes-${selectedWeekKey}-${theme}` : `productivity-goal-${productivityYear}-${theme}`}
                     tinymceScriptSrc={TINYMCE_CDN}
@@ -3094,6 +3095,9 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         quickbars_selection_toolbar: "bold italic bullist numlist link",
                         quickbars_insert_toolbar: false,
                         content_style: `
+                          html {
+                            background-color: ${theme === "dark" ? "#0a0a0a" : "#faf7f4"} !important;
+                          }
                           body {
                             background-color: ${theme === "dark" ? "#0a0a0a" : "#faf7f4"} !important;
                             color: ${theme === "dark" ? "#d1d5db" : "#0f172a"} !important;
@@ -3117,10 +3121,35 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                             background-color: transparent !important;
                           }
                         `,
+                        inline_styles: true,
                         branding: false,
                         placeholder: selectedWeekKey
                           ? "What are your goals this week, and did you accomplish them?"
                           : "",
+                        setup: (editor: any) => {
+                          editor.on('PreInit', () => {
+                            const iframe = editor.getContentAreaContainer()?.querySelector('iframe');
+                            if (iframe?.contentDocument) {
+                              const doc = iframe.contentDocument;
+                              const style = doc.createElement('style');
+                              style.textContent = `
+                                html, body {
+                                  background-color: ${theme === "dark" ? "#0a0a0a" : "#faf7f4"} !important;
+                                }
+                              `;
+                              doc.head?.appendChild(style);
+                            }
+                          });
+                          editor.on('init', () => {
+                            const doc = editor.getDoc();
+                            if (doc && doc.documentElement) {
+                              doc.documentElement.style.backgroundColor = theme === "dark" ? "#0a0a0a" : "#faf7f4";
+                              if (doc.body) {
+                                doc.body.style.backgroundColor = theme === "dark" ? "#0a0a0a" : "#faf7f4";
+                              }
+                            }
+                          });
+                        },
                       } as Record<string, unknown>
                     }
                     onEditorChange={(content) =>
@@ -3132,6 +3161,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                           }))
                     }
                   />
+                  </div>
                 </div>
                 {productivityMode === "day" && dosDontsPanel ? (
                   <div
