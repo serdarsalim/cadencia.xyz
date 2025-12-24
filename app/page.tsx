@@ -3034,6 +3034,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     productivityScaleMode={productivityScaleMode}
                     weeklyGoalsTemplate={weeklyGoalsTemplate}
                     productivityMode={productivityMode}
+                    theme={theme}
                   />
                   {productivityMode === "week" && dosDontsPanel ? (
                     <div className="mt-4 hidden lg:block">{dosDontsPanel}</div>
@@ -3838,6 +3839,7 @@ type ProductivityGridProps = {
   productivityScaleMode?: string;
   weeklyGoalsTemplate?: string;
   productivityMode?: "day" | "week";
+  theme?: Theme;
 };
 
 const ProductivityGrid = ({
@@ -3870,6 +3872,7 @@ const ProductivityGrid = ({
   productivityScaleMode = "3",
   weeklyGoalsTemplate = "",
   productivityMode = "day",
+  theme = "light",
 }: ProductivityGridProps) => {
   const dayGridRef = useRef<HTMLDivElement | null>(null);
   const [hoveredDayDisplay, setHoveredDayDisplay] = useState<{
@@ -4381,6 +4384,13 @@ const ProductivityGrid = ({
                 const nextDayKey = `${year}-${monthIndex + 1}-${dayOfMonth + 1}`;
                 const nextDayHasColor = (ratings[nextDayKey] !== null && ratings[nextDayKey] !== undefined) || isDayOffComputed(nextDayKey, year, monthIndex, dayOfMonth + 1);
 
+                const isSelectedWeek = selectedWeekKey === currentWeek.weekKey;
+                const isFirstDayOfWeek =
+                  currentWeek.dayKeys[0] === `${year}-${monthIndex + 1}-${dayOfMonth}`;
+                const isLastDayOfWeek =
+                  currentWeek.dayKeys[currentWeek.dayKeys.length - 1] ===
+                  `${year}-${monthIndex + 1}-${dayOfMonth}`;
+
                 // Top border: if first in month and (current or previous has color/PTO), make it darker
                 const borderTop = isFirstInMonth
                   ? (currentDayHasColor || previousDayHasColor ? "border-t border-t-gray-500" : "border-t border-t-gray-400")
@@ -4389,30 +4399,32 @@ const ProductivityGrid = ({
                 const borderBottom = !nextDayInWeek
                   ? (currentDayHasColor || nextDayHasColor ? "border-b border-b-gray-500" : "border-b border-b-gray-400")
                   : "border-b-[0.5px] border-b-gray-300";
-                // Left and right borders: always on for week grouping
-                const borderSides = "border-l border-r border-l-gray-400 border-r-gray-400";
 
-                weekBorderClass = `${borderTop} ${borderBottom} ${borderSides}`;
-
-                const isSelectedWeek = selectedWeekKey === currentWeek.weekKey;
+                // Left and right borders: use white in dark mode for selected week
+                let borderSides = "";
                 if (isSelectedWeek) {
-                  const isFirstDayOfWeek =
-                    currentWeek.dayKeys[0] === `${year}-${monthIndex + 1}-${dayOfMonth}`;
-                  const isLastDayOfWeek =
-                    currentWeek.dayKeys[currentWeek.dayKeys.length - 1] ===
-                    `${year}-${monthIndex + 1}-${dayOfMonth}`;
-                  let selectedWeekBorders = "";
-                  if (isFirstDayOfWeek) {
-                    selectedWeekBorders =
-                      "border-t-2 border-t-slate-700 border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
-                  } else if (isLastDayOfWeek) {
-                    selectedWeekBorders =
-                      "border-b-2 border-b-slate-700 border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
-                  } else {
-                    selectedWeekBorders = "border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
-                  }
-                  weekBorderClass = `${weekBorderClass} ${selectedWeekBorders}`;
+                  borderSides = theme === "dark"
+                    ? "border-l border-r border-l-white border-r-white"
+                    : "border-l border-r border-l-slate-700 border-r-slate-700";
+                } else {
+                  borderSides = "border-l border-r border-l-gray-400 border-r-gray-400";
                 }
+
+                // Top and bottom overrides for selected week
+                let topBottomOverride = "";
+                if (isSelectedWeek) {
+                  if (isFirstDayOfWeek) {
+                    topBottomOverride = theme === "dark"
+                      ? "border-t-2 border-t-white"
+                      : "border-t-2 border-t-slate-700";
+                  } else if (isLastDayOfWeek) {
+                    topBottomOverride = theme === "dark"
+                      ? "border-b-2 border-b-white"
+                      : "border-b-2 border-b-slate-700";
+                  }
+                }
+
+                weekBorderClass = `${borderTop} ${borderBottom} ${borderSides} ${topBottomOverride}`;
               }
 
               const isTodayInSelectedWeek = isToday && currentWeek && selectedWeekKey === currentWeek.weekKey;
@@ -4595,7 +4607,7 @@ const ProductivityGrid = ({
                 const isFirstWeekInMonth = weekIndexInMonth === 0;
                 const isLastWeekInMonth = weekIndexInMonth === monthWeeks.length - 1;
                 // Build selected week border classes
-                const selectedWeekBorderClass = isSelectedWeek ? "border-2 border-black" : "";
+                const selectedWeekBorderClass = isSelectedWeek ? (theme === "dark" ? "border-2 border-white" : "border-2 border-black") : "";
                 return (
                   <div key={`week-card-${week.weekNumber}`}>
                     <button

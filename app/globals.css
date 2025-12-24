@@ -126,6 +126,20 @@ body {
   border-right-color: #4b5563 !important; /* gray-600 */
 }
 
+/* Selected week border colors for dark mode */
+:root[data-theme="dark"] .border-t-slate-700 {
+  border-top-color: #ffffff !important;
+}
+:root[data-theme="dark"] .border-b-slate-700 {
+  border-bottom-color: #ffffff !important;
+}
+:root[data-theme="dark"] .border-l-slate-700 {
+  border-left-color: #ffffff !important;
+}
+:root[data-theme="dark"] .border-r-slate-700 {
+  border-right-color: #ffffff !important;
+}
+
 @media print {
   body {
     background: #ffffff !important;
