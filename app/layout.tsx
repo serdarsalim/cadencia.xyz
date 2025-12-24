@@ -40,11 +40,20 @@ export const metadata: Metadata = {
     description: APP_DESCRIPTION,
     siteName: APP_NAME,
     type: "website",
+    images: [
+      {
+        url: "/websitecard.png",
+        width: 1200,
+        height: 630,
+        alt: "Cadencia - Achieve your goals",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Cadencia - Achieve your goals",
     description: APP_DESCRIPTION,
+    images: ["/websitecard.png"],
   },
 };
 

@@ -2524,12 +2524,12 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 }
               }}
               autoFocus
-              className="w-full border-b border-foreground bg-transparent text-center text-2xl font-light uppercase tracking-[0.25em] text-foreground outline-none sm:text-3xl sm:tracking-[0.4em]"
+              className="w-full border-b border-foreground bg-transparent text-center text-2xl sm:text-3xl font-bold text-foreground outline-none"
             />
           ) : (
             <h2
               onClick={() => setIsEditingGoalsSectionTitle(true)}
-              className="text-2xl font-light uppercase tracking-[0.25em] text-foreground cursor-pointer transition hover:opacity-70 sm:text-3xl sm:tracking-[0.4em]"
+              className="text-2xl sm:text-3xl font-bold text-foreground cursor-pointer transition hover:opacity-70"
             >
               {goalsSectionTitle}
             </h2>
@@ -3661,7 +3661,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             <img
               src="/cadenciaslogan.png"
               alt="Cadencia - Achieve your goals"
-              className="h-24 mx-auto"
+              className="h-16 mx-auto"
             />
           </div>
 

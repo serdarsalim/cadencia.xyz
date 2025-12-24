@@ -279,7 +279,7 @@ export default function SharedPage({
               >
                 ←
               </button>
-              <h1 className="text-xl sm:text-2xl font-semibold uppercase tracking-[0.3em] text-foreground">
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
                 {selectedWeek.rangeLabel}, {selectedWeek.weekStart.getFullYear()}
               </h1>
               <button
@@ -333,14 +333,8 @@ export default function SharedPage({
             </div>
             {showWeeklyPanel ? (
               <div className="flex flex-col rounded-3xl px-4 pb-4 pt-0 order-1 lg:order-2">
-                {productivityMode === "day" && dosDontsPanel ? (
-                  <div className="mb-4">{dosDontsPanel}</div>
-                ) : null}
-                {productivityMode === "week" && dosDontsPanel ? (
-                  <div className="mb-4 lg:hidden">{dosDontsPanel}</div>
-                ) : null}
                 {showWeeklyGoals ? (
-                  <div className="flex-1 px-4 pt-4 pb-4 weekly-goals-bg rounded-md">
+                  <div className="flex-1 px-4 pt-4 pb-4 weekly-goals-bg rounded-md mb-4">
                     <span className="block text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
                       Weekly goals
                     </span>
@@ -393,12 +387,18 @@ export default function SharedPage({
                     />
                   </div>
                 ) : null}
+                {productivityMode === "day" && dosDontsPanel ? (
+                  <div className="mb-4">{dosDontsPanel}</div>
+                ) : null}
+                {productivityMode === "week" && dosDontsPanel ? (
+                  <div className="mb-4 lg:hidden">{dosDontsPanel}</div>
+                ) : null}
               </div>
             ) : null}
           </section>
           {showOkrs ? (
             <section className="mx-auto mt-12 max-w-5xl text-left">
-              <h2 className="text-sm uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+              <h2 className="text-2xl sm:text-3xl font-bold text-foreground text-center">
                 {data.profile.goalsSectionTitle || "Goals"}
               </h2>
               <div className="mt-4 grid gap-4">
