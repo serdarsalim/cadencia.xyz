@@ -2438,8 +2438,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
   }, [selectedWeekEntry?.dos, selectedWeekEntry?.donts, productivityMode]);
   const dosDontsPanel = selectedWeekKey ? (
     <div className="grid gap-4 sm:grid-cols-2">
-      <label className="flex flex-col gap-2 p-4 dos-card-bg">
-        <span className="text-xs uppercase tracking-[0.3em] dos-label-color">
+      <label className="flex flex-col gap-2 p-4 rounded-md border-2 border-emerald-300 dark:border-emerald-700 bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
+        <span className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600 dark:text-emerald-400">
           Do&apos;s
         </span>
         <textarea
@@ -2454,12 +2454,12 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             resizeTextareaToFit(target);
           }}
           placeholder="Behaviors to reinforce"
-          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)] sm:px-2 sm:text-sm textarea-text-color"
+          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-0 sm:px-2 sm:text-sm text-foreground placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
           style={{ height: "auto" }}
         />
       </label>
-      <label className="flex flex-col gap-2 p-4 donts-card-bg">
-        <span className="text-xs uppercase tracking-[0.3em] donts-label-color">
+      <label className="flex flex-col gap-2 p-4 rounded-md border-2 border-rose-300 dark:border-rose-700 bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-rose-400 dark:hover:border-rose-600 hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
+        <span className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 dark:text-rose-400">
           Don&apos;ts
         </span>
         <textarea
@@ -2474,7 +2474,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             resizeTextareaToFit(target);
           }}
           placeholder="Behaviors to avoid"
-          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--foreground)_30%,transparent)] sm:px-2 sm:text-sm textarea-text-color"
+          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-0 sm:px-2 sm:text-sm text-foreground placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
           style={{ height: "auto" }}
         />
       </label>
@@ -2890,7 +2890,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
       <main className="flex flex-1 items-start justify-center pl-6 pr-4">
         <div className="w-full py-2 text-center">
           {view === "productivity" && (
-            <div className="mt-4 flex flex-col items-center gap-3">
+            <div className="mt-4 flex flex-col items-center gap-2">
               <div className="flex items-center gap-2">
                 <img
                   src="/cadencia-app-logo.png"
@@ -3017,7 +3017,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   </div>
                 ) : null}
                 <div
-                  className="flex-1 px-0 pt-4 pb-0 weekly-goals-bg sm:px-4 sm:pb-4"
+                  className="flex-1 px-0 pt-4 pb-0 weekly-goals-bg sm:px-4 sm:pb-4 rounded-md"
                   data-print-hidden={printOptions.showWeeklyGoals ? "false" : "true"}
                 >
                   <div className="mb-2 flex items-center justify-between gap-3 px-4 sm:px-0">
@@ -4230,7 +4230,7 @@ const ProductivityGrid = ({
   };
 
   const renderDayGrid = () => (
-    <div className="border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6">
+    <div className="border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6 rounded-md">
       <div
         className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
         style={{
@@ -4456,7 +4456,7 @@ const ProductivityGrid = ({
 
   const renderWeekGrid = () => {
     return (
-      <div className="border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6">
+      <div className="border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6 rounded-md">
         <div
           className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
           style={{
