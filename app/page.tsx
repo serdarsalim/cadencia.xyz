@@ -3076,7 +3076,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     </div>
                   </div>
                   <TinyEditor
-                    key={selectedWeekKey ? `week-notes-${selectedWeekKey}` : `productivity-goal-${productivityYear}`}
+                    key={selectedWeekKey ? `week-notes-${selectedWeekKey}-${theme}` : `productivity-goal-${productivityYear}-${theme}`}
                     tinymceScriptSrc={TINYMCE_CDN}
                     value={selectedWeekKey ? selectedWeekEntry?.content ?? "" : currentProductivityGoal}
                     init={
