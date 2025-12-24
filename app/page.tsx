@@ -2454,7 +2454,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             resizeTextareaToFit(target);
           }}
           placeholder="Behaviors to reinforce"
-          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-0 sm:px-2 sm:text-sm text-foreground placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
+          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-0 sm:px-2 sm:text-sm textarea-text-color placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
           style={{ height: "auto" }}
         />
       </label>
@@ -2474,7 +2474,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             resizeTextareaToFit(target);
           }}
           placeholder="Behaviors to avoid"
-          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-0 sm:px-2 sm:text-sm text-foreground placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
+          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-0 sm:px-2 sm:text-sm textarea-text-color placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
           style={{ height: "auto" }}
         />
       </label>
@@ -3096,7 +3096,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         content_style: `
                           body {
                             background-color: ${theme === "dark" ? "#0a0a0a" : "#faf7f4"} !important;
-                            color: ${theme === "dark" ? "#f8fafc" : "#0f172a"} !important;
+                            color: ${theme === "dark" ? "#d1d5db" : "#0f172a"} !important;
                             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
                             font-size: 15px;
                             padding: 10px 16px;
