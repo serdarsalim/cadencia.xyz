@@ -2396,25 +2396,9 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
     const currentEntry = weeklyNotes[weekKey];
 
-    // If current week has any saved data, return it as-is
+    // Return current entry if it exists, otherwise return empty entry
     if (currentEntry) {
       return createWeeklyNoteEntry(currentEntry);
-    }
-
-    // Current week is empty, try to carry over from previous week
-    if (selectedWeekKey) {
-      const prevWeekKey = getPreviousWeekKey(selectedWeekKey);
-      if (prevWeekKey) {
-        const prevEntry = weeklyNotes[prevWeekKey];
-        if (prevEntry && (prevEntry.dos || prevEntry.donts)) {
-          // Carry over dos and donts, but not content
-          return createWeeklyNoteEntry({
-            content: "",
-            dos: prevEntry.dos ?? "",
-            donts: prevEntry.donts ?? ""
-          });
-        }
-      }
     }
 
     return createWeeklyNoteEntry();
@@ -2436,12 +2420,45 @@ const goalStatusBadge = (status: KeyResultStatus) => {
     resizeTextareaToFit(dosTextareaRef.current);
     resizeTextareaToFit(dontsTextareaRef.current);
   }, [selectedWeekEntry?.dos, selectedWeekEntry?.donts, productivityMode]);
+  const copyFromPreviousWeek = (field: 'dos' | 'donts') => {
+    if (!selectedWeekKey) return;
+
+    const prevWeekKey = getPreviousWeekKey(selectedWeekKey);
+    if (!prevWeekKey) return;
+
+    const prevEntry = weeklyNotes[prevWeekKey];
+    if (!prevEntry) return;
+
+    const valueToCopy = field === 'dos' ? prevEntry.dos : prevEntry.donts;
+    if (!valueToCopy) return;
+
+    updateWeeklyNoteEntry(selectedWeekKey, { [field]: valueToCopy });
+
+    // Resize the textarea after copying
+    setTimeout(() => {
+      const textarea = field === 'dos' ? dosTextareaRef.current : dontsTextareaRef.current;
+      resizeTextareaToFit(textarea);
+    }, 0);
+  };
+
   const dosDontsPanel = selectedWeekKey ? (
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="flex flex-col gap-2 p-4 rounded-md border border-emerald-200 dark:border-emerald-800 bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
-        <span className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600 dark:text-emerald-400">
-          Do&apos;s
-        </span>
+        <div className="flex items-center justify-between group/dos">
+          <span className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600 dark:text-emerald-400">
+            Do&apos;s
+          </span>
+          <button
+            type="button"
+            onClick={() => copyFromPreviousWeek('dos')}
+            className="opacity-0 group-hover/dos:opacity-100 transition-opacity text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
+            title="Copy from last week"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </button>
+        </div>
         <textarea
           ref={dosTextareaRef}
           value={selectedWeekEntry?.dos ?? ""}
@@ -2459,9 +2476,21 @@ const goalStatusBadge = (status: KeyResultStatus) => {
         />
       </label>
       <label className="flex flex-col gap-2 p-4 rounded-md border border-rose-200 dark:border-rose-800 bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-rose-300 dark:hover:border-rose-700 hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
-        <span className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 dark:text-rose-400">
-          Don&apos;ts
-        </span>
+        <div className="flex items-center justify-between group/donts">
+          <span className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 dark:text-rose-400">
+            Don&apos;ts
+          </span>
+          <button
+            type="button"
+            onClick={() => copyFromPreviousWeek('donts')}
+            className="opacity-0 group-hover/donts:opacity-100 transition-opacity text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300"
+            title="Copy from last week"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </button>
+        </div>
         <textarea
           ref={dontsTextareaRef}
           value={selectedWeekEntry?.donts ?? ""}
