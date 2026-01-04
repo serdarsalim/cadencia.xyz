@@ -1083,6 +1083,9 @@ export default function Home() {
                 nextProductivityScaleMode = profile.productivityScaleMode;
                 setProductivityScaleMode(nextProductivityScaleMode);
               }
+              if (profile.theme === "light" || profile.theme === "dark") {
+                setTheme(profile.theme);
+              }
 
               const complete = Boolean(profile.personName);
               shouldOpenProfileModal = !complete;
@@ -1294,7 +1297,8 @@ export default function Home() {
       dayOffAllowance,
       workDays: workDays.join(','),
       productivityViewMode: productivityMode,
-      autoMarkWeekendsOff
+      autoMarkWeekendsOff,
+      theme
     };
     const serializedProfile = JSON.stringify(profilePayload);
     if (lastServerSavedProfileRef.current === serializedProfile) {
@@ -1309,7 +1313,7 @@ export default function Home() {
         console.error("Failed to save profile", error);
       }
     })();
-  }, [personName, dateOfBirth, email, weekStartDay, recentYears, goalsSectionTitle, productivityScaleMode, showLegend, weeklyGoalsTemplate, dayOffAllowance, workDays, productivityMode, autoMarkWeekendsOff, isHydrated, userEmail, isDemoMode]);
+  }, [personName, dateOfBirth, email, weekStartDay, recentYears, goalsSectionTitle, productivityScaleMode, showLegend, weeklyGoalsTemplate, dayOffAllowance, workDays, productivityMode, autoMarkWeekendsOff, theme, isHydrated, userEmail, isDemoMode]);
 
   useEffect(() => {
     try {

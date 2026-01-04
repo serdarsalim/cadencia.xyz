@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
           dayOffAllowance: profile.dayOffAllowance ?? 15,
           workDays: profile.workDays || '0,1,2,3,4,5,6',
           autoMarkWeekendsOff: profile.autoMarkWeekendsOff ?? false,
+          theme: profile.theme || 'light',
         }
       })
     } else {
@@ -83,6 +84,7 @@ export async function POST(request: NextRequest) {
           dayOffAllowance: profile.dayOffAllowance ?? 15,
           workDays: profile.workDays || '0,1,2,3,4,5,6',
           autoMarkWeekendsOff: profile.autoMarkWeekendsOff ?? false,
+          theme: profile.theme || 'light',
         }
       })
     }
