@@ -3182,7 +3182,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
                 <div className="flex flex-col rounded-3xl px-0 pb-4 pt-0 order-1 lg:order-2 lg:px-4">
                 <div
-                  className="flex-1 px-0 pt-4 pb-0 weekly-goals-bg sm:px-4 sm:pb-4 rounded-md mb-4"
+                  className="flex-1 px-0 pt-4 pb-0 weekly-goals-bg sm:px-4 sm:pb-4 rounded-md mb-4 border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)]"
                   data-print-hidden={printOptions.showWeeklyGoals ? "false" : "true"}
                 >
                   <div className="mb-2 flex items-center justify-between gap-3 px-4 sm:px-0">
@@ -4709,7 +4709,7 @@ const ProductivityGrid = ({
                     hasValue
                       ? scaleEntry.color
                       : isSickDay
-                        ? "bg-[#93c5fd] dark:bg-[#2563eb]"
+                        ? "bg-[#bfdbfe] dark:bg-[#3b82f6]"
                         : isDayOff
                           ? "day-off-bg"
                           : "bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]"
@@ -4761,7 +4761,7 @@ const ProductivityGrid = ({
 
   const renderWeekGrid = () => {
     return (
-      <div className="border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6 rounded-md">
+      <div className="border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] p-6 rounded-md">
         <div
           className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
           style={{
