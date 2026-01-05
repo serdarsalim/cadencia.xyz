@@ -12,6 +12,7 @@ import {
   saveProductivity,
   saveWeeklyNotes,
   saveDayOffs,
+  saveSickDays,
   saveProfile
 } from "@/lib/api";
 import { APP_NAME, legacyStorageKey, storageKey } from "@/lib/branding";
@@ -524,7 +525,9 @@ export default function Home() {
   const [workDays, setWorkDays] = useState<WeekdayIndex[]>([0, 1, 2, 3, 4, 5, 6]);
   const [autoMarkWeekendsOff, setAutoMarkWeekendsOff] = useState(false);
   const [dayOffs, setDayOffs] = useState<Record<string, boolean>>({});
+  const [sickDays, setSickDays] = useState<Record<string, boolean>>({});
   const [isDayOffMode, setIsDayOffMode] = useState(false);
+  const [isSickDayMode, setIsSickDayMode] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
   const [shareError, setShareError] = useState<string | null>(null);
   const [isLoadingShares, setIsLoadingShares] = useState(false);
@@ -641,6 +644,11 @@ export default function Home() {
   const dayOffsSaveTimeoutRef = useRef<number | null>(null);
   const isSavingDayOffsRef = useRef(false);
   const lastServerSavedDayOffsRef = useRef<string | null>(null);
+  const lastProcessedSickDaysRef = useRef<string | null>(null);
+  const pendingSickDaysRef = useRef<Record<string, boolean>>({});
+  const sickDaysSaveTimeoutRef = useRef<number | null>(null);
+  const isSavingSickDaysRef = useRef(false);
+  const lastServerSavedSickDaysRef = useRef<string | null>(null);
   const lastServerSavedProfileRef = useRef<string | null>(null);
   const hasLoadedServerDataRef = useRef(false);
 
@@ -870,6 +878,48 @@ export default function Home() {
           dayOffsSaveTimeoutRef.current = window.setTimeout(() => {
             dayOffsSaveTimeoutRef.current = null;
             triggerDayOffsSave();
+          }, 200);
+        }
+      }
+    })();
+  }, [userEmail, isDemoMode]);
+
+  const triggerSickDaysSave = useCallback(() => {
+    if (!userEmail || isDemoMode) {
+      return;
+    }
+
+    const pendingSerialized = JSON.stringify(pendingSickDaysRef.current ?? {});
+    if (lastServerSavedSickDaysRef.current === pendingSerialized) {
+      return;
+    }
+
+    if (isSavingSickDaysRef.current) {
+      return;
+    }
+
+    const dataToSave = pendingSickDaysRef.current;
+    const serializedToSave = pendingSerialized;
+
+    isSavingSickDaysRef.current = true;
+    void (async () => {
+      try {
+        await saveSickDays(dataToSave);
+        lastServerSavedSickDaysRef.current = serializedToSave;
+      } catch (error) {
+        console.error("Failed to persist sick days", error);
+      } finally {
+        isSavingSickDaysRef.current = false;
+        const latestSerialized = JSON.stringify(pendingSickDaysRef.current ?? {});
+        if (
+          userEmail &&
+          !isDemoMode &&
+          latestSerialized !== serializedToSave &&
+          !sickDaysSaveTimeoutRef.current
+        ) {
+          sickDaysSaveTimeoutRef.current = window.setTimeout(() => {
+            sickDaysSaveTimeoutRef.current = null;
+            triggerSickDaysSave();
           }, 200);
         }
       }
@@ -1124,6 +1174,13 @@ export default function Home() {
             lastProcessedDayOffsRef.current = serializedDayOffs;
             lastServerSavedDayOffsRef.current = serializedDayOffs;
             pendingDayOffsRef.current = dayOffsData;
+
+            const sickDaysData = data.sickDays ?? {};
+            setSickDays(sickDaysData);
+            const serializedSickDays = JSON.stringify(sickDaysData);
+            lastProcessedSickDaysRef.current = serializedSickDays;
+            lastServerSavedSickDaysRef.current = serializedSickDays;
+            pendingSickDaysRef.current = sickDaysData;
 
             if (migratedProductivity.didMigrate || migratedWeekly.didMigrate) {
               window.localStorage.setItem(migrationKey, "true");
@@ -1404,6 +1461,36 @@ export default function Home() {
       }
     };
   }, [dayOffs, isHydrated, userEmail, isDemoMode, triggerDayOffsSave]);
+
+  useEffect(() => {
+    if (!isHydrated || !userEmail || isDemoMode) {
+      return;
+    }
+
+    const currentSerialized = JSON.stringify(sickDays);
+    if (lastProcessedSickDaysRef.current === currentSerialized) {
+      return;
+    }
+    lastProcessedSickDaysRef.current = currentSerialized;
+
+    pendingSickDaysRef.current = sickDays;
+
+    if (sickDaysSaveTimeoutRef.current) {
+      window.clearTimeout(sickDaysSaveTimeoutRef.current);
+    }
+
+    sickDaysSaveTimeoutRef.current = window.setTimeout(() => {
+      sickDaysSaveTimeoutRef.current = null;
+      triggerSickDaysSave();
+    }, 600);
+
+    return () => {
+      if (sickDaysSaveTimeoutRef.current) {
+        window.clearTimeout(sickDaysSaveTimeoutRef.current);
+        sickDaysSaveTimeoutRef.current = null;
+      }
+    };
+  }, [sickDays, isHydrated, userEmail, isDemoMode, triggerSickDaysSave]);
 
   useEffect(() => {
     try {
@@ -4114,7 +4201,7 @@ const ProductivityGrid = ({
         </svg>
       </button>
       {isDayOffMenuOpen ? (
-        <div className="absolute right-0 z-10 mt-2 w-56 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-3 shadow-lg">
+        <div className="absolute right-0 z-10 mt-2 w-56 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] p-3 shadow-lg backdrop-blur-sm">
           <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
             <span>Days left</span>
             <span className="text-[11px] font-semibold text-foreground">

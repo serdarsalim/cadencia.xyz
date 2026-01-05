@@ -154,12 +154,14 @@ export async function loadAllData() {
       productivityRes,
       weeklyNotesRes,
       dayOffsRes,
+      sickDaysRes,
       profileRes
     ] = await Promise.all([
       fetch('/api/goals'),
       fetch('/api/productivity'),
       fetch('/api/weekly-notes'),
       fetch('/api/day-offs'),
+      fetch('/api/sick-days'),
       fetch('/api/profile')
     ])
 
@@ -168,12 +170,14 @@ export async function loadAllData() {
       { productivityRatings },
       { weeklyNotes },
       { dayOffs },
+      { sickDays },
       { profile }
     ] = await Promise.all([
       goalsRes.json(),
       productivityRes.json(),
       weeklyNotesRes.json(),
       dayOffsRes.json(),
+      sickDaysRes.json(),
       profileRes.json()
     ])
 
@@ -183,6 +187,7 @@ export async function loadAllData() {
       productivityRatings: transformProductivityFromDB(productivityRatings || []),
       weeklyNotes: transformWeeklyNotesFromDB(weeklyNotes || []),
       dayOffs: transformDayOffsFromDB(dayOffs || []),
+      sickDays: transformDayOffsFromDB(sickDays || []),
       profile: profile || null
     }
   } catch (error) {
@@ -321,6 +326,38 @@ export async function saveDayOffs(dayOffs: Record<string, boolean>) {
     return transformDayOffsFromDB(data.dayOffs)
   } catch (error) {
     console.error('Error saving day offs:', error)
+    return null
+  }
+}
+
+export async function saveSickDays(sickDays: Record<string, boolean>) {
+  try {
+    const array = transformDayOffsToDB(sickDays) // Reuse same transform since structure is identical
+    const response = await fetch('/api/sick-days', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sickDays: array })
+    })
+
+    if (response.status === 401) {
+      return null
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      console.error('Error saving sick days:', response.status, response.statusText, errorData)
+      return null
+    }
+
+    const data = await response.json().catch(() => null)
+    if (!data || !Array.isArray(data.sickDays)) {
+      console.error('Invalid sick days response payload', data)
+      return null
+    }
+
+    return transformDayOffsFromDB(data.sickDays) // Reuse same transform
+  } catch (error) {
+    console.error('Error saving sick days:', error)
     return null
   }
 }
