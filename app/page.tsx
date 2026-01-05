@@ -4634,6 +4634,15 @@ const ProductivityGrid = ({
                 const nextDayKey = `${year}-${monthIndex + 1}-${dayOfMonth + 1}`;
                 const nextDayHasColor = (ratings[nextDayKey] !== null && ratings[nextDayKey] !== undefined) || isDayOffComputed(nextDayKey, year, monthIndex, dayOfMonth + 1);
 
+                // Check if both current and previous are day-offs (no ratings)
+                const currentIsDayOff = isDayOff && !hasValue;
+                const previousIsDayOff = isDayOffComputed(previousDayKey, year, monthIndex, dayOfMonth - 1) && (ratings[previousDayKey] === null || ratings[previousDayKey] === undefined);
+                const bothDayOffs = currentIsDayOff && previousIsDayOff;
+
+                // Check if both current and next are day-offs (no ratings)
+                const nextIsDayOff = isDayOffComputed(nextDayKey, year, monthIndex, dayOfMonth + 1) && (ratings[nextDayKey] === null || ratings[nextDayKey] === undefined);
+                const bothDayOffsBottom = currentIsDayOff && nextIsDayOff;
+
                 const isSelectedWeek = selectedWeekKey === currentWeek.weekKey;
                 const isFirstDayOfWeek =
                   currentWeek.dayKeys[0] === `${year}-${monthIndex + 1}-${dayOfMonth}`;
@@ -4642,13 +4651,15 @@ const ProductivityGrid = ({
                   `${year}-${monthIndex + 1}-${dayOfMonth}`;
 
                 // Top border: if first in month and (current or previous has color/PTO), make it darker
+                // In dark mode, if both are day-offs, use lighter border
                 const borderTop = isFirstInMonth
                   ? (currentDayHasColor || previousDayHasColor ? "border-t border-t-gray-500" : "border-t border-t-gray-400")
-                  : "border-t-[0.5px] border-t-gray-300";
+                  : (theme === "dark" && bothDayOffs ? "border-t-[0.5px] border-t-gray-600" : "border-t-[0.5px] border-t-gray-300");
                 // Bottom border: if last in week and (current or next has color/PTO), make it darker
+                // In dark mode, if both are day-offs, use lighter border
                 const borderBottom = !nextDayInWeek
                   ? (currentDayHasColor || nextDayHasColor ? "border-b border-b-gray-500" : "border-b border-b-gray-400")
-                  : "border-b-[0.5px] border-b-gray-300";
+                  : (theme === "dark" && bothDayOffsBottom ? "border-b-[0.5px] border-b-gray-600" : "border-b-[0.5px] border-b-gray-300");
 
                 // Left and right borders: use white in dark mode for selected week
                 let borderSides = "";

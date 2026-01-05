@@ -84,7 +84,7 @@ body {
 
 /* Day off color for light mode */
 .day-off-bg {
-  background-color: #8dc8e659 !important;
+  background-color: #dbeafe !important;
 }
 
 /* Productivity colors for dark mode */
@@ -103,7 +103,7 @@ body {
 
 /* Day off color for dark mode */
 :root[data-theme="dark"] .day-off-bg {
-  background-color: #1e3a5f !important;
+  background-color: #2563eb60 !important;
 }
 
 /* Day grid border colors for dark mode */
