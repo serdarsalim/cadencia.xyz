@@ -316,6 +316,8 @@ export default function SharedPage({
                 setYear={setProductivityYear}
                 ratings={visibleRatings}
                 dayOffs={computedDayOffs}
+                sickDays={{}}
+                setSickDays={undefined}
                 scale={scale}
                 mode={productivityMode}
                 showLegend={showSelfRating}

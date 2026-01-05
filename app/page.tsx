@@ -3051,40 +3051,55 @@ const goalStatusBadge = (status: KeyResultStatus) => {
       <main className="flex flex-1 items-start justify-center pl-6 pr-4">
         <div className="w-full py-2 text-center">
           {view === "productivity" && (
-            <div className="mt-4 flex flex-col items-center gap-2">
-              <div className="flex items-center gap-2">
-                <img
-                  src="/cadencia-app-logo.png"
-                  alt="Cadencia"
-                  className="h-5 sm:h-6"
-                />
-                <span
-                  className="text-base sm:text-lg text-foreground font-montserrat"
-                  style={{ fontWeight: 600 }}
-                >
+            <div className="mt-4 relative">
+              {/* Logo and app name - left aligned on desktop, mobile shows only logo */}
+              <div className="hidden sm:flex items-center gap-2 absolute left-0 top-1/2 -translate-y-1/2">
+                <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-6" />
+                <span className="text-lg text-foreground font-montserrat" style={{ fontWeight: 600 }}>
                   Cadencia
                 </span>
               </div>
-              <div className="flex items-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => shiftSelectedWeek(-1)}
-                  className="rounded-full px-2 py-1 text-sm transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] hover:text-foreground"
-                  aria-label="Previous week"
-                >
-                  ←
-                </button>
-                <h1 className="text-2xl sm:text-3xl font-bold heading-text-color">
-                  {navbarWeekLabel}
-                </h1>
-                <button
-                  type="button"
-                  onClick={() => shiftSelectedWeek(1)}
-                  className="rounded-full px-2 py-1 text-sm transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] hover:text-foreground"
-                  aria-label="Next week"
-                >
-                  →
-                </button>
+              <div className="flex sm:hidden items-center gap-2 absolute left-4 top-1/2 -translate-y-1/2">
+                <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-5" />
+              </div>
+
+              {/* Theme toggle button - desktop only, right aligned */}
+              <button
+                type="button"
+                onClick={() => {
+                  const newTheme = theme === "light" ? "dark" : "light";
+                  setTheme(newTheme);
+                  if (!isDemoMode) {
+                    saveProfile({
+                      personName, dateOfBirth, weekStartDay, recentYears,
+                      goalsSectionTitle, productivityScaleMode, showLegend,
+                      weeklyGoalsTemplate, dayOffAllowance,
+                      workDays: workDays.join(','),
+                      productivityViewMode: productivityMode,
+                      autoMarkWeekendsOff,
+                      theme: newTheme,
+                    });
+                  }
+                }}
+                className="hidden sm:flex items-center gap-2 absolute right-0 top-1/2 -translate-y-1/2 rounded-full px-3 py-2 text-sm transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:text-foreground"
+                aria-label="Toggle theme"
+              >
+                {theme === "light" ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Date navigation - centered */}
+              <div className="flex items-center justify-center gap-4">
+                <button type="button" onClick={() => shiftSelectedWeek(-1)}>←</button>
+                <h1 className="text-2xl sm:text-3xl font-bold heading-text-color">{navbarWeekLabel}</h1>
+                <button type="button" onClick={() => shiftSelectedWeek(1)}>→</button>
               </div>
             </div>
           )}
@@ -3112,6 +3127,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     setRatings={setProductivityRatings}
                     dayOffs={dayOffs}
                     setDayOffs={setDayOffs}
+                    sickDays={sickDays}
+                    setSickDays={setSickDays}
                     scale={productivityScale}
                     mode={productivityMode}
                     showLegend={showLegend}
@@ -3138,6 +3155,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     }}
                     dayOffMode={isDayOffMode}
                     setDayOffMode={setIsDayOffMode}
+                    isSickDayMode={isSickDayMode}
+                    setIsSickDayMode={setIsSickDayMode}
                     dayOffsRemaining={dayOffsRemaining}
                     dayOffAllowance={dayOffAllowance}
                     selectedWeekKey={selectedWeekKey}
@@ -3966,12 +3985,16 @@ type ProductivityGridProps = {
   setRatings?: React.Dispatch<React.SetStateAction<Record<string, number | null>>>;
   dayOffs: Record<string, boolean>;
   setDayOffs?: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  sickDays: Record<string, boolean>;
+  setSickDays?: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   scale: ProductivityScaleEntry[];
   mode: "day" | "week";
   showLegend: boolean;
   onToggleMode: () => void;
   dayOffMode?: boolean;
   setDayOffMode?: React.Dispatch<React.SetStateAction<boolean>>;
+  isSickDayMode?: boolean;
+  setIsSickDayMode?: React.Dispatch<React.SetStateAction<boolean>>;
   dayOffsRemaining?: number;
   dayOffAllowance?: number;
   selectedWeekKey: string | null;
@@ -3999,12 +4022,16 @@ const ProductivityGrid = ({
   setRatings,
   dayOffs,
   setDayOffs,
+  sickDays,
+  setSickDays,
   scale,
   mode,
   showLegend,
   onToggleMode,
   dayOffMode = false,
   setDayOffMode,
+  isSickDayMode = false,
+  setIsSickDayMode,
   dayOffsRemaining = 0,
   dayOffAllowance = 0,
   selectedWeekKey,
@@ -4210,7 +4237,10 @@ const ProductivityGrid = ({
           </div>
           <button
             type="button"
-            onClick={() => setDayOffMode?.((prev) => !prev)}
+            onClick={() => {
+              setDayOffMode?.((prev) => !prev);
+              if (isSickDayMode && setIsSickDayMode) setIsSickDayMode(false);
+            }}
             className={`mt-3 w-full rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
               dayOffMode
                 ? "border-[#8dc8e6] bg-[#eef7fc] text-[#3f6f88]"
@@ -4218,6 +4248,20 @@ const ProductivityGrid = ({
             }`}
           >
             {dayOffMode ? "Stop selecting" : "Add/remove day off"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setIsSickDayMode?.((prev) => !prev);
+              if (dayOffMode) setDayOffMode?.(false);
+            }}
+            className={`mt-2 w-full rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
+              isSickDayMode
+                ? "border-[#ff9999] bg-[#fff5f5] text-[#cc5555]"
+                : "border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] hover:border-foreground"
+            }`}
+          >
+            {isSickDayMode ? "Stop selecting" : "Add/remove sick leave"}
           </button>
           <label className="mt-3 flex cursor-pointer items-center gap-2 text-[11px] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]">
             <input
@@ -4305,6 +4349,33 @@ const ProductivityGrid = ({
       return;
     }
 
+    if (isSickDayMode && setSickDays) {
+      setSickDays((prev) => {
+        const next = { ...prev };
+        const hasRating = ratings[key] !== null && ratings[key] !== undefined;
+        const isCurrentlySickDay = next[key] === true;
+
+        // Toggle sick day
+        if (isCurrentlySickDay) {
+          delete next[key];
+        } else if (!hasRating) {
+          // Only mark as sick day if there's no rating
+          next[key] = true;
+          // If marking as sick day, remove day-off
+          if (setDayOffs) {
+            setDayOffs((prevDayOffs) => {
+              const nextDayOffs = { ...prevDayOffs };
+              delete nextDayOffs[key];
+              return nextDayOffs;
+            });
+          }
+        }
+
+        return next;
+      });
+      return;
+    }
+
     // Allow rating even if day is marked as day off
     if (setRatings) {
       setRatings((prev) => {
@@ -4338,6 +4409,34 @@ const ProductivityGrid = ({
         return;
       }
       setDayOffs((prev) => {
+        const next = { ...prev };
+        const eligibleKeys = targetWeek.dayKeys.filter(
+          (dayKey) => ratings[dayKey] === null || ratings[dayKey] === undefined
+        );
+        if (eligibleKeys.length === 0) {
+          return next;
+        }
+        const hasAll = eligibleKeys.every((dayKey) => next[dayKey]);
+        if (hasAll) {
+          eligibleKeys.forEach((dayKey) => {
+            delete next[dayKey];
+          });
+        } else {
+          eligibleKeys.forEach((dayKey) => {
+            next[dayKey] = true;
+          });
+        }
+        return next;
+      });
+      return;
+    }
+
+    if (isSickDayMode && setSickDays) {
+      const targetWeek = weeks.find((week) => week.weekKey === weekKey);
+      if (!targetWeek) {
+        return;
+      }
+      setSickDays((prev) => {
         const next = { ...prev };
         const eligibleKeys = targetWeek.dayKeys.filter(
           (dayKey) => ratings[dayKey] === null || ratings[dayKey] === undefined
@@ -4483,6 +4582,7 @@ const ProductivityGrid = ({
               const currentValue = hasValue ? Math.min(storedValue!, scale.length - 1) : 0;
               const scaleEntry = scale[currentValue];
               const isDayOff = isDayOffComputed(key, year, monthIndex, dayOfMonth);
+              const isSickDay = sickDays[key] === true;
               const validDay =
                 dayOfMonth <= daysInMonth(year, monthIndex);
 
@@ -4608,9 +4708,11 @@ const ProductivityGrid = ({
                   className={`h-4 w-full text-[10px] font-semibold text-transparent transition focus:text-transparent relative ${weekBorderClass} ${
                     hasValue
                       ? scaleEntry.color
-                      : isDayOff
-                        ? "day-off-bg"
-                        : "bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]"
+                      : isSickDay
+                        ? "bg-[#93c5fd] dark:bg-[#2563eb]"
+                        : isDayOff
+                          ? "day-off-bg"
+                          : "bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]"
                   }`}
                   aria-label={`Day ${dayOfMonth} of ${new Date(2020, monthIndex).toLocaleString(undefined, {
                     month: "long",
