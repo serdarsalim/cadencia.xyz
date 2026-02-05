@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Montserrat } from "next/font/google";
+import { Geist, Geist_Mono, Montserrat, Manrope } from "next/font/google";
 import "./globals.css";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/branding";
 
@@ -17,6 +17,12 @@ const montserrat = Montserrat({
   variable: "--font-montserrat",
   subsets: ["latin"],
   weight: ["100", "200", "300", "400", "500", "600", "700"],
+  display: "swap",
+});
+
+const manrope = Manrope({
+  variable: "--font-manrope",
+  subsets: ["latin"],
   display: "swap",
 });
 
@@ -66,7 +72,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} ${manrope.variable} antialiased`}
       >
         {children}
       </body>

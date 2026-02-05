@@ -34,6 +34,10 @@
   font-family: var(--font-montserrat), sans-serif;
 }
 
+.font-manrope {
+  font-family: var(--font-manrope), sans-serif;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
