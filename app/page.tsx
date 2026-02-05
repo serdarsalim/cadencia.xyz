@@ -3234,14 +3234,16 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         quickbars_selection_toolbar: "bold italic bullist numlist link",
                         quickbars_insert_toolbar: false,
                         content_style: `
+                          @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
                           html {
                             background-color: ${theme === "dark" ? "#0a0a0a" : "#faf7f4"} !important;
                           }
                           body {
                             background-color: ${theme === "dark" ? "#0a0a0a" : "#faf7f4"} !important;
                             color: ${theme === "dark" ? "#d1d5db" : "#0f172a"} !important;
-                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                            font-size: 15px;
+                            font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                            font-size: 14px;
+                            line-height: 1.55;
                             padding: 10px 16px;
                             margin: 0;
                           }
@@ -3534,11 +3536,13 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     quickbars_selection_toolbar: "bold italic bullist numlist link",
                     quickbars_insert_toolbar: false,
                     content_style: `
+                      @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
                       body {
                         background-color: transparent !important;
                         color: #0f172a !important;
-                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                        font-size: 15px;
+                        font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                        font-size: 14px;
+                        line-height: 1.55;
                         padding: 8px;
                         margin: 0;
                       }
