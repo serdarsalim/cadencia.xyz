@@ -34,10 +34,6 @@
   font-family: var(--font-montserrat), sans-serif;
 }
 
-.font-manrope {
-  font-family: var(--font-manrope), sans-serif;
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
@@ -76,12 +72,15 @@ body {
 .productivity-low {
   background-color: #ffebee !important;
 }
+
 .productivity-medium {
   background-color: #b3df8f !important;
 }
+
 .productivity-high {
   background-color: #84c400 !important;
 }
+
 .productivity-top {
   background-color: #38b000 !important;
 }
@@ -95,12 +94,15 @@ body {
 :root[data-theme="dark"] .productivity-low {
   background-color: #ffebee !important;
 }
+
 :root[data-theme="dark"] .productivity-medium {
   background-color: #b3df8f !important;
 }
+
 :root[data-theme="dark"] .productivity-high {
   background-color: #84c400 !important;
 }
+
 :root[data-theme="dark"] .productivity-top {
   background-color: #38b000 !important;
 }
@@ -112,34 +114,48 @@ body {
 
 /* Day grid border colors for dark mode */
 :root[data-theme="dark"] .border-t-gray-400 {
-  border-top-color: #4b5563 !important; /* gray-600 */
+  border-top-color: #4b5563 !important;
+  /* gray-600 */
 }
+
 :root[data-theme="dark"] .border-t-gray-300 {
-  border-top-color: #374151 !important; /* gray-700 */
+  border-top-color: #374151 !important;
+  /* gray-700 */
 }
+
 :root[data-theme="dark"] .border-b-gray-400 {
-  border-bottom-color: #4b5563 !important; /* gray-600 */
+  border-bottom-color: #4b5563 !important;
+  /* gray-600 */
 }
+
 :root[data-theme="dark"] .border-b-gray-300 {
-  border-bottom-color: #374151 !important; /* gray-700 */
+  border-bottom-color: #374151 !important;
+  /* gray-700 */
 }
+
 :root[data-theme="dark"] .border-l-gray-400 {
-  border-left-color: #4b5563 !important; /* gray-600 */
+  border-left-color: #4b5563 !important;
+  /* gray-600 */
 }
+
 :root[data-theme="dark"] .border-r-gray-400 {
-  border-right-color: #4b5563 !important; /* gray-600 */
+  border-right-color: #4b5563 !important;
+  /* gray-600 */
 }
 
 /* Selected week border colors for dark mode */
 :root[data-theme="dark"] .border-t-slate-700 {
   border-top-color: #ffffff !important;
 }
+
 :root[data-theme="dark"] .border-b-slate-700 {
   border-bottom-color: #ffffff !important;
 }
+
 :root[data-theme="dark"] .border-l-slate-700 {
   border-left-color: #ffffff !important;
 }
+
 :root[data-theme="dark"] .border-r-slate-700 {
   border-right-color: #ffffff !important;
 }
@@ -175,7 +191,7 @@ body {
   background: rgba(23, 23, 23, 0.65);
 }
 
-.okr-card > * {
+.okr-card>* {
   position: relative;
   z-index: 1;
 }
@@ -251,10 +267,13 @@ body {
 
 /* Today indicator pulsating dot animation */
 @keyframes pulse-dot {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.6;
     transform: scale(1.2);
@@ -266,6 +285,7 @@ body {
 }
 
 @media (max-width: 640px) {
+
   input,
   textarea,
   select {
