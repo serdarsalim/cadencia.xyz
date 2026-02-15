@@ -2534,7 +2534,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
   const dosDontsPanel = selectedWeekKey ? (
     <div className="grid gap-4 sm:grid-cols-2">
-      <label className="flex flex-col gap-2 p-4 rounded-md border border-emerald-200 dark:border-emerald-800 bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
+      <label className="flex flex-col gap-2 p-4 rounded-md border border-emerald-200 dark:border-emerald-800 bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-[#fdfcfb] dark:hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
         <div className="flex items-center justify-between group/dos">
           <span className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600 dark:text-emerald-400">
             Do&apos;s
@@ -2566,7 +2566,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           style={{ height: "auto" }}
         />
       </label>
-      <label className="flex flex-col gap-2 p-4 rounded-md border border-rose-200 dark:border-rose-800 bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-rose-300 dark:hover:border-rose-700 hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
+      <label className="flex flex-col gap-2 p-4 rounded-md border border-rose-200 dark:border-rose-800 bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-rose-300 dark:hover:border-rose-700 hover:bg-[#fdfcfb] dark:hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
         <div className="flex items-center justify-between group/donts">
           <span className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 dark:text-rose-400">
             Don&apos;ts
@@ -3214,7 +3214,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                       ) : null}
                     </div>
                   </div>
-                  <div className={theme === "dark" ? "bg-[#0a0a0a]" : "bg-[#faf7f4]"}>
+                  <div className={theme === "dark" ? "bg-[#0a0a0a]" : "bg-[#fdfcfb]"}>
                   <TinyEditor
                     key={selectedWeekKey ? `week-notes-${selectedWeekKey}-${theme}` : `productivity-goal-${productivityYear}-${theme}`}
                     tinymceScriptSrc={TINYMCE_CDN}
@@ -3236,10 +3236,10 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         content_style: `
                           @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
                           html {
-                            background-color: ${theme === "dark" ? "#0a0a0a" : "#faf7f4"} !important;
+                            background-color: ${theme === "dark" ? "#0a0a0a" : "#fdfcfb"} !important;
                           }
                           body {
-                            background-color: ${theme === "dark" ? "#0a0a0a" : "#faf7f4"} !important;
+                            background-color: ${theme === "dark" ? "#0a0a0a" : "#fdfcfb"} !important;
                             color: ${theme === "dark" ? "#d1d5db" : "#0f172a"} !important;
                             font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
                             font-size: 14px;
@@ -3275,7 +3275,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                               const style = doc.createElement('style');
                               style.textContent = `
                                 html, body {
-                                  background-color: ${theme === "dark" ? "#0a0a0a" : "#faf7f4"} !important;
+                                  background-color: ${theme === "dark" ? "#0a0a0a" : "#fdfcfb"} !important;
                                 }
                               `;
                               doc.head?.appendChild(style);
@@ -3284,9 +3284,9 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                           editor.on('init', () => {
                             const doc = editor.getDoc();
                             if (doc && doc.documentElement) {
-                              doc.documentElement.style.backgroundColor = theme === "dark" ? "#0a0a0a" : "#faf7f4";
+                              doc.documentElement.style.backgroundColor = theme === "dark" ? "#0a0a0a" : "#fdfcfb";
                               if (doc.body) {
-                                doc.body.style.backgroundColor = theme === "dark" ? "#0a0a0a" : "#faf7f4";
+                                doc.body.style.backgroundColor = theme === "dark" ? "#0a0a0a" : "#fdfcfb";
                               }
                             }
                           });
@@ -4527,7 +4527,7 @@ const ProductivityGrid = ({
   };
 
   const renderDayGrid = () => (
-    <div className="border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6 rounded-md">
+    <div className="border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-[#fdfcfb] p-6 rounded-md">
       <div
         className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
         style={{
@@ -4662,6 +4662,7 @@ const ProductivityGrid = ({
                 const nextIsSickOnly = sickDays[nextDayKey] === true && !nextHasValue;
                 const bothSickDays = currentIsSickOnly && previousIsSickOnly;
                 const bothSickDaysBottom = currentIsSickOnly && nextIsSickOnly;
+                const sickPairAtWeekBoundary = !nextDayInWeek && currentIsSickOnly && nextIsSickOnly;
 
                 const isSelectedWeek = selectedWeekKey === currentWeek.weekKey;
                 const isFirstDayOfWeek =
@@ -4684,7 +4685,11 @@ const ProductivityGrid = ({
                 // Bottom border: if last in week and (current or next has color/PTO), make it darker
                 // In dark mode, if both are day-offs, use lighter border
                 const borderBottom = !nextDayInWeek
-                  ? (currentDayHasColor || nextDayHasColor ? "border-b border-b-gray-500" : "border-b border-b-gray-400")
+                  ? (sickPairAtWeekBoundary
+                      ? "border-b border-b-gray-700"
+                      : currentDayHasColor || nextDayHasColor
+                        ? "border-b border-b-gray-500"
+                        : "border-b border-b-gray-400")
                   : (theme === "dark" && bothDayOffsBottom
                       ? "border-b-[0.5px] border-b-gray-600"
                       : bothSickDaysBottom
@@ -4804,7 +4809,7 @@ const ProductivityGrid = ({
 
   const renderWeekGrid = () => {
     return (
-      <div className="border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] p-6 rounded-md">
+      <div className="border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-[#fdfcfb] p-6 rounded-md">
         <div
           className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
           style={{

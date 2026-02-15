@@ -204,7 +204,7 @@ body {
 
 /* Weekly goals background */
 .weekly-goals-bg {
-  background-color: #faf7f4;
+  background-color: #fdfcfb;
 }
 
 :root[data-theme="dark"] .weekly-goals-bg {
