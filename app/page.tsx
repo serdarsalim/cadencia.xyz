@@ -4638,6 +4638,13 @@ const ProductivityGrid = ({
                 const nextDayKey = `${year}-${monthIndex + 1}-${dayOfMonth + 1}`;
                 const nextDayHasColor = (ratings[nextDayKey] !== null && ratings[nextDayKey] !== undefined) || isDayOffComputed(nextDayKey, year, monthIndex, dayOfMonth + 1);
 
+                // Keep separators visible when adjacent days are both 25-50% (rating value 1)
+                const currentIsMediumScore = ratings[key] === 1;
+                const previousIsMediumScore = ratings[previousDayKey] === 1;
+                const nextIsMediumScore = ratings[nextDayKey] === 1;
+                const mediumPairWithPrevious = currentIsMediumScore && previousIsMediumScore;
+                const mediumPairWithNext = currentIsMediumScore && nextIsMediumScore;
+
                 // Check if both current and previous are day-offs (no ratings)
                 const currentIsDayOff = isDayOff && !hasValue;
                 const previousIsDayOff = isDayOffComputed(previousDayKey, year, monthIndex, dayOfMonth - 1) && (ratings[previousDayKey] === null || ratings[previousDayKey] === undefined);
@@ -4646,6 +4653,15 @@ const ProductivityGrid = ({
                 // Check if both current and next are day-offs (no ratings)
                 const nextIsDayOff = isDayOffComputed(nextDayKey, year, monthIndex, dayOfMonth + 1) && (ratings[nextDayKey] === null || ratings[nextDayKey] === undefined);
                 const bothDayOffsBottom = currentIsDayOff && nextIsDayOff;
+
+                // Darken separators when adjacent cells are both sick leave (blue)
+                const previousHasValue = ratings[previousDayKey] !== null && ratings[previousDayKey] !== undefined;
+                const nextHasValue = ratings[nextDayKey] !== null && ratings[nextDayKey] !== undefined;
+                const currentIsSickOnly = isSickDay && !hasValue;
+                const previousIsSickOnly = sickDays[previousDayKey] === true && !previousHasValue;
+                const nextIsSickOnly = sickDays[nextDayKey] === true && !nextHasValue;
+                const bothSickDays = currentIsSickOnly && previousIsSickOnly;
+                const bothSickDaysBottom = currentIsSickOnly && nextIsSickOnly;
 
                 const isSelectedWeek = selectedWeekKey === currentWeek.weekKey;
                 const isFirstDayOfWeek =
@@ -4658,12 +4674,24 @@ const ProductivityGrid = ({
                 // In dark mode, if both are day-offs, use lighter border
                 const borderTop = isFirstInMonth
                   ? (currentDayHasColor || previousDayHasColor ? "border-t border-t-gray-500" : "border-t border-t-gray-400")
-                  : (theme === "dark" && bothDayOffs ? "border-t-[0.5px] border-t-gray-600" : "border-t-[0.5px] border-t-gray-300");
+                  : (theme === "dark" && bothDayOffs
+                      ? "border-t-[0.5px] border-t-gray-600"
+                      : bothSickDays
+                        ? "border-t border-t-gray-400"
+                      : mediumPairWithPrevious
+                        ? "border-t border-t-[#e5e7eb]"
+                        : "border-t-[0.5px] border-t-gray-300");
                 // Bottom border: if last in week and (current or next has color/PTO), make it darker
                 // In dark mode, if both are day-offs, use lighter border
                 const borderBottom = !nextDayInWeek
                   ? (currentDayHasColor || nextDayHasColor ? "border-b border-b-gray-500" : "border-b border-b-gray-400")
-                  : (theme === "dark" && bothDayOffsBottom ? "border-b-[0.5px] border-b-gray-600" : "border-b-[0.5px] border-b-gray-300");
+                  : (theme === "dark" && bothDayOffsBottom
+                      ? "border-b-[0.5px] border-b-gray-600"
+                      : bothSickDaysBottom
+                        ? "border-b border-b-gray-400"
+                      : mediumPairWithNext
+                        ? "border-b border-b-[#e5e7eb]"
+                        : "border-b-[0.5px] border-b-gray-300");
 
                 // Left and right borders: use white in dark mode for selected week
                 let borderSides = "";
