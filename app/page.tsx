@@ -207,14 +207,18 @@ type Goal = {
   id: string;
   title: string;
   timeframe: string;
+  sortOrder?: number;
   description?: string;
   keyResults: KeyResult[];
   statusOverride?: KeyResultStatus;
   archived?: boolean;
 };
 
+const normalizeGoalOrder = (goalList: Goal[]) =>
+  goalList.map((goal, index) => ({ ...goal, sortOrder: index }));
+
 const combineGoalsForSave = (activeGoals: Goal[], archivedGoals: Goal[]) => {
-  const combined = [...activeGoals, ...archivedGoals];
+  const combined = [...normalizeGoalOrder(activeGoals), ...normalizeGoalOrder(archivedGoals)];
   const unique = new Map<string, Goal>();
   for (const goal of combined) {
     if (!unique.has(goal.id)) {
@@ -1058,16 +1062,21 @@ export default function Home() {
             const uniqueGoals = (data.goals ?? []).reduce((acc: Goal[], goal: Goal) => {
               const isDuplicate = acc.some(g => g.title.toLowerCase() === goal.title.toLowerCase());
               if (!isDuplicate) {
-                // Ensure archived field exists with default value
-                acc.push({ ...goal, archived: goal.archived ?? false });
+                // Ensure archived/order fields exist with default values
+                acc.push({
+                  ...goal,
+                  archived: goal.archived ?? false,
+                  sortOrder: goal.sortOrder ?? acc.length,
+                });
               }
               return acc;
             }, []);
-            setGoals(uniqueGoals);
-            const serializedGoals = JSON.stringify(uniqueGoals);
+            const normalizedGoals = normalizeGoalOrder(uniqueGoals);
+            setGoals(normalizedGoals);
+            const serializedGoals = JSON.stringify(normalizedGoals);
             lastProcessedGoalsRef.current = serializedGoals;
             lastServerSavedGoalsRef.current = serializedGoals;
-            pendingGoalsRef.current = uniqueGoals;
+            pendingGoalsRef.current = normalizedGoals;
 
             const normalizedSchedule = normalizeScheduleEntryColors(data.scheduleEntries ?? {});
             setScheduleEntries(normalizedSchedule);
@@ -1922,10 +1931,11 @@ export default function Home() {
       title,
       timeframe: "",
       keyResults: [],
+      sortOrder: goals.length,
       archived: false,
     };
     setGoals((prev) => {
-      const updatedGoals = [...prev, nextGoal];
+      const updatedGoals = normalizeGoalOrder([...prev, nextGoal]);
       saveGoalsNow(updatedGoals);
       return updatedGoals;
     });
@@ -1953,10 +1963,14 @@ export default function Home() {
 
     const previousGoals = goals;
     const previousArchivedGoals = archivedGoals;
-    const updatedGoal = { ...goalToArchive, archived: true };
+    const updatedGoal = {
+      ...goalToArchive,
+      archived: true,
+      sortOrder: archivedGoals.length,
+    };
 
     // Optimistic update
-    setGoals((prev) => prev.filter((goal) => goal.id !== goalId));
+    setGoals((prev) => normalizeGoalOrder(prev.filter((goal) => goal.id !== goalId)));
     setArchivedGoals((prev) => [...prev, updatedGoal]);
 
     try {
@@ -1985,11 +1999,15 @@ export default function Home() {
 
     const previousGoals = goals;
     const previousArchivedGoals = archivedGoals;
-    const updatedGoal = { ...goalToUnarchive, archived: false };
+    const updatedGoal = {
+      ...goalToUnarchive,
+      archived: false,
+      sortOrder: goals.length,
+    };
 
     // Optimistic update
-    setArchivedGoals((prev) => prev.filter((goal) => goal.id !== goalId));
-    setGoals((prev) => [...prev, updatedGoal]);
+    setArchivedGoals((prev) => normalizeGoalOrder(prev.filter((goal) => goal.id !== goalId)));
+    setGoals((prev) => normalizeGoalOrder([...prev, updatedGoal]));
 
     try {
       const response = await fetch('/api/goals/archive', {
@@ -2018,10 +2036,30 @@ export default function Home() {
         throw new Error('Failed to fetch archived goals');
       }
       const data = await response.json();
-      setArchivedGoals(data.goals || []);
+      setArchivedGoals(normalizeGoalOrder(data.goals || []));
     } catch (error) {
       console.error('Error fetching archived goals:', error);
     }
+  };
+
+  const moveGoal = (goalId: string, direction: "up" | "down") => {
+    setGoals((prev) => {
+      const currentIndex = prev.findIndex((goal) => goal.id === goalId);
+      if (currentIndex === -1) {
+        return prev;
+      }
+      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) {
+        return prev;
+      }
+
+      const reordered = [...prev];
+      const [movedGoal] = reordered.splice(currentIndex, 1);
+      reordered.splice(targetIndex, 0, movedGoal!);
+      const normalized = normalizeGoalOrder(reordered);
+      saveGoalsNow(normalized);
+      return normalized;
+    });
   };
 
 const handleKrDraftChange = (goalId: string, value: string) => {
@@ -2665,7 +2703,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             No archived goals yet.
           </p>
         )}
-        {(isViewingArchived ? archivedGoals : goals).map((goal) => {
+        {(isViewingArchived ? archivedGoals : goals).map((goal, goalIndex) => {
           const draft = krDrafts[goal.id] ?? { title: "" };
           return (
             <div
@@ -2720,6 +2758,28 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 <div className="flex items-center gap-3">
                   {activeGoalCardId === goal.id && (
                     <>
+                      {!isViewingArchived ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => moveGoal(goal.id, "up")}
+                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                            aria-label="Move goal up"
+                            disabled={goalIndex === 0}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveGoal(goal.id, "down")}
+                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                            aria-label="Move goal down"
+                            disabled={goalIndex === goals.length - 1}
+                          >
+                            ↓
+                          </button>
+                        </>
+                      ) : null}
                       {isViewingArchived ? (
                         <button
                           type="button"

@@ -88,6 +88,7 @@ model Goal {
   userId         String
   title          String
   timeframe      String
+  sortOrder      Int         @default(0)
   statusOverride String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt

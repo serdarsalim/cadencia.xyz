@@ -24,9 +24,7 @@ export async function GET() {
           include: {
             keyResults: true
           },
-          orderBy: {
-            createdAt: 'asc'
-          }
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
         }
       }
     })
@@ -88,15 +86,16 @@ export async function POST(request: NextRequest) {
         )
         const processedGoalIds = new Set<string>()
 
-        for (const goal of goals) {
+        for (const [index, goal] of goals.entries()) {
           const goalId = goal.id || randomUUID()
           processedGoalIds.add(goalId)
 
           const baseData = {
             title: goal.title,
             timeframe: goal.timeframe,
+            sortOrder: index,
             statusOverride: goal.statusOverride || null,
-            archived: (goal as any).archived || false,
+            archived: goal.archived ?? false,
             userId: user.id
           }
 
@@ -122,6 +121,7 @@ export async function POST(request: NextRequest) {
           const goalNeedsUpdate =
             existingGoal.title !== baseData.title ||
             existingGoal.timeframe !== baseData.timeframe ||
+            existingGoal.sortOrder !== baseData.sortOrder ||
             existingGoal.statusOverride !== baseData.statusOverride ||
             existingGoal.archived !== baseData.archived
 
@@ -131,6 +131,7 @@ export async function POST(request: NextRequest) {
               data: {
                 title: baseData.title,
                 timeframe: baseData.timeframe,
+                sortOrder: baseData.sortOrder,
                 statusOverride: baseData.statusOverride,
                 archived: baseData.archived
               }
@@ -215,9 +216,7 @@ export async function POST(request: NextRequest) {
           include: {
             keyResults: true
           },
-          orderBy: {
-            createdAt: 'asc'
-          }
+          orderBy: [{ archived: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }]
         })
       } catch (txError) {
         console.error('Transaction error:', txError)

@@ -23,9 +23,7 @@ export async function GET() {
           include: {
             keyResults: true
           },
-          orderBy: {
-            createdAt: 'desc'
-          }
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
         }
       }
     })
@@ -76,10 +74,23 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
     }
 
+    const updateData: { archived: boolean; sortOrder?: number } = { archived }
+    if (!archived) {
+      const lastActiveGoal = await prisma.goal.findFirst({
+        where: {
+          userId: user.id,
+          archived: false
+        },
+        orderBy: [{ sortOrder: 'desc' }, { createdAt: 'desc' }],
+        select: { sortOrder: true }
+      })
+      updateData.sortOrder = (lastActiveGoal?.sortOrder ?? -1) + 1
+    }
+
     // Update the goal's archived status
     const updatedGoal = await prisma.goal.update({
       where: { id: goalId },
-      data: { archived },
+      data: updateData,
       include: {
         keyResults: true
       }

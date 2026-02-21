@@ -14,6 +14,7 @@ export type Goal = {
   id: string;
   title: string;
   timeframe: string;
+  sortOrder?: number;
   description?: string;
   keyResults: KeyResult[];
   statusOverride?: KeyResultStatus;

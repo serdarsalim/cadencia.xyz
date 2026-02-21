@@ -11,6 +11,7 @@ export const goalSchema = z.object({
   id: z.string(),
   title: z.string().min(1).max(200),
   timeframe: z.string().max(100),
+  sortOrder: z.number().int().nonnegative().optional(),
   description: z.string().max(1000).optional(),
   statusOverride: z.string().max(50).optional().nullable(),
   archived: z.boolean().optional(),
