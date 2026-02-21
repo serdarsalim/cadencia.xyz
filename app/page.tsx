@@ -2754,7 +2754,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           return (
             <div
               key={goal.id}
-              className="okr-card px-7 py-6"
+              className="okr-card px-7 pt-6 pb-4"
               onClick={() => setActiveGoalCardId(goal.id)}
               onFocusCapture={() => setActiveGoalCardId(goal.id)}
               ref={(node) => {
