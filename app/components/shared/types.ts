@@ -7,6 +7,7 @@ export type KeyResultStatus = "on-hold" | "started" | "completed";
 export type KeyResult = {
   id: string;
   title: string;
+  sortOrder?: number;
   status: KeyResultStatus;
 };
 

@@ -22,7 +22,9 @@ export async function GET() {
             archived: false
           },
           include: {
-            keyResults: true
+            keyResults: {
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
+            }
           },
           orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
         }
@@ -79,7 +81,11 @@ export async function POST(request: NextRequest) {
 
         const existingGoals = await tx.goal.findMany({
           where: { userId: user.id },
-          include: { keyResults: true }
+          include: {
+            keyResults: {
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
+            }
+          }
         })
         const existingGoalMap = new Map(
           existingGoals.map(goal => [goal.id, goal])
@@ -107,10 +113,11 @@ export async function POST(request: NextRequest) {
                 id: goalId,
                 ...baseData,
                 keyResults: {
-                  create: goal.keyResults.map(keyResult => ({
+                  create: goal.keyResults.map((keyResult, keyResultIndex) => ({
                     id: keyResult.id || randomUUID(),
                     title: keyResult.title,
-                    status: keyResult.status
+                    status: keyResult.status,
+                    sortOrder: keyResultIndex
                   }))
                 }
               }
@@ -147,9 +154,10 @@ export async function POST(request: NextRequest) {
             goalId: string
             title: string
             status: string
+            sortOrder: number
           }[] = []
 
-          for (const keyResult of goal.keyResults) {
+          for (const [keyResultIndex, keyResult] of goal.keyResults.entries()) {
             const keyResultId = keyResult.id || randomUUID()
             incomingKeyResultIds.add(keyResultId)
 
@@ -162,20 +170,23 @@ export async function POST(request: NextRequest) {
                 id: keyResultId,
                 goalId,
                 title: keyResult.title,
-                status: keyResult.status
+                status: keyResult.status,
+                sortOrder: keyResultIndex
               })
               continue
             }
 
             if (
               existingKeyResult.title !== keyResult.title ||
-              existingKeyResult.status !== keyResult.status
+              existingKeyResult.status !== keyResult.status ||
+              existingKeyResult.sortOrder !== keyResultIndex
             ) {
               await tx.keyResult.update({
                 where: { id: keyResultId },
                 data: {
                   title: keyResult.title,
-                  status: keyResult.status
+                  status: keyResult.status,
+                  sortOrder: keyResultIndex
                 }
               })
             }
@@ -214,7 +225,9 @@ export async function POST(request: NextRequest) {
         return tx.goal.findMany({
           where: { userId: user.id },
           include: {
-            keyResults: true
+            keyResults: {
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
+            }
           },
           orderBy: [{ archived: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }]
         })

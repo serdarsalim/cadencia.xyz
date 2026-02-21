@@ -21,7 +21,9 @@ export async function GET() {
             archived: true
           },
           include: {
-            keyResults: true
+            keyResults: {
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
+            }
           },
           orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
         }
@@ -92,7 +94,9 @@ export async function PATCH(request: NextRequest) {
       where: { id: goalId },
       data: updateData,
       include: {
-        keyResults: true
+        keyResults: {
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
+        }
       }
     })
 

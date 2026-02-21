@@ -27,7 +27,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
             email: true,
             profile: true,
             goals: {
-              include: { keyResults: true },
+              include: {
+                keyResults: {
+                  orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+                },
+              },
               orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
             },
             productivityRatings: true,

@@ -200,6 +200,7 @@ type KeyResultStatus = "on-hold" | "started" | "completed";
 type KeyResult = {
   id: string;
   title: string;
+  sortOrder?: number;
   status: KeyResultStatus;
 };
 
@@ -215,7 +216,14 @@ type Goal = {
 };
 
 const normalizeGoalOrder = (goalList: Goal[]) =>
-  goalList.map((goal, index) => ({ ...goal, sortOrder: index }));
+  goalList.map((goal, index) => ({
+    ...goal,
+    sortOrder: index,
+    keyResults: goal.keyResults.map((kr, krIndex) => ({
+      ...kr,
+      sortOrder: krIndex,
+    })),
+  }));
 
 const combineGoalsForSave = (activeGoals: Goal[], archivedGoals: Goal[]) => {
   const combined = [...normalizeGoalOrder(activeGoals), ...normalizeGoalOrder(archivedGoals)];
@@ -1067,6 +1075,10 @@ export default function Home() {
                   ...goal,
                   archived: goal.archived ?? false,
                   sortOrder: goal.sortOrder ?? acc.length,
+                  keyResults: (goal.keyResults ?? []).map((kr, krIndex) => ({
+                    ...kr,
+                    sortOrder: kr.sortOrder ?? krIndex,
+                  })),
                 });
               }
               return acc;
@@ -2342,16 +2354,21 @@ const beginKrFieldEdit = (
     const newKr: KeyResult = {
       id: generateId(),
       title,
+      sortOrder: 0,
       status: "started",
     };
     setGoals((prev) => {
       const updatedGoals = prev.map((goal) =>
         goal.id === goalId
-          ? { ...goal, keyResults: [...goal.keyResults, newKr] }
+          ? {
+              ...goal,
+              keyResults: [...goal.keyResults, { ...newKr, sortOrder: goal.keyResults.length }],
+            }
           : goal
       );
-      saveGoalsNow(updatedGoals);
-      return updatedGoals;
+      const normalized = normalizeGoalOrder(updatedGoals);
+      saveGoalsNow(normalized);
+      return normalized;
     });
     setKrDrafts((prev) => {
       const next = { ...prev };
@@ -2362,16 +2379,45 @@ const beginKrFieldEdit = (
   };
 
   const handleRemoveKeyResult = (goalId: string, krId: string) => {
-    setGoals((prev) =>
-      prev.map((goal) =>
+    setGoals((prev) => {
+      const updatedGoals = prev.map((goal) =>
         goal.id === goalId
           ? {
               ...goal,
               keyResults: goal.keyResults.filter((kr) => kr.id !== krId),
             }
           : goal
-      )
-    );
+      );
+      const normalized = normalizeGoalOrder(updatedGoals);
+      saveGoalsNow(normalized);
+      return normalized;
+    });
+  };
+
+  const moveKeyResult = (goalId: string, krId: string, direction: "up" | "down") => {
+    setGoals((prev) => {
+      const updatedGoals = prev.map((goal) => {
+        if (goal.id !== goalId) {
+          return goal;
+        }
+        const currentIndex = goal.keyResults.findIndex((kr) => kr.id === krId);
+        if (currentIndex === -1) {
+          return goal;
+        }
+        const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+        if (targetIndex < 0 || targetIndex >= goal.keyResults.length) {
+          return goal;
+        }
+        const reorderedKeyResults = [...goal.keyResults];
+        const [movedKr] = reorderedKeyResults.splice(currentIndex, 1);
+        reorderedKeyResults.splice(targetIndex, 0, movedKr!);
+        return { ...goal, keyResults: reorderedKeyResults };
+      });
+
+      const normalized = normalizeGoalOrder(updatedGoals);
+      saveGoalsNow(normalized);
+      return normalized;
+    });
   };
 
   const cycleKeyResultStatus = (goalId: string, krId: string) => {
@@ -2959,16 +3005,36 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                             </span>
                           )}
                           {activeGoalCardId === goal.id && !isViewingArchived && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleRemoveKeyResult(goal.id, kr.id)
-                              }
-                              className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
-                              aria-label="Remove key result"
-                            >
-                              ✕
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => moveKeyResult(goal.id, kr.id, "up")}
+                                className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                                aria-label="Move key result up"
+                                disabled={krIndex === 0}
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveKeyResult(goal.id, kr.id, "down")}
+                                className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                                aria-label="Move key result down"
+                                disabled={krIndex === goal.keyResults.length - 1}
+                              >
+                                ↓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleRemoveKeyResult(goal.id, kr.id)
+                                }
+                                className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
+                                aria-label="Remove key result"
+                              >
+                                ✕
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>

@@ -4,6 +4,7 @@ import { z } from 'zod'
 export const keyResultSchema = z.object({
   id: z.string(),
   title: z.string().min(1).max(500),
+  sortOrder: z.number().int().nonnegative().optional(),
   status: z.enum(['started', 'pending', 'on-hold', 'completed'])
 })
 
