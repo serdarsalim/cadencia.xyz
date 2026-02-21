@@ -622,8 +622,10 @@ export default function Home() {
     krId: string;
     field: "title";
   } | null>(null);
+  const [weeklyGoalsMinHeight, setWeeklyGoalsMinHeight] = useState<number | null>(null);
   const [activeGoalCardId, setActiveGoalCardId] = useState<string | null>(null);
   const okrCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const calendarColumnRef = useRef<HTMLDivElement | null>(null);
   const [weeklyNotes, setWeeklyNotes] = useState<Record<string, WeeklyNoteEntry>>({});
   const [selectedWeekKey, setSelectedWeekKey] = useState<string | null>(null);
   const lastWeekStartDayRef = useRef<WeekdayIndex | null>(null);
@@ -1034,6 +1036,45 @@ export default function Home() {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [activeShareOptionsId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const updateHeight = () => {
+      const leftColumn = calendarColumnRef.current;
+      if (!leftColumn) {
+        setWeeklyGoalsMinHeight(null);
+        return;
+      }
+      const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+      if (!isDesktop) {
+        setWeeklyGoalsMinHeight(null);
+        return;
+      }
+      setWeeklyGoalsMinHeight(Math.ceil(leftColumn.getBoundingClientRect().height));
+    };
+
+    updateHeight();
+
+    const leftColumn = calendarColumnRef.current;
+    if (!leftColumn) {
+      return;
+    }
+
+    const observer = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => {
+          updateHeight();
+        })
+      : null;
+    observer?.observe(leftColumn);
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, [view]);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -3241,8 +3282,9 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
           {view === "productivity" && (
             <>
-              <section className="mx-auto mt-8 grid max-w-480 gap-8 text-left lg:grid-cols-[1fr_1.2fr]">
+              <section className="mx-auto mt-8 grid max-w-480 gap-8 text-left lg:grid-cols-[1fr_1.2fr] lg:items-stretch">
                 <div
+                  ref={calendarColumnRef}
                   className="space-y-4 order-2 lg:order-1"
                   data-print-hidden={printOptions.showCalendar ? "false" : "true"}
                 >
@@ -3311,9 +3353,10 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   />
                 </div>
 
-                <div className="flex flex-col rounded-3xl px-0 pb-4 pt-0 order-1 lg:order-2 lg:px-4">
+                <div className="flex flex-col rounded-3xl px-0 pb-4 pt-0 order-1 lg:order-2 lg:px-4 lg:h-full">
                 <div
-                  className="flex-1 px-0 pt-4 pb-0 weekly-goals-bg sm:px-4 sm:pb-4 rounded-md mb-4 border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)]"
+                  className="flex-1 px-0 pt-4 pb-0 weekly-goals-bg sm:px-4 sm:pb-4 rounded-md border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] lg:h-full"
+                  style={weeklyGoalsMinHeight ? { minHeight: `${weeklyGoalsMinHeight}px` } : undefined}
                   data-print-hidden={printOptions.showWeeklyGoals ? "false" : "true"}
                 >
                   <div className="mb-2 flex items-center justify-between gap-3 px-4 sm:px-0">
@@ -4627,7 +4670,7 @@ const ProductivityGrid = ({
     const relativeCellCenterY =
       cellRect.top - containerRect.top + cellRect.height / 2;
 
-    let targetX = preferRightSide
+    const targetX = preferRightSide
       ? cellRect.right - containerRect.left + sideOffset
       : cellRect.left - containerRect.left - sideOffset;
     const clampedX = preferRightSide
