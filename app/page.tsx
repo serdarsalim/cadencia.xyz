@@ -4175,6 +4175,7 @@ const ProductivityGrid = ({
     label: string;
     x: number;
     y: number;
+    align: "left" | "right";
   } | null>(null);
 
   // Helper function to check if a day is a weekend (not in workDays)
@@ -4617,23 +4618,36 @@ const ProductivityGrid = ({
       day: "2-digit",
       month: "short",
     });
-    const tooltipWidth = 140;
+    const tooltipWidth = 160;
     const tooltipHeight = 36;
-    const padding = 8;
-    const relativeX = event.clientX - containerRect.left;
-    const relativeY = event.clientY - containerRect.top;
-    const clampedX = Math.min(
-      containerRect.width - padding,
-      Math.max(tooltipWidth + padding, relativeX)
-    );
+    const padding = 10;
+    const sideOffset = 10;
+    const cellRect = event.currentTarget.getBoundingClientRect();
+    const preferRightSide = monthIndex < 6;
+    const relativeCellCenterY =
+      cellRect.top - containerRect.top + cellRect.height / 2;
+
+    let targetX = preferRightSide
+      ? cellRect.right - containerRect.left + sideOffset
+      : cellRect.left - containerRect.left - sideOffset;
+    const clampedX = preferRightSide
+      ? Math.min(
+          containerRect.width - tooltipWidth - padding,
+          Math.max(padding, targetX)
+        )
+      : Math.max(
+          tooltipWidth + padding,
+          Math.min(containerRect.width - padding, targetX)
+        );
     const clampedY = Math.min(
-      containerRect.height - padding,
-      Math.max(tooltipHeight + padding, relativeY)
+      containerRect.height - tooltipHeight / 2 - padding,
+      Math.max(tooltipHeight / 2 + padding, relativeCellCenterY)
     );
     setHoveredDayDisplay({
       label,
       x: clampedX,
       y: clampedY,
+      align: preferRightSide ? "right" : "left",
     });
   };
 
@@ -4681,7 +4695,10 @@ const ProductivityGrid = ({
             style={{
               left: hoveredDayDisplay.x,
               top: hoveredDayDisplay.y,
-              transform: "translate(-100%, -100%)",
+              transform:
+                hoveredDayDisplay.align === "right"
+                  ? "translate(0, -50%)"
+                  : "translate(-100%, -50%)",
             }}
           >
             <span className="rounded-full border border-foreground bg-background px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-foreground shadow whitespace-nowrap">
@@ -4874,7 +4891,11 @@ const ProductivityGrid = ({
                       }
                     }
                   }}
-                  className={`h-4 w-full text-[10px] font-semibold text-transparent transition focus:text-transparent relative ${weekBorderClass} ${
+                  className={`h-4 w-full text-[10px] font-semibold text-transparent transition focus:text-transparent relative ${
+                    theme === "dark"
+                      ? "hover:outline hover:outline-1 hover:outline-offset-[-1px] hover:outline-slate-200"
+                      : "hover:outline hover:outline-2 hover:outline-offset-[-1px] hover:outline-orange-500"
+                  } ${weekBorderClass} ${
                     hasValue
                       ? scaleEntry.color
                       : isSickDay
@@ -5060,6 +5081,10 @@ const ProductivityGrid = ({
                         }
                       }}
                       className={`relative flex h-5 w-full items-center justify-center border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:h-5 ${
+                        theme === "dark"
+                          ? "hover:outline hover:outline-1 hover:outline-offset-[-1px] hover:outline-slate-200"
+                          : "hover:outline hover:outline-2 hover:outline-offset-[-1px] hover:outline-orange-500"
+                      } ${
                         hasDayScores
                           ? "cursor-pointer"
                           : "hover:opacity-90"
