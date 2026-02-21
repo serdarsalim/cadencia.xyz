@@ -3120,6 +3120,14 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   className="space-y-4 order-2 lg:order-1"
                   data-print-hidden={printOptions.showCalendar ? "false" : "true"}
                 >
+                  {dosDontsPanel ? (
+                    <div
+                      className="mb-4"
+                      data-print-hidden={printOptions.showDosDonts ? "false" : "true"}
+                    >
+                      {dosDontsPanel}
+                    </div>
+                  ) : null}
                   <ProductivityGrid
                     year={productivityYear}
                     setYear={setProductivityYear}
@@ -3175,9 +3183,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     productivityMode={productivityMode}
                     theme={theme}
                   />
-                  {productivityMode === "week" && dosDontsPanel ? (
-                    <div className="mt-4 hidden lg:block">{dosDontsPanel}</div>
-                  ) : null}
                 </div>
 
                 <div className="flex flex-col rounded-3xl px-0 pb-4 pt-0 order-1 lg:order-2 lg:px-4">
@@ -3304,22 +3309,6 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   />
                   </div>
                 </div>
-                {productivityMode === "day" && dosDontsPanel ? (
-                  <div
-                    className="mb-4"
-                    data-print-hidden={printOptions.showDosDonts ? "false" : "true"}
-                  >
-                    {dosDontsPanel}
-                  </div>
-                ) : null}
-                {productivityMode === "week" && dosDontsPanel ? (
-                  <div
-                    className="mb-4 lg:hidden"
-                    data-print-hidden={printOptions.showDosDonts ? "false" : "true"}
-                  >
-                    {dosDontsPanel}
-                  </div>
-                ) : null}
                 </div>
               </section>
               <div data-print-hidden={printOptions.showOkrs ? "false" : "true"}>
