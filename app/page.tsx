@@ -4527,7 +4527,13 @@ const ProductivityGrid = ({
   };
 
   const renderDayGrid = () => (
-    <div className="border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-[#fdfcfb] p-6 rounded-md">
+    <div
+      className={`border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] p-6 rounded-md ${
+        theme === "dark"
+          ? "bg-[color-mix(in_srgb,var(--background)_92%,var(--foreground)_8%)]"
+          : "bg-[#ffffff]"
+      }`}
+    >
       <div
         className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
         style={{
@@ -4680,7 +4686,7 @@ const ProductivityGrid = ({
                       : bothSickDays
                         ? "border-t border-t-gray-400"
                       : mediumPairWithPrevious
-                        ? "border-t border-t-[#e5e7eb]"
+                        ? (theme === "dark" ? "border-t-[0.5px] border-t-gray-500" : "border-t-[0.5px] border-t-[#e5e7eb]")
                         : "border-t-[0.5px] border-t-gray-300");
                 // Bottom border: if last in week and (current or next has color/PTO), make it darker
                 // In dark mode, if both are day-offs, use lighter border
@@ -4695,7 +4701,7 @@ const ProductivityGrid = ({
                       : bothSickDaysBottom
                         ? "border-b border-b-gray-400"
                       : mediumPairWithNext
-                        ? "border-b border-b-[#e5e7eb]"
+                        ? (theme === "dark" ? "border-b-[0.5px] border-b-gray-500" : "border-b-[0.5px] border-b-[#e5e7eb]")
                         : "border-b-[0.5px] border-b-gray-300");
 
                 // Left and right borders: use white in dark mode for selected week
@@ -4809,7 +4815,13 @@ const ProductivityGrid = ({
 
   const renderWeekGrid = () => {
     return (
-      <div className="border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-[#fdfcfb] p-6 rounded-md">
+      <div
+        className={`border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] p-6 rounded-md ${
+          theme === "dark"
+            ? "bg-[color-mix(in_srgb,var(--background)_92%,var(--foreground)_8%)]"
+            : "bg-[#ffffff]"
+        }`}
+      >
         <div
           className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
           style={{
