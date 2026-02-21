@@ -3246,8 +3246,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             You keep drifting through life? Stop and use Cadencia.
           </p>
           <p className="mx-auto mt-7 max-w-4xl text-base sm:text-2xl leading-relaxed text-[color-mix(in_srgb,var(--foreground)_78%,transparent)]">
-            Inspired by GitHub&apos;s productivity heatmap. Built for personal accountability, mentor check-ins,
-            and lightweight team visibility without micromanagement.
+            Built for goal tracking, personal accountability, mentor check-ins, and lightweight team visibility
+            without micromanagement. Inspired by GitHub&apos;s productivity heatmap.
           </p>
           <p className="mx-auto mt-4 max-w-3xl text-sm sm:text-base text-[color-mix(in_srgb,var(--foreground)_68%,transparent)]">
             Free to use. Open source on{" "}
@@ -3301,12 +3301,12 @@ const goalStatusBadge = (status: KeyResultStatus) => {
   return (
     <div className="app-shell flex min-h-screen flex-col text-foreground transition-colors">
       {!userEmail && isHydrated ? (
-        <div className="w-full bg-[#d8c06c] px-4 py-2.5 text-center text-sm font-semibold text-[#2c2410]">
+        <div className="w-full bg-[#d8c06c] px-4 py-3 text-center text-base sm:text-lg font-semibold text-[#2c2410]">
           Sign up and start tracking your goals. Time is running out.
           <button
             type="button"
             onClick={() => signIn("google", { callbackUrl: "/" })}
-            className="ml-2 underline underline-offset-2 hover:opacity-80"
+            className="ml-2 text-base sm:text-lg font-bold underline underline-offset-2 hover:opacity-80"
           >
             Sign up
           </button>
@@ -4193,6 +4193,9 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           <div className="order-3 flex items-center justify-center gap-4 text-xs uppercase tracking-[0.3em] text-white/70">
             <Link href="/about" className="transition hover:text-white">
               About
+            </Link>
+            <Link href="/ai" className="transition hover:text-white">
+              AI
             </Link>
             <Link href="/terms" className="transition hover:text-white">
               Terms

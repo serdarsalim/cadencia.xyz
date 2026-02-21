@@ -28,13 +28,28 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Cadencia - Achieve your goals",
+  metadataBase: new URL("https://cadencia.xyz"),
+  title: {
+    default: "Cadencia - Stop drifting. Track your goals daily.",
+    template: "%s | Cadencia",
+  },
   description: APP_DESCRIPTION,
   applicationName: APP_NAME,
+  alternates: {
+    canonical: "/",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
   keywords: [
     "Cadencia",
+    "goal tracking app",
     "personal goal setting",
     "productivity tracker",
+    "github style heatmap",
+    "accountability app",
+    "mentor progress tracking",
     "personal OKRs",
     "weekly schedule planner",
     "minimalist planning app",
@@ -43,25 +58,25 @@ export const metadata: Metadata = {
   authors: [{ name: APP_NAME }],
   category: "productivity",
   openGraph: {
-    title: "Cadencia - Achieve your goals",
+    title: "Cadencia - Stop drifting. Track your goals daily.",
     description: APP_DESCRIPTION,
     siteName: APP_NAME,
     type: "website",
-    url: "https://cadencia.xyz",
+    url: "/",
     images: [
       {
-        url: "https://cadencia.xyz/websitecard.png",
+        url: "/websitecard.png",
         width: 1200,
         height: 630,
-        alt: "Cadencia - Achieve your goals",
+        alt: "Cadencia - Goal tracking with a GitHub-style heatmap",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Cadencia - Achieve your goals",
+    title: "Cadencia - Stop drifting. Track your goals daily.",
     description: APP_DESCRIPTION,
-    images: ["https://cadencia.xyz/websitecard.png"],
+    images: ["/websitecard.png"],
   },
 };
 

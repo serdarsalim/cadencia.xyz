@@ -1,7 +1,7 @@
 export const APP_NAME = "Cadencia";
 
 export const APP_DESCRIPTION =
-  "Cadencia is a minimalist app for setting personal OKRs with Key Results and tracking weekly productivity goals.";
+  "Cadencia is a free goal-tracking app with a GitHub-style productivity heatmap, weekly planning, OKRs, and accountability-friendly sharing.";
 
 export const APP_LONG_DESCRIPTION = `A focused personal OKR system with weekly planning and daily self-scoring. Set long-term objectives with measurable key results, plan what you want to achieve each week, and score yourself daily (not achieved, partly achieved, or achieved). View your year at a glance with a visual calendar showing your productivity patterns.`;
 

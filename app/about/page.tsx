@@ -1,12 +1,18 @@
-"use client";
-
 import Link from "next/link";
+import type { Metadata } from "next";
 import {
-  APP_FEATURES,
-  APP_LONG_DESCRIPTION,
   APP_NAME,
   APP_TAGLINE,
 } from "@/lib/branding";
+
+export const metadata: Metadata = {
+  title: "About",
+  description:
+    "Learn what Cadencia is for, how people use it, and why it is built around a GitHub-inspired productivity heatmap.",
+  alternates: {
+    canonical: "/about",
+  },
+};
 
 export default function AboutPage() {
   return (
@@ -16,39 +22,49 @@ export default function AboutPage() {
           {APP_TAGLINE}
         </p>
         <h1 className="text-5xl font-light text-foreground">{APP_NAME}</h1>
-        <p className="text-base text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
-          {APP_LONG_DESCRIPTION}
+        <p className="text-lg leading-relaxed text-[color-mix(in_srgb,var(--foreground)_75%,transparent)]">
+          Cadencia started as a simple question: how do you keep promises to yourself when life gets noisy?
+          The answer was a calm weekly rhythm and a visual year-at-a-glance heatmap.
+          Inspired by GitHub&apos;s productivity heatmap.
         </p>
-        <div className="flex flex-wrap gap-3 text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-          {APP_FEATURES.map((feature) => (
-            <span key={feature}>{feature}</span>
-          ))}
-        </div>
         <div className="rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-6 text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] space-y-4">
           <div>
             <h2 className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)] mb-2">
-              How it works
+              How People Use It
             </h2>
             <ul className="space-y-2 list-disc list-inside">
               <li>
-                <strong>Set OKRs:</strong> Create objectives with key results. Track their status (not started, in progress, complete) and archive goals you're no longer pursuing.
+                <strong>Run your week on purpose:</strong> Set weekly goals, then score each day against what you said matters.
               </li>
               <li>
-                <strong>Plan weekly:</strong> Each week, write your goals in free text. This is your plan for the week—flexible and judgment-free.
+                <strong>Keep behavioral guardrails:</strong> Use Do&apos;s and Don&apos;ts to stay honest about habits, not just outcomes.
               </li>
               <li>
-                <strong>Score daily:</strong> Rate each day against your weekly plan. Click a day to cycle through: not achieved → partly achieved → achieved.
+                <strong>Track meaningful progress:</strong> Use OKRs when you need deeper structure and long-term direction.
               </li>
               <li>
-                <strong>Set behavioral anchors:</strong> Define your Do's and Don'ts—principles that guide your work habits.
+                <strong>Work with other people:</strong> Share progress with mentors, accountability partners, or lightweight team check-ins.
               </li>
               <li>
-                <strong>Review the year:</strong> The calendar shows your entire year at a glance. Click any day to jump to that week.
+                <strong>Review patterns, not moods:</strong> The calendar gives you a full-year view so trends are obvious.
               </li>
             </ul>
           </div>
           <p>
-            {APP_NAME} is built for personal clarity and accountability. Perfect for New Year's resolutions—the year view runs January to December. It is a personal workspace and does not provide professional advice. By using the product you acknowledge it is provided as-is.
+            Cadencia is built for clarity and accountability. It&apos;s free to use, open source, and designed to stay simple.
+            It helps you decide what to do next, instead of drifting.
+          </p>
+          <p>
+            Built by{" "}
+            <a
+              href="https://serdarsalim.com"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Serdar Salim
+            </a>
+            .
           </p>
         </div>
         <Link
