@@ -161,7 +161,7 @@ export const demoGoals = [
 
 export const demoWeeklyNoteTemplate = {
   content:
-    "<p><strong>Welcome to the Demo!</strong></p><p>This productivity tracker helps you:</p><ul><li>Rate your productivity daily or weekly on the calendar</li><li>Set weekly goals and track progress</li><li>Define Do's and Don'ts to stay focused</li><li>Plan your schedule with time blocks</li><li>Set and track OKRs (Objectives and Key Results)</li><li>Share your progress with others</li></ul><p><em>Sign in to start tracking your own productivity journey!</em></p>",
+    "<p><strong>Weekly priorities</strong></p><ul><li>Ship onboarding v1 and collect first 5 user recordings</li><li>Finish API retry/backoff handling + error boundary tests</li><li>Publish one product update post for users and mentors</li></ul><p><strong>Progress check</strong></p><ul><li>Onboarding v1 shipped on Wednesday</li><li>3/5 user recordings completed</li><li>API reliability work ~70% complete</li><li>Post draft ready, scheduled for Friday</li></ul>",
   dos: "Focus on deep work\nTake regular breaks\nReview goals daily\nCelebrate small wins",
   donts:
     "Don't multitask during focus time\nDon't skip breaks\nDon't overcommit\nDon't compare to others",

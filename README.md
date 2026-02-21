@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Cadencia
 
-## Getting Started
+Cadencia is a personal productivity tracker built around a GitHub-style heatmap for life and work consistency.
 
-First, run the development server:
+Live app: https://cadencia.xyz
+Repository: https://github.com/serdarsalim/cadencia.xyz
 
+## What Cadencia Is
+Cadencia helps you:
+- Score daily or weekly progress on a visual year-at-a-glance calendar
+- Plan weekly goals and review outcomes
+- Track Do's and Don'ts for behavior-level accountability
+- Manage OKRs (Objectives and Key Results)
+- Mark day-off and sick-leave days
+- Share progress with accountability partners, mentors, or teammates
+
+## Core Workflow
+1. Open the app and choose `Demo` or `Sign up`.
+2. In Calendar view, rate each day (or week) by progress level.
+3. Set weekly goals and add Do's / Don'ts.
+4. Track objective progress through OKRs.
+5. Review patterns in the heatmap and adjust each week.
+
+## Signing In and Data
+- Guest/demo mode lets you try the full product flow.
+- To persist data, sign up/sign in with Google.
+- Signed-in users can save and sync their tracking data.
+
+## Running Locally
+### Prerequisites
+- Node.js 20+
+- npm
+- PostgreSQL database (or compatible Neon/Postgres setup)
+
+### Setup
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Create a `.env` file with required variables (example):
+```bash
+DATABASE_URL="postgresql://..."
+NEXTAUTH_SECRET="..."
+NEXTAUTH_URL="http://localhost:3000"
+GOOGLE_CLIENT_ID="..."
+GOOGLE_CLIENT_SECRET="..."
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Run Prisma migrations:
+```bash
+npx prisma migrate deploy
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Start development server:
+```bash
+npm run dev
+```
 
-## Learn More
+Then open `http://localhost:3000`.
 
-To learn more about Next.js, take a look at the following resources:
+## Tech Stack
+- Next.js (App Router)
+- React + TypeScript
+- Prisma + PostgreSQL
+- NextAuth (Google sign-in)
+- Tailwind CSS
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Notes
+- The app includes a logged-out landing page and a demo flow.
+- Demo data is for exploration and does not represent persisted user data.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+Cadencia is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only).
+See `LICENSE` for the full text.

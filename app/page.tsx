@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { UserInfo } from "./components/UserInfo";
 import { migrateFromLocalStorage } from "@/lib/migrate";
@@ -622,6 +623,7 @@ export default function Home() {
     krId: string;
     field: "title";
   } | null>(null);
+  const [showGuestDemo, setShowGuestDemo] = useState(false);
   const [weeklyGoalsMinHeight, setWeeklyGoalsMinHeight] = useState<number | null>(null);
   const [activeGoalCardId, setActiveGoalCardId] = useState<string | null>(null);
   const okrCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -1292,6 +1294,7 @@ export default function Home() {
           setWeeklyGoalsTemplate(
             normalizeWeeklyGoalsTemplate(demoProfile.weeklyGoalsTemplate ?? weeklyGoalsTemplate)
           );
+          setProductivityMode("day");
           setView("productivity");
         }
 
@@ -3208,11 +3211,105 @@ const goalStatusBadge = (status: KeyResultStatus) => {
     );
   }
 
+  if (!userEmail && !showGuestDemo) {
+    return (
+      <div className="app-shell relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 text-foreground">
+        <button
+          type="button"
+          onClick={() => signIn("google", { callbackUrl: "/" })}
+          className="absolute right-6 top-6 z-20 rounded-full border border-[color-mix(in_srgb,var(--foreground)_35%,transparent)] bg-[color-mix(in_srgb,var(--background)_78%,transparent)] px-5 py-2 text-sm font-semibold text-foreground transition hover:border-[color-mix(in_srgb,var(--foreground)_55%,transparent)]"
+        >
+          Sign in
+        </button>
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_12%,color-mix(in_srgb,var(--foreground)_20%,transparent),transparent_42%),radial-gradient(circle_at_15%_20%,rgba(59,130,246,0.16),transparent_35%),radial-gradient(circle_at_82%_18%,rgba(14,165,233,0.14),transparent_34%)]" />
+        <div className="pointer-events-none absolute inset-0 opacity-70">
+          <span className="absolute left-[8%] top-[14%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_55%,transparent)]" />
+          <span className="absolute left-[18%] top-[32%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_45%,transparent)]" />
+          <span className="absolute left-[32%] top-[20%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]" />
+          <span className="absolute left-[64%] top-[16%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_45%,transparent)]" />
+          <span className="absolute left-[74%] top-[28%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_40%,transparent)]" />
+          <span className="absolute left-[88%] top-[18%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]" />
+          <span className="absolute left-[12%] top-[58%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]" />
+          <span className="absolute left-[78%] top-[62%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_45%,transparent)]" />
+          <span className="absolute left-[90%] top-[54%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]" />
+        </div>
+        <main className="relative z-10 w-full max-w-5xl text-center">
+          <img
+            src="/cadencia-app-logo.png"
+            alt="Cadencia"
+            className="mx-auto h-16 w-auto sm:h-20 drop-shadow-[0_0_24px_rgba(59,130,246,0.35)]"
+          />
+          <h1 className="mt-5 text-6xl sm:text-7xl font-black tracking-[-0.03em] text-[color-mix(in_srgb,#60a5fa_72%,#0ea5e9_28%)]">
+            Cadencia
+          </h1>
+          <p className="mt-4 text-sm sm:text-base uppercase tracking-[0.24em] text-[color-mix(in_srgb,#60a5fa_82%,#0ea5e9_18%)]">
+            You keep drifting through life? Stop and use Cadencia.
+          </p>
+          <p className="mx-auto mt-7 max-w-4xl text-base sm:text-2xl leading-relaxed text-[color-mix(in_srgb,var(--foreground)_78%,transparent)]">
+            Inspired by GitHub&apos;s productivity heatmap. Built for personal accountability, mentor check-ins,
+            and lightweight team visibility without micromanagement.
+          </p>
+          <p className="mx-auto mt-4 max-w-3xl text-sm sm:text-base text-[color-mix(in_srgb,var(--foreground)_68%,transparent)]">
+            Free to use. Open source on{" "}
+            <a
+              href="https://github.com/serdarsalim/cadencia.xyz"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2 hover:opacity-80"
+            >
+              GitHub
+            </a>
+            .
+          </p>
+          <p className="mx-auto mt-2 max-w-3xl text-sm sm:text-base text-[color-mix(in_srgb,var(--foreground)_68%,transparent)]">
+            Built by{" "}
+            <a
+              href="https://serdarsalim.com"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2 hover:opacity-80"
+            >
+              Serdar Salim
+            </a>
+            .
+          </p>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                setProductivityMode("day");
+                setView("productivity");
+                setShowGuestDemo(true);
+              }}
+              className="rounded-full bg-[color-mix(in_srgb,#60a5fa_70%,#0ea5e9_30%)] px-8 py-3 text-sm font-semibold text-white transition hover:brightness-105"
+            >
+              Demo
+            </button>
+            <button
+              type="button"
+              onClick={() => signIn("google", { callbackUrl: "/" })}
+              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_35%,transparent)] bg-[color-mix(in_srgb,var(--background)_78%,transparent)] px-8 py-3 text-sm font-semibold text-foreground transition hover:border-[color-mix(in_srgb,var(--foreground)_55%,transparent)]"
+            >
+              Sign up
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell flex min-h-screen flex-col text-foreground transition-colors">
       {!userEmail && isHydrated ? (
-        <div className="flex justify-end px-6 pt-3">
-          <UserInfo />
+        <div className="w-full bg-[#d8c06c] px-4 py-2.5 text-center text-sm font-semibold text-[#2c2410]">
+          Sign up and start tracking your goals. Time is running out.
+          <button
+            type="button"
+            onClick={() => signIn("google", { callbackUrl: "/" })}
+            className="ml-2 underline underline-offset-2 hover:opacity-80"
+          >
+            Sign up
+          </button>
         </div>
       ) : null}
       <main className="flex flex-1 items-start justify-center pl-6 pr-4">
