@@ -4937,6 +4937,22 @@ const ProductivityGrid = ({
                   </div>
                 ))}
               </div>
+              <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
+                <div className="flex items-center gap-2 whitespace-nowrap">
+                  <span
+                    className="h-3 w-3 rounded day-off-bg border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4"
+                    aria-hidden="true"
+                  />
+                  <span>Day off</span>
+                </div>
+                <div className="flex items-center gap-2 whitespace-nowrap">
+                  <span
+                    className="h-3 w-3 rounded bg-[#bfdbfe] dark:bg-[#3b82f6] border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4"
+                    aria-hidden="true"
+                  />
+                  <span>Sick leave</span>
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -5124,6 +5140,22 @@ const ProductivityGrid = ({
                       <span>{item.label}</span>
                     </div>
                   ))}
+                </div>
+                <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
+                  <div className="flex items-center gap-2 whitespace-nowrap">
+                    <span
+                      className="h-3 w-3 rounded day-off-bg border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4"
+                      aria-hidden="true"
+                    />
+                    <span>Day off</span>
+                  </div>
+                  <div className="flex items-center gap-2 whitespace-nowrap">
+                    <span
+                      className="h-3 w-3 rounded bg-[#bfdbfe] dark:bg-[#3b82f6] border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4"
+                      aria-hidden="true"
+                    />
+                    <span>Sick leave</span>
+                  </div>
                 </div>
               </>
             )}
