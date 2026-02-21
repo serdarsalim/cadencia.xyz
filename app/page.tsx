@@ -4600,7 +4600,7 @@ const ProductivityGrid = ({
                 return (
                   <span
                     key={`${key}-empty`}
-                    className="h-4 w-full rounded-sm border border-dashed border-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
+                    className="h-4 w-full"
                     aria-hidden="true"
                   />
                 );
