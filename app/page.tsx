@@ -4840,7 +4840,7 @@ const ProductivityGrid = ({
                 let borderSides = "";
                 if (isSelectedWeek) {
                   borderSides = theme === "dark"
-                    ? "border-l border-r border-l-white border-r-white"
+                    ? "border-l-[3px] border-r-[3px] border-l-white border-r-white"
                     : "border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
                 } else {
                   borderSides = "border-l border-r border-l-gray-400 border-r-gray-400";
@@ -4851,11 +4851,11 @@ const ProductivityGrid = ({
                 if (isSelectedWeek) {
                   if (isFirstDayOfWeek) {
                     topBottomOverride = theme === "dark"
-                      ? "border-t-2 border-t-white"
+                      ? "border-t-[3px] border-t-white"
                       : "border-t-2 border-t-slate-700";
                   } else if (isLastDayOfWeek) {
                     topBottomOverride = theme === "dark"
-                      ? "border-b-2 border-b-white"
+                      ? "border-b-[3px] border-b-white"
                       : "border-b-2 border-b-slate-700";
                   }
                 }
