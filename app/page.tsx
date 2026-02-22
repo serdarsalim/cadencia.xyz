@@ -2676,14 +2676,51 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
   const resizeTextareaToFit = (target: HTMLTextAreaElement | null) => {
     if (!target) return;
+    const safetyBufferPx = 2;
     target.style.height = "auto";
-    target.style.height = `${target.scrollHeight}px`;
+    target.style.height = `${target.scrollHeight + safetyBufferPx}px`;
   };
 
-  useEffect(() => {
+  const resizeDoDontTextareas = useCallback(() => {
     resizeTextareaToFit(dosTextareaRef.current);
     resizeTextareaToFit(dontsTextareaRef.current);
-  }, [selectedWeekEntry?.dos, selectedWeekEntry?.donts, productivityMode]);
+  }, []);
+
+  useEffect(() => {
+    resizeDoDontTextareas();
+    const rafId = window.requestAnimationFrame(() => {
+      resizeDoDontTextareas();
+    });
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [
+    selectedWeekEntry?.dos,
+    selectedWeekEntry?.donts,
+    productivityMode,
+    resizeDoDontTextareas,
+  ]);
+
+  useEffect(() => {
+    const handleViewportResize = () => {
+      resizeDoDontTextareas();
+    };
+
+    window.addEventListener("resize", handleViewportResize);
+    window.visualViewport?.addEventListener("resize", handleViewportResize);
+
+    if ("fonts" in document) {
+      void document.fonts.ready.then(() => {
+        resizeDoDontTextareas();
+      });
+    }
+
+    return () => {
+      window.removeEventListener("resize", handleViewportResize);
+      window.visualViewport?.removeEventListener("resize", handleViewportResize);
+    };
+  }, [resizeDoDontTextareas]);
+
   const copyFromPreviousWeek = (field: 'dos' | 'donts') => {
     if (!selectedWeekKey) return;
 
