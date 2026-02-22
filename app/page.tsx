@@ -4843,14 +4843,14 @@ const ProductivityGrid = ({
 
   const renderDayGrid = () => (
     <div
-      className={`p-6 rounded-md ${
+      className={`rounded-md px-3 py-4 sm:p-6 ${
         theme === "dark"
           ? "bg-[color-mix(in_srgb,var(--background)_92%,var(--foreground)_8%)]"
           : "bg-[#ffffff]"
       }`}
     >
       <div
-        className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
+        className="grid gap-1.5 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] sm:gap-2"
         style={{
           gridTemplateColumns: `repeat(12, minmax(0, 1fr))`,
         }}
@@ -4896,10 +4896,9 @@ const ProductivityGrid = ({
           return (
           <div
             key={`row-${dayOfMonth}`}
-            className="grid items-center"
+            className="grid items-center gap-x-1 sm:gap-x-2"
             style={{
               gridTemplateColumns: `repeat(12, minmax(0, 1fr))`,
-              columnGap: "0.5rem",
             }}
           >
             {months.map((monthIndex) => {
@@ -5154,14 +5153,14 @@ const ProductivityGrid = ({
   const renderWeekGrid = () => {
     return (
       <div
-        className={`p-6 rounded-md ${
+        className={`rounded-md px-3 py-4 sm:p-6 ${
           theme === "dark"
             ? "bg-[color-mix(in_srgb,var(--background)_92%,var(--foreground)_8%)]"
             : "bg-[#ffffff]"
         }`}
       >
         <div
-          className="grid gap-2 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
+          className="grid gap-1.5 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] sm:gap-2"
           style={{
             gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
           }}
@@ -5182,7 +5181,7 @@ const ProductivityGrid = ({
           })}
         </div>
         <div
-          className="mt-4 grid gap-2 sm:gap-3"
+          className="mt-4 grid gap-1.5 sm:gap-3"
           style={{
             gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
           }}
