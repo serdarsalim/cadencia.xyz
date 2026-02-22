@@ -2772,12 +2772,12 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 }
               }}
               autoFocus
-              className="w-full border-b border-foreground bg-transparent text-center text-4xl sm:text-5xl font-bold kr-apple-font heading-text-color outline-none"
+              className="w-full border-b border-foreground bg-transparent pb-[5px] text-center text-4xl sm:text-5xl font-bold kr-apple-font heading-text-color outline-none"
             />
           ) : (
             <h2
               onClick={() => setIsEditingGoalsSectionTitle(true)}
-              className="text-4xl sm:text-5xl font-bold kr-apple-font heading-text-color cursor-pointer transition hover:opacity-70"
+              className="pb-[5px] text-4xl sm:text-5xl font-bold kr-apple-font heading-text-color cursor-pointer transition hover:opacity-70"
             >
               {goalsSectionTitle}
             </h2>
