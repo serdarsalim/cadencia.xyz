@@ -2758,7 +2758,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
       ref={sectionRef}
       className={`mx-auto ${spacingClass} flex max-w-4xl flex-col gap-4 pt-16 text-left`}
     >
-      <div className="space-y-6 pt-6">
+      <div className="space-y-4 pt-6">
         <div className="text-center">
           {isEditingGoalsSectionTitle ? (
             <input
@@ -2939,10 +2939,10 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                                 )
                               }
                               autoFocus
-                              className="kr-apple-font w-full border-b border-transparent bg-transparent text-sm font-medium text-foreground outline-none focus:border-foreground"
+                              className="kr-apple-font w-full border-b border-transparent bg-transparent text-[15px] font-medium text-foreground outline-none focus:border-foreground"
                             />
                           ) : isViewingArchived ? (
-                            <span className="kr-apple-font text-left text-sm font-medium text-foreground">
+                            <span className="kr-apple-font text-left text-[15px] font-medium text-foreground">
                               {kr.title || "Untitled key result"}
                             </span>
                           ) : (
@@ -2951,7 +2951,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                               onClick={() =>
                                 beginKrFieldEdit(goal.id, kr, "title")
                               }
-                              className="kr-apple-font text-left text-sm font-medium text-foreground transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
+                              className="kr-apple-font text-left text-[15px] font-medium text-foreground transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
                             >
                               {kr.title || "Untitled key result"}
                             </button>
