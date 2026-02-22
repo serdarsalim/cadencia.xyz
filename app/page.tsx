@@ -27,6 +27,8 @@ import {
   demoScheduleEntries,
   demoProductivityRatings,
   demoGoals,
+  demoSickDays,
+  demoWeeklyStoryByWeekNumber,
   demoWeeklyNoteTemplate,
   demoProfile,
   demoDayOffs,
@@ -1344,9 +1346,11 @@ export default function Home() {
           setDateOfBirth(demoProfile.dateOfBirth);
           setWeekStartDay(demoProfile.weekStartDay as WeekdayIndex);
           setRecentYears(demoProfile.recentYears);
+          setGoalsSectionTitle(demoProfile.goalsSectionTitle ?? "2026 Goals");
           setShowLegend(demoProfile.showLegend ?? true);
           setDayOffAllowance(demoProfile.dayOffAllowance ?? 15);
           setDayOffs(demoDayOffs);
+          setSickDays(demoSickDays);
           setProductivityScaleMode((demoProfile.productivityScaleMode as "3" | "4") ?? "3");
           setAutoMarkWeekendsOff(demoProfile.autoMarkWeekendsOff ?? false);
           setWorkDays(demoProfile.workDays ? demoProfile.workDays.split(',').map(Number) as WeekdayIndex[] : [0, 1, 2, 3, 4, 5, 6]);
@@ -3870,36 +3874,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
               <TinyEditor
                 tinymceScriptSrc={TINYMCE_CDN}
                 value={weeklyGoalsTemplate}
-                init={
-                  {
-                    menubar: false,
-                    statusbar: false,
-                    height: 300,
-                    license_key: "gpl",
-                    plugins: "lists quickbars link",
-                    skin: theme === "dark" ? "oxide-dark" : "oxide",
-                    content_css: false,
-                    toolbar: false,
-                    quickbars_selection_toolbar: "bold italic bullist numlist link",
-                    quickbars_insert_toolbar: false,
-                    content_style: `
-                      @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
-                      body {
-                        background-color: transparent !important;
-                        color: #0f172a !important;
-                        font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                        font-size: 14px;
-                        line-height: 1.55;
-                        padding: 8px;
-                        margin: 0;
-                      }
-                      * {
-                        background-color: transparent !important;
-                      }
-                    `,
-                    branding: false,
-                  } as Record<string, unknown>
-                }
+                init={createWeeklyGoalsEditorInit(theme, { height: 300, minHeight: 220 })}
                 onEditorChange={(content) =>
                   setWeeklyGoalsTemplate(normalizeWeeklyGoalsTemplate(content))
                 }
@@ -6531,8 +6506,59 @@ const buildDemoWeeklyNotes = (
 ): Record<string, Partial<WeeklyNoteEntry>> => {
   const notes: Record<string, Partial<WeeklyNoteEntry>> = {};
   const today = new Date();
+  const weeks = buildWeeksForYear(year, weekStartDay);
+  const currentWeekIndex = weeks.findIndex((week) =>
+    week.dayKeys.some((dayKey) => {
+      const [y, m, d] = dayKey.split("-").map(Number);
+      const keyDate = new Date(y!, m! - 1, d);
+      return (
+        keyDate.getFullYear() === today.getFullYear() &&
+        keyDate.getMonth() === today.getMonth() &&
+        keyDate.getDate() === today.getDate()
+      );
+    })
+  );
 
-  buildWeeksForYear(year, weekStartDay).forEach((week) => {
+  const januaryFirstWeekIndex = weeks.findIndex((week) =>
+    week.dayKeys.some((dayKey) => {
+      const [y, m, d] = dayKey.split("-").map(Number);
+      return y === year && m === 1 && d === 1;
+    })
+  );
+
+  if (januaryFirstWeekIndex !== -1) {
+    Object.entries(demoWeeklyStoryByWeekNumber).forEach(([weekNumber, script]) => {
+      const parsedWeekNumber = Number(weekNumber);
+      if (!Number.isFinite(parsedWeekNumber)) {
+        return;
+      }
+      const targetWeek = weeks[januaryFirstWeekIndex + parsedWeekNumber - 1];
+      if (!targetWeek) {
+        return;
+      }
+      const targetWeekIndex = januaryFirstWeekIndex + parsedWeekNumber - 1;
+      if (currentWeekIndex !== -1 && targetWeekIndex > currentWeekIndex) {
+        return;
+      }
+
+      const contentParagraphs = script.weeklyNote
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => `<p>${line}</p>`)
+        .join("");
+
+      notes[targetWeek.weekKey] = {
+        content:
+          `<p><strong>${script.title}</strong></p>${contentParagraphs}` +
+          `<p><strong>Carry Forward</strong>: ${script.carryForward}</p>`,
+        dos: script.dos.join("\n"),
+        donts: script.donts.join("\n"),
+      };
+    });
+  }
+
+  weeks.forEach((week) => {
     // Check if this week contains today
     const isCurrentWeek = week.dayKeys.some((dayKey) => {
       const [y, m, d] = dayKey.split("-").map(Number);
@@ -6545,7 +6571,7 @@ const buildDemoWeeklyNotes = (
     });
 
     // Only add demo content for the current week
-    if (isCurrentWeek) {
+    if (isCurrentWeek && !notes[week.weekKey]) {
       notes[week.weekKey] = demoWeeklyNoteTemplate;
     }
   });
