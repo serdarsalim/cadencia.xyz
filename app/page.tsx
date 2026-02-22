@@ -2721,7 +2721,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
   const showCopyDonts = Boolean(selectedWeekKey && !selectedWeekEntry?.donts?.trim());
 
   const dosDontsPanel = selectedWeekKey ? (
-    <div className="rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]">
+    <div className="rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]">
       <div className="grid gap-0 sm:grid-cols-2">
       <div className="flex flex-col gap-1 px-4 pt-4 pb-2">
         <div
@@ -3402,90 +3402,84 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           </button>
         </div>
       ) : null}
-      <main className="flex flex-1 items-start justify-center pl-6 pr-4">
+      <header className="sticky top-0 z-40 w-full bg-[color-mix(in_srgb,#60a5fa_9%,var(--background))] backdrop-blur-md">
+        <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-2">
+            <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-5 sm:h-6" />
+            <span className="hidden sm:inline text-[20px] text-foreground" style={{ fontFamily: "var(--font-outfit)", fontWeight: 600 }}>
+              Cadencia
+            </span>
+          </div>
+
+          <div className="flex items-center gap-0.5 sm:gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setIsShareEditorVisible((prev) => !prev);
+              }}
+              className="flex items-center rounded-full px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
+              aria-label="Open sharing"
+              aria-pressed={isShareEditorVisible}
+            >
+              🔗
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsPrintOptionsOpen(true)}
+              className="flex items-center rounded-full px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
+              aria-label="Print"
+            >
+              <span role="img" aria-hidden="true">
+                🖨️
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsEditingProfile((prev) => !prev);
+              }}
+              className="flex items-center rounded-full px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
+              aria-label="Toggle profile settings"
+              aria-pressed={isProfileEditorVisible}
+            >
+              ⚙️
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const newTheme = theme === "light" ? "dark" : "light";
+                setTheme(newTheme);
+                if (!isDemoMode) {
+                  saveProfile({
+                    personName, dateOfBirth, weekStartDay, recentYears,
+                    goalsSectionTitle, productivityScaleMode, showLegend,
+                    weeklyGoalsTemplate, dayOffAllowance,
+                    workDays: workDays.join(','),
+                    productivityViewMode: productivityMode,
+                    autoMarkWeekendsOff,
+                    theme: newTheme,
+                  });
+                }
+              }}
+              className="flex items-center rounded-full px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
+              aria-label="Toggle theme"
+            >
+              {theme === "light" ? (
+                <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+              ) : (
+                <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex flex-1 items-start justify-center px-4 sm:px-6">
         <div className="w-full py-2 text-center">
-          {view === "productivity" && (
-            <div className="mt-4 relative">
-              {/* Logo and app name - left aligned on desktop, mobile shows only logo */}
-              <div className="hidden sm:flex items-center gap-2 absolute left-0 top-1/2 -translate-y-1/2">
-                <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-6" />
-                <span className="text-[20px] text-foreground" style={{ fontFamily: "var(--font-outfit)", fontWeight: 600 }}>
-                  Cadencia
-                </span>
-              </div>
-              <div className="flex sm:hidden items-center gap-2 absolute left-4 top-1/2 -translate-y-1/2">
-                <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-5" />
-              </div>
-
-              {/* Global controls - desktop only, right aligned */}
-              <div className="hidden sm:flex items-center gap-1 absolute right-0 top-1/2 -translate-y-1/2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsShareEditorVisible((prev) => !prev);
-                  }}
-                  className="flex items-center rounded-full px-3 py-2 text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
-                  aria-label="Open sharing"
-                  aria-pressed={isShareEditorVisible}
-                >
-                  🔗
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsPrintOptionsOpen(true)}
-                  className="flex items-center rounded-full px-3 py-2 text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
-                  aria-label="Print"
-                >
-                  <span role="img" aria-hidden="true">
-                    🖨️
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditingProfile((prev) => !prev);
-                  }}
-                  className="flex items-center rounded-full px-3 py-2 text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
-                  aria-label="Toggle profile settings"
-                  aria-pressed={isProfileEditorVisible}
-                >
-                  ⚙️
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const newTheme = theme === "light" ? "dark" : "light";
-                    setTheme(newTheme);
-                    if (!isDemoMode) {
-                      saveProfile({
-                        personName, dateOfBirth, weekStartDay, recentYears,
-                        goalsSectionTitle, productivityScaleMode, showLegend,
-                        weeklyGoalsTemplate, dayOffAllowance,
-                        workDays: workDays.join(','),
-                        productivityViewMode: productivityMode,
-                        autoMarkWeekendsOff,
-                        theme: newTheme,
-                      });
-                    }
-                  }}
-                  className="flex items-center rounded-full px-3 py-2 text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
-                  aria-label="Toggle theme"
-                >
-                  {theme === "light" ? (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-
-              <div className="h-10" />
-            </div>
-          )}
           {view === "life" && (
             <section className="mt-8 space-y-6">
               <WeeklySchedule
