@@ -3368,7 +3368,10 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           </p>
           <p className="mx-auto mt-7 max-w-4xl text-base sm:text-2xl leading-relaxed text-[color-mix(in_srgb,var(--foreground)_78%,transparent)]">
             Built for goal tracking, personal accountability, mentor check-ins, and lightweight team visibility
-            without micromanagement. Inspired by GitHub&apos;s productivity heatmap.
+            without micromanagement.
+          </p>
+          <p className="mx-auto mt-2 max-w-4xl text-xs sm:text-sm text-[color-mix(in_srgb,var(--foreground)_62%,transparent)]">
+            Inspired by GitHub&apos;s productivity heatmap.
           </p>
           <p className="mx-auto mt-4 max-w-3xl text-sm sm:text-base text-[color-mix(in_srgb,var(--foreground)_68%,transparent)]">
             Free to use. Open source on{" "}
