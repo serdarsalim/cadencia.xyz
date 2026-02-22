@@ -24,18 +24,24 @@ const buildWeeklyGoalsContentStyle = (theme: EditorTheme): string => `
     font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 14px;
     line-height: 1.55;
-    padding: 10px 16px;
+    padding: 8px 8px;
     margin: 0;
   }
   .mce-content-body {
-    padding-left: 22px !important;
+    padding-left: 10px !important;
   }
   .mce-content-body:before {
-    left: 22px !important;
+    left: 10px !important;
   }
   @media (min-width: 640px) {
     body {
       padding: 10px 25px;
+    }
+    .mce-content-body {
+      padding-left: 22px !important;
+    }
+    .mce-content-body:before {
+      left: 22px !important;
     }
   }
   * {
