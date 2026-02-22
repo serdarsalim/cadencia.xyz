@@ -2527,11 +2527,11 @@ const beginKrFieldEdit = (
 const goalStatusBadge = (status: KeyResultStatus) => {
   switch (status) {
     case "started":
-      return "bg-[#dbeafe] text-[#1d4ed8]";
+      return "bg-[#bfdbfe] text-[#1e40af]";
     case "on-hold":
-      return "bg-[#fef9c3] text-[#92400e]";
+      return "bg-[#fde68a] text-[#b45309]";
     case "completed":
-      return "bg-[#dcfce7] text-[#15803d]";
+      return "bg-[#bbf7d0] text-[#166534]";
     default:
       return "bg-[color-mix(in_srgb,var(--foreground)_12%,transparent)] text-foreground";
   }
