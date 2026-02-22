@@ -298,6 +298,43 @@ export async function saveWeeklyNotes(weeklyNotes: Record<string, WeeklyNotePayl
   }
 }
 
+export async function saveWeeklyNoteForWeek(
+  weekKey: string,
+  updates: Partial<WeeklyNotePayload>
+) {
+  try {
+    const response = await fetch('/api/weekly-notes', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weekKey, ...updates })
+    })
+
+    if (response.status === 401) {
+      return null
+    }
+
+    if (!response.ok) {
+      console.error('Error patching weekly note:', response.status, response.statusText)
+      return null
+    }
+
+    const data = await response.json().catch(() => null)
+    if (!data || !data.weeklyNote) {
+      console.error('Invalid weekly note patch response payload', data)
+      return null
+    }
+
+    return {
+      content: data.weeklyNote.content ?? '',
+      dos: data.weeklyNote.dos ?? '',
+      donts: data.weeklyNote.donts ?? ''
+    } as WeeklyNotePayload
+  } catch (error) {
+    console.error('Error patching weekly note:', error)
+    return null
+  }
+}
+
 export async function saveDayOffs(dayOffs: Record<string, boolean>) {
   try {
     const array = transformDayOffsToDB(dayOffs)

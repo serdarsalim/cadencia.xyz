@@ -77,3 +77,69 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const session = await auth()
+
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email }
+    })
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    const { weekKey, content, dos, donts } = await request.json()
+
+    if (!weekKey || typeof weekKey !== 'string') {
+      return NextResponse.json({ error: 'weekKey is required' }, { status: 400 })
+    }
+
+    const existing = await prisma.weeklyNote.findUnique({
+      where: {
+        userId_weekKey: {
+          userId: user.id,
+          weekKey
+        }
+      }
+    })
+
+    const nextContent =
+      content !== undefined ? String(content) : (existing?.content ?? '')
+    const nextDos =
+      dos !== undefined ? String(dos) : (existing?.dos ?? null)
+    const nextDonts =
+      donts !== undefined ? String(donts) : (existing?.donts ?? null)
+
+    const weeklyNote = await prisma.weeklyNote.upsert({
+      where: {
+        userId_weekKey: {
+          userId: user.id,
+          weekKey
+        }
+      },
+      create: {
+        userId: user.id,
+        weekKey,
+        content: nextContent,
+        dos: nextDos,
+        donts: nextDonts
+      },
+      update: {
+        content: nextContent,
+        dos: nextDos,
+        donts: nextDonts
+      }
+    })
+
+    return NextResponse.json({ weeklyNote })
+  } catch (error) {
+    console.error('Error upserting weekly note:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

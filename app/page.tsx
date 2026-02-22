@@ -11,7 +11,7 @@ import {
   saveGoals,
   saveSchedule,
   saveProductivity,
-  saveWeeklyNotes,
+  saveWeeklyNoteForWeek,
   saveDayOffs,
   saveSickDays,
   saveProfile
@@ -653,9 +653,9 @@ export default function Home() {
   const lastServerSavedProductivityRef = useRef<string | null>(null);
   const lastProcessedWeeklyNotesRef = useRef<string | null>(null);
   const pendingWeeklyNotesRef = useRef<Record<string, WeeklyNoteEntry>>({});
-  const weeklyNotesSaveTimeoutRef = useRef<number | null>(null);
-  const isSavingWeeklyNotesRef = useRef(false);
-  const lastServerSavedWeeklyNotesRef = useRef<string | null>(null);
+  const weeklyNotesSaveTimeoutsRef = useRef<Record<string, number>>({});
+  const isSavingWeeklyNoteKeysRef = useRef<Record<string, boolean>>({});
+  const lastServerSavedWeeklyNotesByKeyRef = useRef<Record<string, string>>({});
   const lastProcessedDayOffsRef = useRef<string | null>(null);
   const pendingDayOffsRef = useRef<Record<string, boolean>>({});
   const dayOffsSaveTimeoutRef = useRef<number | null>(null);
@@ -817,47 +817,99 @@ export default function Home() {
     })();
   }, [userEmail, isDemoMode]);
 
-  const triggerWeeklyNotesSave = useCallback(() => {
+  const flushWeeklyNoteSave = useCallback((weekKey: string) => {
     if (!userEmail || isDemoMode) {
       return;
     }
 
-    const pendingSerialized = JSON.stringify(pendingWeeklyNotesRef.current ?? {});
-    if (lastServerSavedWeeklyNotesRef.current === pendingSerialized) {
+    const pendingEntry = pendingWeeklyNotesRef.current[weekKey];
+    if (!pendingEntry) {
       return;
     }
 
-    if (isSavingWeeklyNotesRef.current) {
+    const pendingSerialized = JSON.stringify(createWeeklyNoteEntry(pendingEntry));
+    if (lastServerSavedWeeklyNotesByKeyRef.current[weekKey] === pendingSerialized) {
       return;
     }
 
-    const dataToSave = pendingWeeklyNotesRef.current;
-    const serializedToSave = pendingSerialized;
+    if (isSavingWeeklyNoteKeysRef.current[weekKey]) {
+      return;
+    }
 
-    isSavingWeeklyNotesRef.current = true;
+    isSavingWeeklyNoteKeysRef.current[weekKey] = true;
+
     void (async () => {
       try {
-        await saveWeeklyNotes(dataToSave);
-        lastServerSavedWeeklyNotesRef.current = serializedToSave;
+        const saved = await saveWeeklyNoteForWeek(weekKey, pendingEntry);
+        if (!saved) {
+          return;
+        }
+
+        const normalizedSaved = createWeeklyNoteEntry(saved);
+        const savedSerialized = JSON.stringify(normalizedSaved);
+        lastServerSavedWeeklyNotesByKeyRef.current[weekKey] = savedSerialized;
+        pendingWeeklyNotesRef.current[weekKey] = normalizedSaved;
+
+        setWeeklyNotes((prev) => {
+          const current = createWeeklyNoteEntry(prev[weekKey]);
+          if (JSON.stringify(current) === pendingSerialized) {
+            return {
+              ...prev,
+              [weekKey]: normalizedSaved,
+            };
+          }
+          return prev;
+        });
       } catch (error) {
-        console.error("Failed to persist weekly notes", error);
+        console.error("Failed to persist weekly note", error);
       } finally {
-        isSavingWeeklyNotesRef.current = false;
-        const latestSerialized = JSON.stringify(pendingWeeklyNotesRef.current ?? {});
-        if (
-          userEmail &&
-          !isDemoMode &&
-          latestSerialized !== serializedToSave &&
-          !weeklyNotesSaveTimeoutRef.current
-        ) {
-          weeklyNotesSaveTimeoutRef.current = window.setTimeout(() => {
-            weeklyNotesSaveTimeoutRef.current = null;
-            triggerWeeklyNotesSave();
+        isSavingWeeklyNoteKeysRef.current[weekKey] = false;
+        const latestPending = pendingWeeklyNotesRef.current[weekKey];
+        if (!latestPending) {
+          return;
+        }
+        const latestSerialized = JSON.stringify(createWeeklyNoteEntry(latestPending));
+        if (latestSerialized !== lastServerSavedWeeklyNotesByKeyRef.current[weekKey]) {
+          const existing = weeklyNotesSaveTimeoutsRef.current[weekKey];
+          if (existing) {
+            window.clearTimeout(existing);
+          }
+          weeklyNotesSaveTimeoutsRef.current[weekKey] = window.setTimeout(() => {
+            delete weeklyNotesSaveTimeoutsRef.current[weekKey];
+            flushWeeklyNoteSave(weekKey);
           }, 200);
         }
       }
     })();
   }, [userEmail, isDemoMode]);
+
+  const queueWeeklyNoteSave = useCallback(
+    (weekKey: string, entry: WeeklyNoteEntry, options?: { immediate?: boolean }) => {
+      if (!weekKey || !userEmail || isDemoMode || !hasLoadedServerDataRef.current) {
+        return;
+      }
+
+      const normalizedEntry = createWeeklyNoteEntry(entry);
+      pendingWeeklyNotesRef.current[weekKey] = normalizedEntry;
+
+      const existing = weeklyNotesSaveTimeoutsRef.current[weekKey];
+      if (existing) {
+        window.clearTimeout(existing);
+        delete weeklyNotesSaveTimeoutsRef.current[weekKey];
+      }
+
+      if (options?.immediate) {
+        flushWeeklyNoteSave(weekKey);
+        return;
+      }
+
+      weeklyNotesSaveTimeoutsRef.current[weekKey] = window.setTimeout(() => {
+        delete weeklyNotesSaveTimeoutsRef.current[weekKey];
+        flushWeeklyNoteSave(weekKey);
+      }, 600);
+    },
+    [flushWeeklyNoteSave, userEmail, isDemoMode]
+  );
 
   const triggerDayOffsSave = useCallback(() => {
     if (!userEmail || isDemoMode) {
@@ -969,13 +1021,14 @@ export default function Home() {
       window.clearTimeout(productivitySaveTimeoutRef.current);
       productivitySaveTimeoutRef.current = null;
     }
-    lastServerSavedWeeklyNotesRef.current = null;
     pendingWeeklyNotesRef.current = {};
+    lastServerSavedWeeklyNotesByKeyRef.current = {};
     lastProcessedWeeklyNotesRef.current = null;
-    if (weeklyNotesSaveTimeoutRef.current) {
-      window.clearTimeout(weeklyNotesSaveTimeoutRef.current);
-      weeklyNotesSaveTimeoutRef.current = null;
-    }
+    Object.values(weeklyNotesSaveTimeoutsRef.current).forEach((timeoutId) => {
+      window.clearTimeout(timeoutId);
+    });
+    weeklyNotesSaveTimeoutsRef.current = {};
+    isSavingWeeklyNoteKeysRef.current = {};
     lastServerSavedDayOffsRef.current = null;
     pendingDayOffsRef.current = {};
     lastProcessedDayOffsRef.current = null;
@@ -1230,7 +1283,12 @@ export default function Home() {
             setWeeklyNotes(normalizedWeekly);
             const serializedWeekly = JSON.stringify(normalizedWeekly);
             lastProcessedWeeklyNotesRef.current = migratedWeekly.didMigrate ? null : serializedWeekly;
-            lastServerSavedWeeklyNotesRef.current = migratedWeekly.didMigrate ? null : serializedWeekly;
+            lastServerSavedWeeklyNotesByKeyRef.current = Object.fromEntries(
+              Object.entries(normalizedWeekly).map(([weekKey, entry]) => [
+                weekKey,
+                JSON.stringify(createWeeklyNoteEntry(entry)),
+              ])
+            );
             pendingWeeklyNotesRef.current = normalizedWeekly;
 
             const dayOffsData = data.dayOffs ?? {};
@@ -1710,37 +1768,12 @@ export default function Home() {
     }
     lastProcessedWeeklyNotesRef.current = serialized;
 
-    if (!userEmail) {
-      try {
-        window.localStorage.setItem(storageKey("weekly-notes"), serialized);
-      } catch (error) {
-        console.error("Failed to cache weekly notes", error);
-      }
-      return;
+    try {
+      window.localStorage.setItem(storageKey("weekly-notes"), serialized);
+    } catch (error) {
+      console.error("Failed to cache weekly notes", error);
     }
-
-    if (!hasLoadedServerDataRef.current || isDemoMode) {
-      return;
-    }
-
-    pendingWeeklyNotesRef.current = weeklyNotes;
-
-    if (weeklyNotesSaveTimeoutRef.current) {
-      window.clearTimeout(weeklyNotesSaveTimeoutRef.current);
-    }
-
-    weeklyNotesSaveTimeoutRef.current = window.setTimeout(() => {
-      weeklyNotesSaveTimeoutRef.current = null;
-      triggerWeeklyNotesSave();
-    }, 600);
-
-    return () => {
-      if (weeklyNotesSaveTimeoutRef.current) {
-        window.clearTimeout(weeklyNotesSaveTimeoutRef.current);
-        weeklyNotesSaveTimeoutRef.current = null;
-      }
-    };
-  }, [weeklyNotes, isHydrated, userEmail, isDemoMode, triggerWeeklyNotesSave]);
+  }, [weeklyNotes, isHydrated]);
 
   const selectedWeek = useMemo(
     () => (selectedWeekKey ? weeksForYear.find((week) => week.weekKey === selectedWeekKey) : null),
@@ -2148,16 +2181,27 @@ const handleKrDraftChange = (goalId: string, value: string) => {
     });
   };
 
-  const updateWeeklyNoteEntry = (weekKey: string, updates: Partial<WeeklyNoteEntry>) => {
+  const updateWeeklyNoteEntry = (
+    weekKey: string,
+    updates: Partial<WeeklyNoteEntry>,
+    options?: { persistNow?: boolean }
+  ) => {
     setWeeklyNotes((prev) => {
       const existing = prev[weekKey] ?? createWeeklyNoteEntry();
-      return {
+      const nextEntry = createWeeklyNoteEntry({
+        content: updates.content ?? existing.content,
+        dos: updates.dos ?? existing.dos,
+        donts: updates.donts ?? existing.donts,
+      });
+      const next = {
         ...prev,
-        [weekKey]: {
-          content: updates.content ?? existing.content,
-          dos: updates.dos ?? existing.dos,
-          donts: updates.donts ?? existing.donts,
-        },
+        [weekKey]: nextEntry,
+      };
+      queueWeeklyNoteSave(weekKey, nextEntry, {
+        immediate: options?.persistNow,
+      });
+      return {
+        ...next,
       };
     });
   };
@@ -2652,7 +2696,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
     const valueToCopy = field === 'dos' ? prevEntry.dos : prevEntry.donts;
     if (!valueToCopy) return;
 
-    updateWeeklyNoteEntry(selectedWeekKey, { [field]: valueToCopy });
+    updateWeeklyNoteEntry(selectedWeekKey, { [field]: valueToCopy }, { persistNow: true });
 
     // Resize the textarea after copying
     setTimeout(() => {
@@ -2670,6 +2714,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           </span>
           <button
             type="button"
+            onMouseDown={(event) => event.preventDefault()}
             onClick={() => copyFromPreviousWeek('dos')}
             className="opacity-0 group-hover/dos:opacity-100 transition-opacity text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
             title="Copy from last week"
@@ -2690,6 +2735,9 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             const target = event.target as HTMLTextAreaElement;
             resizeTextareaToFit(target);
           }}
+          onBlur={(event) => {
+            updateWeeklyNoteEntry(selectedWeekKey, { dos: event.target.value }, { persistNow: true });
+          }}
           placeholder="Behaviors to reinforce"
           className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-0 sm:px-2 sm:text-sm textarea-text-color placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
           style={{ height: "auto" }}
@@ -2702,6 +2750,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           </span>
           <button
             type="button"
+            onMouseDown={(event) => event.preventDefault()}
             onClick={() => copyFromPreviousWeek('donts')}
             className="opacity-0 group-hover/donts:opacity-100 transition-opacity text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300"
             title="Copy from last week"
@@ -2721,6 +2770,9 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           onInput={(event) => {
             const target = event.target as HTMLTextAreaElement;
             resizeTextareaToFit(target);
+          }}
+          onBlur={(event) => {
+            updateWeeklyNoteEntry(selectedWeekKey, { donts: event.target.value }, { persistNow: true });
           }}
           placeholder="Behaviors to avoid"
           className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-0 sm:px-2 sm:text-sm textarea-text-color placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
@@ -3394,12 +3446,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 </button>
               </div>
 
-              {/* Date navigation - centered */}
-              <div className="flex items-center justify-center gap-4">
-                <button type="button" onClick={() => shiftSelectedWeek(-1)}>←</button>
-                <h1 className="text-2xl sm:text-3xl font-bold heading-text-color">{navbarWeekLabel}</h1>
-                <button type="button" onClick={() => shiftSelectedWeek(1)}>→</button>
-              </div>
+              <div className="h-10" />
             </div>
           )}
           {view === "life" && (
@@ -3491,10 +3538,31 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   style={weeklyGoalsMinHeight ? { minHeight: `${weeklyGoalsMinHeight}px` } : undefined}
                   data-print-hidden={printOptions.showWeeklyGoals ? "false" : "true"}
                 >
-                  <div className="mb-2 flex items-center justify-between gap-3 px-4 sm:px-0">
-                    <span className="block text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-                      Weekly goals
-                    </span>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-3 px-4 sm:px-0">
+                    <div className="flex flex-1 items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => shiftSelectedWeek(-1)}
+                        className="rounded-full px-2 py-1 text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
+                        aria-label="Previous week"
+                      >
+                        ←
+                      </button>
+                      <span
+                        className="block text-[19px] text-foreground"
+                        style={{ fontFamily: "var(--font-outfit)", fontWeight: 600 }}
+                      >
+                        Goals for week {navbarWeekLabel}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => shiftSelectedWeek(1)}
+                        className="rounded-full px-2 py-1 text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
+                        aria-label="Next week"
+                      >
+                        →
+                      </button>
+                    </div>
                     <div className="flex items-center gap-3">
                       {selectedWeekKey && isWeeklyGoalsEmpty && templateContentText ? (
                         <button
