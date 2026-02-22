@@ -2721,7 +2721,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
   const showCopyDonts = Boolean(selectedWeekKey && !selectedWeekEntry?.donts?.trim());
 
   const dosDontsPanel = selectedWeekKey ? (
-    <div className="rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]">
+    <div className="rounded-md bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]">
       <div className="grid gap-0 sm:grid-cols-2">
       <div className="flex flex-col gap-1 px-4 pt-4 pb-2">
         <div
@@ -2888,7 +2888,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           return (
             <div
               key={goal.id}
-              className="okr-card px-7 pt-6 pb-4"
+              className="okr-card border-none px-7 pt-6 pb-4"
               onClick={() => setActiveGoalCardId(goal.id)}
               onFocusCapture={() => setActiveGoalCardId(goal.id)}
               ref={(node) => {
@@ -3256,7 +3256,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             </button>
           </>
         ) : (
-          <div className="w-full max-w-3xl okr-card p-6">
+          <div className="w-full max-w-3xl okr-card border-none p-6">
             <div className="grid gap-6 lg:grid-cols-2">
               <input
                 type="text"
@@ -3565,7 +3565,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
                 <div className="flex flex-col rounded-3xl px-0 pb-4 pt-0 order-1 lg:order-2 lg:px-4 lg:h-full">
                 <div
-                  className="flex-1 px-0 pt-4 pb-0 weekly-goals-bg sm:px-4 sm:pb-4 rounded-md border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] lg:h-full"
+                  className="flex-1 px-0 pt-4 pb-0 weekly-goals-bg sm:px-4 sm:pb-4 rounded-md border border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] lg:h-full"
                   style={weeklyGoalsMinHeight ? { minHeight: `${weeklyGoalsMinHeight}px` } : undefined}
                   data-print-hidden={printOptions.showWeeklyGoals ? "false" : "true"}
                 >
