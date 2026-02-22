@@ -4843,7 +4843,7 @@ const ProductivityGrid = ({
 
   const renderDayGrid = () => (
     <div
-      className={`border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] p-6 rounded-md ${
+      className={`p-6 rounded-md ${
         theme === "dark"
           ? "bg-[color-mix(in_srgb,var(--background)_92%,var(--foreground)_8%)]"
           : "bg-[#ffffff]"
@@ -5154,7 +5154,7 @@ const ProductivityGrid = ({
   const renderWeekGrid = () => {
     return (
       <div
-        className={`border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] p-6 rounded-md ${
+        className={`p-6 rounded-md ${
           theme === "dark"
             ? "bg-[color-mix(in_srgb,var(--background)_92%,var(--foreground)_8%)]"
             : "bg-[#ffffff]"
@@ -6170,10 +6170,10 @@ const WeeklySchedule = ({
                 e.dataTransfer.dropEffect = "move";
               }}
               onDrop={(e) => handleDayDrop(e, dayKey)}
-              className={`group rounded-2xl border py-4 transition ${
+              className={`group rounded-2xl py-4 transition ${
                 today
                   ? "border-[#60a5fa] bg-transparent shadow-[0_8px_24px_rgba(96,165,250,0.25)]"
-                  : "border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-transparent"
+                  : "bg-transparent"
               }`}
             >
               <div className="mb-3 flex items-center justify-between px-4">
