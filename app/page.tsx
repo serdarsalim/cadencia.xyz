@@ -2705,24 +2705,49 @@ const goalStatusBadge = (status: KeyResultStatus) => {
     }, 0);
   };
 
+  const previousWeekKeyForCopy = selectedWeekKey ? getPreviousWeekKey(selectedWeekKey) : null;
+  const previousWeekEntryForCopy = previousWeekKeyForCopy ? weeklyNotes[previousWeekKeyForCopy] : null;
+  const canCopyDos = Boolean(
+    selectedWeekKey &&
+    !selectedWeekEntry?.dos?.trim() &&
+    previousWeekEntryForCopy?.dos?.trim()
+  );
+  const canCopyDonts = Boolean(
+    selectedWeekKey &&
+    !selectedWeekEntry?.donts?.trim() &&
+    previousWeekEntryForCopy?.donts?.trim()
+  );
+  const showCopyDos = Boolean(selectedWeekKey && !selectedWeekEntry?.dos?.trim());
+  const showCopyDonts = Boolean(selectedWeekKey && !selectedWeekEntry?.donts?.trim());
+
   const dosDontsPanel = selectedWeekKey ? (
     <div className="grid gap-4 sm:grid-cols-2">
-      <label className="flex flex-col gap-2 p-4 rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] hover:bg-[#fdfcfb] dark:hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
-        <div className="flex items-center justify-between group/dos">
+      <div className="flex flex-col gap-2 p-4 rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] hover:bg-[#fdfcfb] dark:hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
+        <div
+          className={`flex items-center justify-between group/dos ${
+            canCopyDos ? "cursor-pointer" : ""
+          }`}
+          onMouseDown={canCopyDos ? (event) => event.preventDefault() : undefined}
+          onClick={canCopyDos ? () => copyFromPreviousWeek("dos") : undefined}
+          title={canCopyDos ? "Copy from last week" : undefined}
+        >
           <span className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600 dark:text-emerald-400">
             Do&apos;s
           </span>
-          <button
-            type="button"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => copyFromPreviousWeek('dos')}
-            className="opacity-0 group-hover/dos:opacity-100 transition-opacity text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
-            title="Copy from last week"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-          </button>
+          {showCopyDos ? (
+            <span
+              className={`opacity-100 transition-opacity ${
+                canCopyDos
+                  ? "text-emerald-600 dark:text-emerald-400 group-hover/dos:text-emerald-700 dark:group-hover/dos:text-emerald-300"
+                  : "text-[color-mix(in_srgb,var(--foreground)_35%,transparent)]"
+              }`}
+              aria-hidden="true"
+            >
+              <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </span>
+          ) : null}
         </div>
         <textarea
           ref={dosTextareaRef}
@@ -2742,23 +2767,33 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-0 sm:px-2 sm:text-sm textarea-text-color placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
           style={{ height: "auto" }}
         />
-      </label>
-      <label className="flex flex-col gap-2 p-4 rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] hover:bg-[#fdfcfb] dark:hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
-        <div className="flex items-center justify-between group/donts">
+      </div>
+      <div className="flex flex-col gap-2 p-4 rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] hover:bg-[#fdfcfb] dark:hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
+        <div
+          className={`flex items-center justify-between group/donts ${
+            canCopyDonts ? "cursor-pointer" : ""
+          }`}
+          onMouseDown={canCopyDonts ? (event) => event.preventDefault() : undefined}
+          onClick={canCopyDonts ? () => copyFromPreviousWeek("donts") : undefined}
+          title={canCopyDonts ? "Copy from last week" : undefined}
+        >
           <span className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 dark:text-rose-400">
             Don&apos;ts
           </span>
-          <button
-            type="button"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => copyFromPreviousWeek('donts')}
-            className="opacity-0 group-hover/donts:opacity-100 transition-opacity text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300"
-            title="Copy from last week"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-          </button>
+          {showCopyDonts ? (
+            <span
+              className={`opacity-100 transition-opacity ${
+                canCopyDonts
+                  ? "text-rose-600 dark:text-rose-400 group-hover/donts:text-rose-700 dark:group-hover/donts:text-rose-300"
+                  : "text-[color-mix(in_srgb,var(--foreground)_35%,transparent)]"
+              }`}
+              aria-hidden="true"
+            >
+              <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </span>
+          ) : null}
         </div>
         <textarea
           ref={dontsTextareaRef}
@@ -2778,7 +2813,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 py-2 text-[13px] outline-none focus:ring-0 sm:px-2 sm:text-sm textarea-text-color placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
           style={{ height: "auto" }}
         />
-      </label>
+      </div>
     </div>
   ) : null;
 
