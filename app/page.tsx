@@ -3402,8 +3402,8 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           </button>
         </div>
       ) : null}
-      <header className="sticky top-0 z-40 w-full bg-[color-mix(in_srgb,#60a5fa_9%,var(--background))] backdrop-blur-md">
-        <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center justify-between px-4 sm:px-6">
+      <header className="sticky top-0 z-40 w-full bg-[linear-gradient(90deg,color-mix(in_srgb,#a78bfa_14%,var(--background))_0%,color-mix(in_srgb,#818cf8_12%,var(--background))_50%,color-mix(in_srgb,#60a5fa_14%,var(--background))_100%)] backdrop-blur-md">
+        <div className="flex h-14 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2">
             <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-5 sm:h-6" />
             <span className="hidden sm:inline text-[20px] text-foreground" style={{ fontFamily: "var(--font-outfit)", fontWeight: 600 }}>
