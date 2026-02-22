@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Montserrat, Outfit } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/branding";
 
@@ -91,6 +92,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} ${outfit.variable} antialiased`}
       >
         {children}
+        <Analytics />
       </body>
     </html>
   );
