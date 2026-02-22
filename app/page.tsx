@@ -1829,7 +1829,7 @@ export default function Home() {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
   };
 
-  const navbarWeekLabel = useMemo(() => {
+  const goalsHeaderLabel = useMemo(() => {
     const findWeekForDate = (date: Date) =>
       weeksForYear.find((week) =>
         week.dayKeys.some((dayKey) => {
@@ -1846,21 +1846,11 @@ export default function Home() {
     const activeWeek = selectedWeek ?? findWeekForDate(new Date());
 
     if (!activeWeek) {
-      return "Select a week";
+      return "Goals";
     }
 
-    const [firstDayKey] = activeWeek.dayKeys;
-    let labelYear = productivityYear;
-    if (firstDayKey) {
-      const [yearPart] = firstDayKey.split("-");
-      const parsedYear = Number(yearPart);
-      if (Number.isFinite(parsedYear)) {
-        labelYear = parsedYear;
-      }
-    }
-
-    return `${activeWeek.rangeLabel}, ${labelYear}`;
-  }, [weeksForYear, selectedWeek, productivityYear]);
+    return `Goals for ${activeWeek.rangeLabel}`;
+  }, [weeksForYear, selectedWeek]);
 
   const shiftSelectedWeek = (direction: -1 | 1) => {
     if (!weeksForYear.length) return;
@@ -3620,7 +3610,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                         className="block text-[19px] text-foreground"
                         style={{ fontFamily: "var(--font-outfit)", fontWeight: 600 }}
                       >
-                        Goals for week {navbarWeekLabel}
+                        {goalsHeaderLabel}
                       </span>
                       <button
                         type="button"
