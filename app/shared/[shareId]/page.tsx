@@ -18,6 +18,10 @@ import {
   type KeyResult,
   type WeeklyNoteEntry,
 } from "@/app/page";
+import {
+  createWeeklyGoalsEditorInit,
+  type EditorTheme,
+} from "@/lib/weekly-goals-editor";
 
 type SharedWeeklyNote = {
   content: string;
@@ -87,6 +91,24 @@ export default function SharedPage({
   );
   const [productivityMode, setProductivityMode] = useState<"day" | "week">("week");
   const [selectedWeekKey, setSelectedWeekKey] = useState<string | null>(null);
+  const [theme, setTheme] = useState<EditorTheme>("light");
+
+  useEffect(() => {
+    const syncTheme = () => {
+      const nextTheme =
+        document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+      setTheme(nextTheme);
+    };
+
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -229,13 +251,13 @@ export default function SharedPage({
   const visibleRatings = showSelfRating ? data.productivityRatings : {};
   const dosDontsPanel = showDosDonts ? (
     <div className="grid gap-4 sm:grid-cols-2">
-      <div className="flex flex-col gap-2 p-4 rounded-md border border-emerald-200 dark:border-emerald-800 bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]">
+      <div className="flex flex-col gap-2 p-4 rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]">
         <span className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600 dark:text-emerald-400">Do&apos;s</span>
         <p className="text-[13px] sm:text-sm whitespace-pre-wrap text-foreground px-1 py-2 sm:px-2 leading-relaxed">
           {selectedWeekEntry?.dos ?? ""}
         </p>
       </div>
-      <div className="flex flex-col gap-2 p-4 rounded-md border border-rose-200 dark:border-rose-800 bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]">
+      <div className="flex flex-col gap-2 p-4 rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]">
         <span className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 dark:text-rose-400">Don&apos;ts</span>
         <p className="text-[13px] sm:text-sm whitespace-pre-wrap text-foreground px-1 py-2 sm:px-2 leading-relaxed">
           {selectedWeekEntry?.donts ?? ""}
@@ -311,6 +333,7 @@ export default function SharedPage({
             }`}
           >
             <div className="space-y-4 order-2 lg:order-1">
+              {dosDontsPanel ? <div>{dosDontsPanel}</div> : null}
               <ProductivityGrid
                 year={productivityYear}
                 setYear={setProductivityYear}
@@ -329,9 +352,6 @@ export default function SharedPage({
                 }
                 readOnly={true}
               />
-              {productivityMode === "week" && dosDontsPanel ? (
-                <div className="mt-4 hidden lg:block">{dosDontsPanel}</div>
-              ) : null}
             </div>
             {showWeeklyPanel ? (
               <div className="flex flex-col rounded-3xl px-4 pb-4 pt-0 order-1 lg:order-2">
@@ -340,60 +360,15 @@ export default function SharedPage({
                     <span className="block text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
                       Weekly goals
                     </span>
+                    <div className={theme === "dark" ? "bg-[#0a0a0a]" : "bg-[#fdfcfb]"}>
                     <TinyEditor
-                      key={selectedWeekKey ? `shared-week-notes-${selectedWeekKey}` : "shared-week-notes"}
+                      key={selectedWeekKey ? `shared-week-notes-${selectedWeekKey}-${theme}` : `shared-week-notes-${theme}`}
                       tinymceScriptSrc={TINYMCE_CDN}
                       value={selectedWeekEntry?.content ?? ""}
-                      init={
-                        {
-                          menubar: false,
-                          statusbar: false,
-                          height: 430,
-                          license_key: "gpl",
-                      plugins: "lists autoresize",
-                      readonly: true,
-                      skin: "oxide",
-                      content_css: false,
-                      toolbar: false,
-                      autoresize_bottom_margin: 8,
-                      min_height: 260,
-                          quickbars_selection_toolbar: false,
-                          quickbars_insert_toolbar: false,
-                          content_style: `
-                            body {
-                              background-color: #faf7f4 !important;
-                              color: #0f172a !important;
-                              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                              font-size: 15px;
-                              padding: 10px 10px 10px 22px;
-                              margin: 0;
-                            }
-                            .mce-content-body {
-                              padding-left: 22px !important;
-                            }
-                            .mce-content-body:before {
-                              left: 22px !important;
-                            }
-                            @media (min-width: 640px) {
-                              body {
-                                padding: 10px 25px;
-                              }
-                            }
-                            * {
-                              background-color: transparent !important;
-                            }
-                          `,
-                          branding: false,
-                        } as Record<string, unknown>
-                      }
+                      init={createWeeklyGoalsEditorInit(theme, { readonly: true })}
                     />
+                    </div>
                   </div>
-                ) : null}
-                {productivityMode === "day" && dosDontsPanel ? (
-                  <div className="mb-4">{dosDontsPanel}</div>
-                ) : null}
-                {productivityMode === "week" && dosDontsPanel ? (
-                  <div className="mb-4 lg:hidden">{dosDontsPanel}</div>
                 ) : null}
               </div>
             ) : null}

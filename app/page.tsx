@@ -31,6 +31,7 @@ import {
   demoProfile,
   demoDayOffs,
 } from "@/lib/demo-data";
+import { createWeeklyGoalsEditorInit } from "@/lib/weekly-goals-editor";
 
 type Theme = "light" | "dark";
 
@@ -2662,7 +2663,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
   const dosDontsPanel = selectedWeekKey ? (
     <div className="grid gap-4 sm:grid-cols-2">
-      <label className="flex flex-col gap-2 p-4 rounded-md border border-emerald-200 dark:border-emerald-800 bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-[#fdfcfb] dark:hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
+      <label className="flex flex-col gap-2 p-4 rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] hover:bg-[#fdfcfb] dark:hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
         <div className="flex items-center justify-between group/dos">
           <span className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600 dark:text-emerald-400">
             Do&apos;s
@@ -2694,7 +2695,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
           style={{ height: "auto" }}
         />
       </label>
-      <label className="flex flex-col gap-2 p-4 rounded-md border border-rose-200 dark:border-rose-800 bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-rose-300 dark:hover:border-rose-700 hover:bg-[#fdfcfb] dark:hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
+      <label className="flex flex-col gap-2 p-4 rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] hover:bg-[#fdfcfb] dark:hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
         <div className="flex items-center justify-between group/donts">
           <span className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 dark:text-rose-400">
             Don&apos;ts
@@ -3319,7 +3320,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
               {/* Logo and app name - left aligned on desktop, mobile shows only logo */}
               <div className="hidden sm:flex items-center gap-2 absolute left-0 top-1/2 -translate-y-1/2">
                 <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-6" />
-                <span className="text-lg text-foreground font-montserrat" style={{ fontWeight: 600 }}>
+                <span className="text-[20px] text-foreground" style={{ fontFamily: "var(--font-outfit)", fontWeight: 600 }}>
                   Cadencia
                 </span>
               </div>
@@ -3327,37 +3328,71 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-5" />
               </div>
 
-              {/* Theme toggle button - desktop only, right aligned */}
-              <button
-                type="button"
-                onClick={() => {
-                  const newTheme = theme === "light" ? "dark" : "light";
-                  setTheme(newTheme);
-                  if (!isDemoMode) {
-                    saveProfile({
-                      personName, dateOfBirth, weekStartDay, recentYears,
-                      goalsSectionTitle, productivityScaleMode, showLegend,
-                      weeklyGoalsTemplate, dayOffAllowance,
-                      workDays: workDays.join(','),
-                      productivityViewMode: productivityMode,
-                      autoMarkWeekendsOff,
-                      theme: newTheme,
-                    });
-                  }
-                }}
-                className="hidden sm:flex items-center gap-2 absolute right-0 top-1/2 -translate-y-1/2 rounded-full px-3 py-2 text-sm transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:text-foreground"
-                aria-label="Toggle theme"
-              >
-                {theme === "light" ? (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
-                )}
-              </button>
+              {/* Global controls - desktop only, right aligned */}
+              <div className="hidden sm:flex items-center gap-1 absolute right-0 top-1/2 -translate-y-1/2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsShareEditorVisible((prev) => !prev);
+                  }}
+                  className="flex items-center rounded-full px-3 py-2 text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
+                  aria-label="Open sharing"
+                  aria-pressed={isShareEditorVisible}
+                >
+                  🔗
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPrintOptionsOpen(true)}
+                  className="flex items-center rounded-full px-3 py-2 text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
+                  aria-label="Print"
+                >
+                  <span role="img" aria-hidden="true">
+                    🖨️
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditingProfile((prev) => !prev);
+                  }}
+                  className="flex items-center rounded-full px-3 py-2 text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
+                  aria-label="Toggle profile settings"
+                  aria-pressed={isProfileEditorVisible}
+                >
+                  ⚙️
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newTheme = theme === "light" ? "dark" : "light";
+                    setTheme(newTheme);
+                    if (!isDemoMode) {
+                      saveProfile({
+                        personName, dateOfBirth, weekStartDay, recentYears,
+                        goalsSectionTitle, productivityScaleMode, showLegend,
+                        weeklyGoalsTemplate, dayOffAllowance,
+                        workDays: workDays.join(','),
+                        productivityViewMode: productivityMode,
+                        autoMarkWeekendsOff,
+                        theme: newTheme,
+                      });
+                    }
+                  }}
+                  className="flex items-center rounded-full px-3 py-2 text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
+                  aria-label="Toggle theme"
+                >
+                  {theme === "light" ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
 
               {/* Date navigation - centered */}
               <div className="flex items-center justify-center gap-4">
@@ -3490,80 +3525,11 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                     key={selectedWeekKey ? `week-notes-${selectedWeekKey}-${theme}` : `productivity-goal-${productivityYear}-${theme}`}
                     tinymceScriptSrc={TINYMCE_CDN}
                     value={selectedWeekKey ? selectedWeekEntry?.content ?? "" : currentProductivityGoal}
-                    init={
-                      {
-                        menubar: false,
-                        statusbar: false,
-                        height: 430,
-                        license_key: "gpl",
-                        plugins: "lists quickbars link autoresize",
-                        skin: theme === "dark" ? "oxide-dark" : "oxide",
-                        content_css: false,
-                        toolbar: false,
-                        autoresize_bottom_margin: 8,
-                        min_height: 260,
-                        quickbars_selection_toolbar: "bold italic bullist numlist link",
-                        quickbars_insert_toolbar: false,
-                        content_style: `
-                          @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
-                          html {
-                            background-color: ${theme === "dark" ? "#0a0a0a" : "#fdfcfb"} !important;
-                          }
-                          body {
-                            background-color: ${theme === "dark" ? "#0a0a0a" : "#fdfcfb"} !important;
-                            color: ${theme === "dark" ? "#d1d5db" : "#0f172a"} !important;
-                            font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                            font-size: 14px;
-                            line-height: 1.55;
-                            padding: 10px 16px;
-                            margin: 0;
-                          }
-                          .mce-content-body {
-                            padding-left: 22px !important;
-                          }
-                          .mce-content-body:before {
-                            left: 22px !important;
-                          }
-                          @media (min-width: 640px) {
-                            body {
-                              padding: 10px 25px;
-                            }
-                          }
-                          * {
-                            background-color: transparent !important;
-                          }
-                        `,
-                        inline_styles: true,
-                        branding: false,
-                        placeholder: selectedWeekKey
-                          ? "What are your goals this week, and did you accomplish them?"
-                          : "",
-                        setup: (editor: any) => {
-                          editor.on('PreInit', () => {
-                            const iframe = editor.getContentAreaContainer()?.querySelector('iframe');
-                            if (iframe?.contentDocument) {
-                              const doc = iframe.contentDocument;
-                              const style = doc.createElement('style');
-                              style.textContent = `
-                                html, body {
-                                  background-color: ${theme === "dark" ? "#0a0a0a" : "#fdfcfb"} !important;
-                                }
-                              `;
-                              doc.head?.appendChild(style);
-                            }
-                          });
-                          editor.on('init', () => {
-                            const doc = editor.getDoc();
-                            if (doc && doc.documentElement) {
-                              doc.documentElement.style.backgroundColor = theme === "dark" ? "#0a0a0a" : "#fdfcfb";
-                              if (doc.body) {
-                                doc.body.style.backgroundColor = theme === "dark" ? "#0a0a0a" : "#fdfcfb";
-                              }
-                            }
-                          });
-                        },
-                      } as Record<string, unknown>
-                    }
+                    init={createWeeklyGoalsEditorInit(theme, {
+                      placeholder: selectedWeekKey
+                        ? "What are your goals this week, and did you accomplish them?"
+                        : "",
+                    })}
                     onEditorChange={(content) =>
                       selectedWeekKey
                         ? updateWeeklyNoteEntry(selectedWeekKey, { content })
@@ -4125,88 +4091,66 @@ const goalStatusBadge = (status: KeyResultStatus) => {
         </div>
       ) : null}
 
-      <footer className="mt-24 bg-slate-900 text-white px-6 md:px-24 py-8 text-sm print-hidden">
+      <footer
+        className={`mt-24 px-6 py-8 text-sm print-hidden md:px-24 ${
+          theme === "light"
+            ? "bg-slate-100 text-slate-800 border-t border-slate-200"
+            : "bg-slate-900 text-white"
+        }`}
+      >
         <div className="flex flex-col items-center gap-8 text-center">
-          <div className="order-2 flex flex-1 justify-center text-center">
-            <img
-              src="/cadenciaslogan.png"
-              alt="Cadencia - Achieve your goals"
-              className="h-16 mx-auto"
-            />
-          </div>
-
-          <div className="order-1 flex justify-center">
-            <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setIsShareEditorVisible((prev) => !prev);
-              }}
-              className={`flex h-10 w-10 items-center justify-center rounded-full border border-white/30 text-white transition ${
-                isShareEditorVisible
-                  ? "border-white"
-                  : "hover:border-white"
-              }`}
-              aria-label="Open sharing"
-              aria-pressed={isShareEditorVisible}
-            >
-              🔗
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsPrintOptionsOpen(true)}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 text-lg text-white transition hover:border-white"
-              aria-label="Print"
-            >
-              <span role="img" aria-hidden="true">
-                🖨️
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setIsEditingProfile((prev) => !prev);
-              }}
-              className={`flex h-10 w-10 items-center justify-center rounded-full border border-white/30 text-white transition ${
-                isProfileEditorVisible
-                  ? "border-white"
-                  : "hover:border-white"
-              }`}
-              aria-label="Toggle profile settings"
-              aria-pressed={isProfileEditorVisible}
-            >
-              ⚙️
-            </button>
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 text-lg text-white transition hover:border-white"
-              aria-label="Toggle dark mode"
-            >
-              <span role="img" aria-hidden="true">
-                {theme === "light" ? "🌙" : "☀️"}
-              </span>
-            </button>
-            </div>
-          </div>
-
-          <div className="order-3 flex items-center justify-center gap-4 text-xs uppercase tracking-[0.3em] text-white/70">
-            <Link href="/about" className="transition hover:text-white">
+          <div
+            className={`order-2 flex items-center justify-center gap-4 text-xs uppercase tracking-[0.3em] ${
+              theme === "light" ? "text-slate-500" : "text-white/70"
+            }`}
+          >
+            <Link href="/about" className={`transition ${theme === "light" ? "hover:text-slate-800" : "hover:text-white"}`}>
               About
             </Link>
-            <Link href="/ai" className="transition hover:text-white">
+            <Link href="/ai" className={`transition ${theme === "light" ? "hover:text-slate-800" : "hover:text-white"}`}>
               AI
             </Link>
-            <Link href="/terms" className="transition hover:text-white">
+            <Link href="/terms" className={`transition ${theme === "light" ? "hover:text-slate-800" : "hover:text-white"}`}>
               Terms
             </Link>
-            <Link href="/privacy" className="transition hover:text-white">
+            <Link href="/privacy" className={`transition ${theme === "light" ? "hover:text-slate-800" : "hover:text-white"}`}>
               Privacy
             </Link>
           </div>
 
-          <div className="order-4 text-[10px] text-white/50">
-            © {new Date().getFullYear()} All rights reserved
+          <div
+            className={`order-3 flex flex-wrap items-center justify-center gap-2 text-xs ${
+              theme === "light" ? "text-slate-600" : "text-white/60"
+            }`}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-4 w-4" />
+              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 600 }}>Cadencia</span>
+            </span>
+            <span aria-hidden="true">•</span>
+            <span>AGPL-3.0</span>
+            <span aria-hidden="true">•</span>
+            <a
+              href="https://github.com/serdarsalim/cadencia.xyz/blob/main/LICENSE"
+              target="_blank"
+              rel="noreferrer"
+              className={`transition ${
+                theme === "light" ? "hover:text-slate-900" : "hover:text-white"
+              }`}
+            >
+              License
+            </a>
+            <span aria-hidden="true">•</span>
+            <a
+              href="https://github.com/serdarsalim/cadencia.xyz"
+              target="_blank"
+              rel="noreferrer"
+              className={`transition ${
+                theme === "light" ? "hover:text-slate-900" : "hover:text-white"
+              }`}
+            >
+              Source Code
+            </a>
           </div>
         </div>
       </footer>
