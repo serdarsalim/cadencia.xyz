@@ -2721,8 +2721,9 @@ const goalStatusBadge = (status: KeyResultStatus) => {
   const showCopyDonts = Boolean(selectedWeekKey && !selectedWeekEntry?.donts?.trim());
 
   const dosDontsPanel = selectedWeekKey ? (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <div className="flex flex-col gap-1 px-4 pt-4 pb-2 rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] hover:bg-[#fdfcfb] dark:hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
+    <div className="rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]">
+      <div className="grid gap-0 sm:grid-cols-2">
+      <div className="flex flex-col gap-1 px-4 pt-4 pb-2">
         <div
           className={`flex items-center justify-between group/dos ${
             canCopyDos ? "cursor-pointer" : ""
@@ -2764,11 +2765,11 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             updateWeeklyNoteEntry(selectedWeekKey, { dos: event.target.value }, { persistNow: true });
           }}
           placeholder="Behaviors to reinforce"
-          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 pb-0 pt-1 text-[13px] outline-none focus:ring-0 sm:px-2 sm:text-sm textarea-text-color placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
+          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 pb-2 pt-1 text-[13px] outline-none focus:ring-0 sm:pb-0 sm:pl-3 sm:pr-2 sm:text-sm textarea-text-color placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
           style={{ height: "auto" }}
         />
       </div>
-      <div className="flex flex-col gap-1 px-4 pt-4 pb-2 rounded-md border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] bg-[#fdfcfb] dark:bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)] transition hover:border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] hover:bg-[#fdfcfb] dark:hover:bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)]">
+      <div className="flex flex-col gap-1 px-4 pt-4 pb-2 sm:pl-5">
         <div
           className={`flex items-center justify-between group/donts ${
             canCopyDonts ? "cursor-pointer" : ""
@@ -2810,9 +2811,10 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             updateWeeklyNoteEntry(selectedWeekKey, { donts: event.target.value }, { persistNow: true });
           }}
           placeholder="Behaviors to avoid"
-          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 pb-0 pt-1 text-[13px] outline-none focus:ring-0 sm:px-2 sm:text-sm textarea-text-color placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
+          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 pb-2 pt-1 text-[13px] outline-none focus:ring-0 sm:px-2 sm:pb-0 sm:text-sm textarea-text-color placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
           style={{ height: "auto" }}
         />
+      </div>
       </div>
     </div>
   ) : null;
