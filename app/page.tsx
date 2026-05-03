@@ -1,203 +1,22 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { signIn } from "next-auth/react";
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
-import { UserInfo } from "./components/UserInfo";
-import { migrateFromLocalStorage } from "@/lib/migrate";
-import {
-  loadAllData,
-  saveGoals,
-  saveSchedule,
-  saveProductivity,
-  saveWeeklyNoteForWeek,
-  saveDayOffs,
-  saveSickDays,
-  saveProfile
-} from "@/lib/api";
-import { APP_NAME, legacyStorageKey, storageKey } from "@/lib/branding";
-import {
-  filterRecentScheduleEntries,
-  safeLocalStorageSetItem,
-  cleanupOldScheduleEntries,
-  emergencyCleanup,
-} from "@/lib/localStorage-utils";
-import {
-  demoScheduleEntries,
-  demoProductivityRatings,
-  demoGoals,
-  demoSickDays,
-  demoWeeklyStoryByWeekNumber,
-  demoWeeklyNoteTemplate,
-  demoProfile,
-  demoDayOffs,
-} from "@/lib/demo-data";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { loadAllData, saveDayOffs, saveGoals, saveProductivity, saveWeeklyNoteForWeek } from "@/lib/api";
+import { storageKey } from "@/lib/branding";
+import { demoDayOffs, demoGoals, demoProductivityRatings, demoProfile } from "@/lib/demo-data";
 import { createWeeklyGoalsEditorInit } from "@/lib/weekly-goals-editor";
 
 type Theme = "light" | "dark";
-
-type RepeatFrequency = "none" | "daily" | "weekly" | "biweekly" | "monthly";
-
-type ScheduleEntry = {
-  time: string;
-  endTime?: string;
-  title: string;
-  color?: string;
-  repeat?: RepeatFrequency;
-  repeatUntil?: string | null;
-  repeatDays?: WeekdayIndex[];
-  skipDates?: string[];
-};
-
-type ShareListItem = {
-  id: string;
-  recipientEmail?: string;
-  owner?: { email?: string | null; profile?: { personName?: string | null } | null };
-  recipientUser?: { email?: string | null };
-  showSelfRating?: boolean;
-  showDosDonts?: boolean;
-  showWeeklyGoals?: boolean;
-  showOkrs?: boolean;
-};
-
 type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
-const WEEK_START_OPTIONS: { value: WeekdayIndex; label: string }[] = [
-  { value: 0, label: "Sunday" },
-  { value: 1, label: "Monday" },
-  { value: 2, label: "Tuesday" },
-  { value: 3, label: "Wednesday" },
-  { value: 4, label: "Thursday" },
-  { value: 5, label: "Friday" },
-  { value: 6, label: "Saturday" },
-];
-
-const ALL_WEEKDAY_INDICES: WeekdayIndex[] = [0, 1, 2, 3, 4, 5, 6];
-
-const WEEKDAY_SHORT_LABELS: string[] = Array.from({ length: 7 }, (_, day) =>
-  new Date(2020, 5, day + 7).toLocaleDateString(undefined, {
-    weekday: "short",
-  })
-);
-
-const TIME_OPTIONS: string[] = Array.from({ length: 24 * 2 }, (_, index) => {
-  const hours = Math.floor(index / 2);
-  const minutes = (index % 2) * 30;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-});
-
-
-const DEFAULT_ENTRY_START = "09:00";
-const DEFAULT_ENTRY_DURATION_MINUTES = 60;
-
-const timeStringToMinutes = (time: string | undefined | null): number | null => {
-  if (!time) return null;
-  const [hoursStr, minutesStr] = time.split(":");
-  const hours = Number(hoursStr);
-  const minutes = Number(minutesStr);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
-    return null;
-  }
-  return hours * 60 + minutes;
+type ProductivityScaleEntry = {
+  value: number;
+  label: string;
+  color: string;
 };
-
-const minutesToTimeString = (minutes: number): string => {
-  const clamped = Math.max(0, Math.min(minutes, 23 * 60 + 30));
-  const hours = Math.floor(clamped / 60);
-  const mins = clamped % 60;
-  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
-};
-
-const nextEntryTimes = (entries: ScheduleEntry[]): { start: string; end: string } => {
-  const lastEntry = entries[entries.length - 1];
-  const defaultStartMinutes =
-    timeStringToMinutes(lastEntry?.endTime ?? lastEntry?.time ?? DEFAULT_ENTRY_START) ??
-    timeStringToMinutes(DEFAULT_ENTRY_START)!;
-  const startMinutes = Math.min(defaultStartMinutes, 23 * 60 + 30);
-  const proposedEnd = startMinutes + DEFAULT_ENTRY_DURATION_MINUTES;
-  const endMinutes = Math.max(startMinutes + 30, Math.min(proposedEnd, 24 * 60));
-  return {
-    start: minutesToTimeString(startMinutes),
-    end: minutesToTimeString(endMinutes),
-  };
-};
-
-const getRepeatColor = (title: string, time: string, fallback?: string) => {
-  if (fallback) {
-    return fallback;
-  }
-  const str = `${title}-${time}`;
-  let hash = 0;
-  for (let i = 0; i < str.length; i += 1) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const colors = [
-    "#8E7DBE",
-    "#F29E4C",
-    "#5DA9E9",
-    "#80CFA9",
-    "#F7B267",
-    "#B8F2E6",
-  ];
-  return colors[Math.abs(hash) % colors.length];
-};
-
-const createEntryWithColor = (
-  entry: ScheduleEntry
-): ScheduleEntry => {
-  if (entry.color) {
-    return entry;
-  }
-  return {
-    ...entry,
-    color: getRepeatColor(entry.title ?? "", entry.time ?? DEFAULT_ENTRY_START),
-  };
-};
-
-const normalizeScheduleEntryColors = (
-  entries: Record<string, ScheduleEntry[]>
-): Record<string, ScheduleEntry[]> => {
-  let mutated = false;
-  const normalized: Record<string, ScheduleEntry[]> = {};
-  Object.entries(entries).forEach(([dayKey, dayEntries]) => {
-    let dayMutated = false;
-    const updatedDayEntries = dayEntries.map((entry) => {
-      if (entry.color) {
-        return entry;
-      }
-      dayMutated = true;
-      return createEntryWithColor(entry);
-    });
-    if (dayMutated) {
-      mutated = true;
-    }
-    normalized[dayKey] = dayMutated ? updatedDayEntries : dayEntries;
-  });
-  return mutated ? normalized : entries;
-};
-
-type EntryMeta = {
-  originalDayKey?: string;
-  originalEntryIndex?: number;
-};
-
-type EntryResolution = {
-  entries: Record<string, ScheduleEntry[]>;
-  targetDayKey: string;
-  targetIndex: number | null;
-};
-
-type EditingEntryState = {
-  dayKey: string;
-  index: number;
-  meta: EntryMeta;
-  data: ScheduleEntry;
-  scope: "single" | "future";
-  canChooseScope: boolean;
-};
-
-type ViewMode = "life" | "productivity";
 
 type KeyResultStatus = "on-hold" | "started" | "completed";
 
@@ -219,44 +38,22 @@ type Goal = {
   archived?: boolean;
 };
 
-const normalizeGoalOrder = (goalList: Goal[]) =>
-  goalList.map((goal, index) => ({
-    ...goal,
-    sortOrder: index,
-    keyResults: goal.keyResults.map((kr, krIndex) => ({
-      ...kr,
-      sortOrder: krIndex,
-    })),
-  }));
-
-const combineGoalsForSave = (activeGoals: Goal[], archivedGoals: Goal[]) => {
-  const combined = [...normalizeGoalOrder(activeGoals), ...normalizeGoalOrder(archivedGoals)];
-  const unique = new Map<string, Goal>();
-  for (const goal of combined) {
-    if (!unique.has(goal.id)) {
-      unique.set(goal.id, goal);
-    }
-  }
-  return Array.from(unique.values());
-};
-
 type WeeklyNoteEntry = {
   content: string;
-  dos: string;
-  donts: string;
+  dos?: string;
+  donts?: string;
 };
 
 const TinyEditor = dynamic(
   () => import("@tinymce/tinymce-react").then((mod) => mod.Editor),
   { ssr: false }
 );
+
 const TINYMCE_CDN =
   "https://cdnjs.cloudflare.com/ajax/libs/tinymce/8.1.2/tinymce.min.js";
-type ProductivityScaleEntry = {
-  value: number;
-  label: string;
-  color: string;
-};
+
+const DEFAULT_WEEKLY_TEMPLATE =
+  "<p><strong>What I want to accomplish this week:</strong></p><ul><li>Monday</li><li>Tuesday</li><li>Wednesday</li><li>Thursday</li><li>Friday</li><li>Saturday</li><li>Sunday</li></ul>";
 
 const PRODUCTIVITY_SCALE_THREE: ProductivityScaleEntry[] = [
   { value: 0, label: "<25%", color: "productivity-low" },
@@ -271,15 +68,8 @@ const PRODUCTIVITY_SCALE_FOUR: ProductivityScaleEntry[] = [
   { value: 3, label: ">75%", color: "productivity-top" },
 ];
 
-type WeekMeta = {
-  weekNumber: number;
-  months: number[];
-  dayKeys: string[];
-  primaryMonth: number;
-  rangeLabel: string;
-  weekKey: string;
-  weekStart: Date;
-};
+const formatDayKey = (date: Date) =>
+  `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 
 const getWeekStart = (date: Date, weekStartDay: WeekdayIndex = 1) => {
   const start = new Date(date);
@@ -290,2239 +80,35 @@ const getWeekStart = (date: Date, weekStartDay: WeekdayIndex = 1) => {
   return start;
 };
 
-const formatDayKey = (date: Date) =>
-  `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-
 const formatWeekKey = (weekStart: Date, weekStartDay: WeekdayIndex) =>
   `week-${weekStartDay}-${formatDayKey(weekStart)}`;
 
-const parseWeekKey = (key: string): { weekStart: Date; weekStartDay: WeekdayIndex } | null => {
-  const match = /^week-(\d)-(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(key);
-  if (!match) {
-    return null;
-  }
-  const [, weekStartDayStr, yearStr, monthStr, dayStr] = match;
-  const weekStartDay = Number(weekStartDayStr);
-  const year = Number(yearStr);
-  const month = Number(monthStr);
-  const day = Number(dayStr);
-  if (
-    !Number.isFinite(weekStartDay) ||
-    weekStartDay < 0 ||
-    weekStartDay > 6 ||
-    !Number.isFinite(year) ||
-    !Number.isFinite(month) ||
-    !Number.isFinite(day)
-  ) {
-    return null;
-  }
-  const parsed = new Date(year, month - 1, day);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-  return { weekStart: parsed, weekStartDay: weekStartDay as WeekdayIndex };
-};
+const getDaysInMonth = (year: number, monthIndex: number) =>
+  new Date(year, monthIndex + 1, 0).getDate();
 
-const isLegacyWeekKey = (key: string) =>
-  /^week-(\d{4})-(\d{1,2})-(\d{1,2})$/.test(key);
-
-const normalizeWeeklyGoalsTemplate = (template: string) => {
-  if (/<[^>]+>/.test(template)) {
-    return template;
-  }
-  const normalized = template
-    .replace(/^\s*What I want to accomplish this week:\s*/i, "")
-    .replace(/\s*-\s*/g, "\n- ")
-    .trim();
-  const heading = "What I want to accomplish this week:";
-  const lines = normalized ? normalized.split(/\r?\n/) : [];
-  const listItems = lines
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith("- "))
-    .map((line) => `<li>${line.slice(2).trim()}</li>`)
-    .join("");
-  const listBlock = listItems ? `<ul>${listItems}</ul>` : "";
-  return `<p><strong>${heading}</strong></p>${listBlock}`;
-};
-
-
-const remapWeekKeys = <T,>(
-  entries: Record<string, T>,
-  nextWeekStartDay: WeekdayIndex
-): Record<string, T> => {
-  const remapped: Record<string, T> = {};
-  for (const [key, value] of Object.entries(entries)) {
-    const parsed = parseWeekKey(key);
-    if (parsed) {
-      // Anchor to mid-week so switching start day shifts forward/backward intuitively.
-      const anchor = new Date(parsed.weekStart);
-      anchor.setDate(anchor.getDate() + 3);
-      const nextWeekStart = getWeekStart(anchor, nextWeekStartDay);
-      const nextKey = formatWeekKey(nextWeekStart, nextWeekStartDay);
-      remapped[nextKey] = value;
-      continue;
-    }
-    remapped[key] = value;
-  }
-  return remapped;
-};
-
-const migrateWeekKeys = <T,>(
-  entries: Record<string, T>,
-  weekStartDay: WeekdayIndex
-): { migrated: Record<string, T>; didMigrate: boolean } => {
-  const migrated: Record<string, T> = {};
-  let didMigrate = false;
-
-  for (const [key, value] of Object.entries(entries)) {
-    if (isLegacyWeekKey(key)) {
-      const nextKey = `week-${weekStartDay}-${key.slice("week-".length)}`;
-      if (!(nextKey in migrated)) {
-        migrated[nextKey] = value;
-      }
-      didMigrate = true;
-      continue;
-    }
-    if (!(key in migrated)) {
-      migrated[key] = value;
-    }
-  }
-
-  return { migrated, didMigrate };
-};
-
-const formatISOWeekInputValue = (date: Date) => {
-  const target = new Date(date);
-  target.setHours(0, 0, 0, 0);
-  target.setDate(target.getDate() + 3 - ((target.getDay() + 6) % 7));
-  const firstThursday = new Date(target.getFullYear(), 0, 4);
-  const weekNumber =
-    1 +
-    Math.round(
-      ((target.getTime() - firstThursday.getTime()) / 86400000 -
-        3 +
-        ((firstThursday.getDay() + 6) % 7)) /
-        7
-    );
-  return `${target.getFullYear()}-W${String(weekNumber).padStart(2, "0")}`;
-};
-
-const parseISOWeekInputValue = (value: string) => {
-  const match = /^(\d{4})-W(\d{2})$/.exec(value);
-  if (!match) {
-    return null;
-  }
-  const [, yearStr, weekStr] = match;
-  const year = Number(yearStr);
-  const week = Number(weekStr);
-  if (!Number.isFinite(year) || !Number.isFinite(week) || week < 1 || week > 53) {
-    return null;
-  }
-  const reference = new Date(year, 0, 4);
-  const start = getWeekStart(reference);
-  start.setDate(start.getDate() + (week - 1) * 7);
-  return start;
-};
-
-const formatRangeLabel = (start: Date, end: Date) => {
-  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
-  const startLabel = `${start.toLocaleString(undefined, {
-    month: "short",
-  })} ${start.getDate()}`;
-  const endLabel = `${end.toLocaleString(undefined, {
-    month: "short",
-  })} ${end.getDate()}`;
-  return sameMonth ? `${startLabel}–${end.getDate()}` : `${startLabel} – ${endLabel}`;
-};
-
-const buildWeeksForYear = (year: number, weekStartDay: WeekdayIndex): WeekMeta[] => {
-  const weeks: WeekMeta[] = [];
-  const yearStart = new Date(year, 0, 1);
-  const yearEnd = new Date(year, 11, 31);
-  let currentStart = getWeekStart(yearStart, weekStartDay);
-  let weekCounter = 1;
-
-  while (currentStart <= yearEnd) {
-    const weekStart = new Date(currentStart);
-    const dayKeys: string[] = [];
-    const monthSet = new Set<number>();
-    const inYearDays: Date[] = [];
-    for (let i = 0; i < 7; i += 1) {
-      const day = new Date(weekStart);
-      day.setDate(weekStart.getDate() + i);
-      if (day.getFullYear() !== year) {
-        continue;
-      }
-      const monthIndex = day.getMonth();
-      monthSet.add(monthIndex);
-      dayKeys.push(`${year}-${monthIndex + 1}-${day.getDate()}`);
-      inYearDays.push(new Date(day));
-    }
-
-    if (dayKeys.length > 0) {
-      const monthCounts: Record<number, number> = {};
-      dayKeys.forEach((key) => {
-        const [, monthPart] = key.split("-");
-        const monthIndex = Number(monthPart) - 1;
-        if (!Number.isFinite(monthIndex)) {
-          return;
-        }
-        monthCounts[monthIndex] = (monthCounts[monthIndex] ?? 0) + 1;
-      });
-      const primaryMonth =
-        Object.entries(monthCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
-      const rangeLabel =
-        inYearDays.length > 0
-          ? formatRangeLabel(inYearDays[0]!, inYearDays[inYearDays.length - 1]!)
-          : "";
-      weeks.push({
-        weekNumber: weekCounter,
-        months: Array.from(monthSet.values()).sort((a, b) => a - b),
-        dayKeys,
-        primaryMonth: Number(primaryMonth),
-        rangeLabel,
-        weekKey: formatWeekKey(weekStart, weekStartDay),
-        weekStart: new Date(weekStart),
-      });
-      weekCounter += 1;
-    }
-
-    currentStart = new Date(weekStart);
-    currentStart.setDate(weekStart.getDate() + 7);
-  }
-
-  return weeks;
-};
-
-
-export default function Home() {
-  const [dateOfBirth, setDateOfBirth] = useState<string>("");
-  const [personName, setPersonName] = useState<string>("");
-  const [email, setEmail] = useState<string>("");
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [isShareEditorVisible, setIsShareEditorVisible] = useState(false);
-  const [isWeeklyTemplateEditorOpen, setIsWeeklyTemplateEditorOpen] = useState(false);
-  const [theme, setTheme] = useState<Theme>("light");
-  const [recentYears, setRecentYears] = useState<string>("10");
-  const [view, setView] = useState<ViewMode>(() => {
-    // Initialize from localStorage if available
-    if (typeof window !== "undefined") {
-      const stored = window.localStorage.getItem(storageKey("active-view"));
-      if (stored === "productivity") {
-        return stored;
-      }
-      if (stored === "life") {
-        return "productivity";
-      }
-    }
-    return "productivity";
+const getMonthDays = (year: number, monthIndex: number) =>
+  Array.from({ length: getDaysInMonth(year, monthIndex) }, (_, index) => {
+    const date = new Date(year, monthIndex, index + 1);
+    return {
+      date,
+      key: formatDayKey(date),
+      dayOfMonth: index + 1,
+      weekday: date.toLocaleDateString(undefined, { weekday: "short" }),
+    };
   });
-  const [productivityYear, setProductivityYear] = useState(() =>
-    new Date().getFullYear()
-  );
-  const [weekStartDay, setWeekStartDay] = useState<WeekdayIndex>(1);
-  const weeksForYear = useMemo(
-    () => buildWeeksForYear(productivityYear, weekStartDay),
-    [productivityYear, weekStartDay]
-  );
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [productivityRatings, setProductivityRatings] = useState<
-    Record<string, number | null>
-  >({});
-  const [productivityGoals, setProductivityGoals] = useState<
-    Record<number, string>
-  >({});
-  const [showLegend, setShowLegend] = useState(true);
-  const [weeklyGoalsTemplate, setWeeklyGoalsTemplate] = useState(
-    "<p><strong>What I want to accomplish this week:</strong></p><ul><li>Monday</li><li>Tuesday</li><li>Wednesday</li><li>Thursday</li><li>Friday</li><li>Saturday</li><li>Sunday</li></ul>"
-  );
-  const [dayOffAllowance, setDayOffAllowance] = useState(15);
-  const [workDays, setWorkDays] = useState<WeekdayIndex[]>([0, 1, 2, 3, 4, 5, 6]);
-  const [autoMarkWeekendsOff, setAutoMarkWeekendsOff] = useState(false);
-  const [dayOffs, setDayOffs] = useState<Record<string, boolean>>({});
-  const [sickDays, setSickDays] = useState<Record<string, boolean>>({});
-  const [isDayOffMode, setIsDayOffMode] = useState(false);
-  const [isSickDayMode, setIsSickDayMode] = useState(false);
-  const [shareEmail, setShareEmail] = useState("");
-  const [shareError, setShareError] = useState<string | null>(null);
-  const [isLoadingShares, setIsLoadingShares] = useState(false);
-  const [sharedWithMe, setSharedWithMe] = useState<ShareListItem[]>([]);
-  const [sharedByMe, setSharedByMe] = useState<ShareListItem[]>([]);
-  const [shareOptions, setShareOptions] = useState({
-    showSelfRating: true,
-    showDosDonts: true,
-    showWeeklyGoals: true,
-    showOkrs: true,
-  });
-  const [isShareOptionsOpen, setIsShareOptionsOpen] = useState(false);
-  const [isPrintOptionsOpen, setIsPrintOptionsOpen] = useState(false);
-  const [printOptions, setPrintOptions] = useState({
-    showCalendar: true,
-    showDosDonts: true,
-    showWeeklyGoals: true,
-    showOkrs: true,
-  });
-  const [activeShareOptionsId, setActiveShareOptionsId] = useState<string | null>(null);
-  const [shareEditOptions, setShareEditOptions] = useState({
-    showSelfRating: true,
-    showDosDonts: true,
-    showWeeklyGoals: true,
-    showOkrs: true,
-  });
-  const [productivityMode, setProductivityMode] =
-    useState<"day" | "week">("week");
-  const [productivityScaleMode, setProductivityScaleMode] =
-    useState<"3" | "4">("3");
-  const productivityScale = useMemo(
-    () => (productivityScaleMode === "4" ? PRODUCTIVITY_SCALE_FOUR : PRODUCTIVITY_SCALE_THREE),
-    [productivityScaleMode]
-  );
-  const dayOffsUsed = useMemo(() => {
-    return Object.keys(dayOffs).reduce((count, key) => {
-      const [yearPart, monthPart, dayPart] = key.split("-");
-      const year = Number(yearPart);
-      if (Number.isFinite(year) && year === productivityYear) {
-        // Parse the date to get the day of week
-        const month = Number(monthPart);
-        const day = Number(dayPart);
-        if (Number.isFinite(month) && Number.isFinite(day)) {
-          const date = new Date(year, month - 1, day);
-          const dayOfWeek = date.getDay() as WeekdayIndex;
-          // Only count PTO on work days
-          if (workDays.includes(dayOfWeek)) {
-            return count + 1;
-          }
-        }
-      }
-      return count;
-    }, 0);
-  }, [dayOffs, productivityYear, workDays]);
-  const dayOffsRemaining = Math.max(0, dayOffAllowance - dayOffsUsed);
-  const [scheduleEntries, setScheduleEntries] = useState<
-    Record<string, ScheduleEntry[]>
-  >({});
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [archivedGoals, setArchivedGoals] = useState<Goal[]>([]);
-  const [isViewingArchived, setIsViewingArchived] = useState(false);
-  const [goalsSectionTitle, setGoalsSectionTitle] = useState("2026 GOALS");
-  const [isEditingGoalsSectionTitle, setIsEditingGoalsSectionTitle] = useState(false);
-  const [newGoalTitle, setNewGoalTitle] = useState("");
-  const [krDrafts, setKrDrafts] = useState<Record<string, { title: string }>>({});
-  const [activeKrDraftGoalId, setActiveKrDraftGoalId] = useState<string | null>(null);
-  const [isAddingGoal, setIsAddingGoal] = useState(false);
-  const [goalFieldDrafts, setGoalFieldDrafts] = useState<
-    Record<string, { title?: string }>
-  >({});
-  const [activeGoalFieldEdit, setActiveGoalFieldEdit] = useState<{
-    goalId: string;
-    field: "title";
-  } | null>(null);
-  const [krFieldDrafts, setKrFieldDrafts] = useState<
-    Record<string, { title?: string }>
-  >({});
-  const [activeKrFieldEdit, setActiveKrFieldEdit] = useState<{
-    goalId: string;
-    krId: string;
-    field: "title";
-  } | null>(null);
-  const [showGuestDemo, setShowGuestDemo] = useState(false);
-  const [weeklyGoalsMinHeight, setWeeklyGoalsMinHeight] = useState<number | null>(null);
-  const [activeGoalCardId, setActiveGoalCardId] = useState<string | null>(null);
-  const okrCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const calendarColumnRef = useRef<HTMLDivElement | null>(null);
-  const [weeklyNotes, setWeeklyNotes] = useState<Record<string, WeeklyNoteEntry>>({});
-  const [selectedWeekKey, setSelectedWeekKey] = useState<string | null>(null);
-  const lastWeekStartDayRef = useRef<WeekdayIndex | null>(null);
-  const dosTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const dontsTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [isDemoMode, setIsDemoMode] = useState(false);
-  const goalsSectionRef = useRef<HTMLDivElement | null>(null);
-  const lastProcessedScheduleRef = useRef<string | null>(null);
-  const pendingScheduleRef = useRef<Record<string, ScheduleEntry[]>>({});
-  const scheduleSaveTimeoutRef = useRef<number | null>(null);
-  const isSavingScheduleRef = useRef(false);
-  const lastServerSavedScheduleRef = useRef<string | null>(null);
-  const lastProcessedGoalsRef = useRef<string | null>(null);
-  const pendingGoalsRef = useRef<Goal[]>([]);
-  const goalsSaveTimeoutRef = useRef<number | null>(null);
-  const isSavingGoalsRef = useRef(false);
-  const lastServerSavedGoalsRef = useRef<string | null>(null);
-  const lastProcessedProductivityRef = useRef<string | null>(null);
-  const pendingProductivityRef = useRef<Record<string, number | null>>({});
-  const productivitySaveTimeoutRef = useRef<number | null>(null);
-  const isSavingProductivityRef = useRef(false);
-  const lastServerSavedProductivityRef = useRef<string | null>(null);
-  const lastProcessedWeeklyNotesRef = useRef<string | null>(null);
-  const pendingWeeklyNotesRef = useRef<Record<string, WeeklyNoteEntry>>({});
-  const weeklyNotesSaveTimeoutsRef = useRef<Record<string, number>>({});
-  const isSavingWeeklyNoteKeysRef = useRef<Record<string, boolean>>({});
-  const lastServerSavedWeeklyNotesByKeyRef = useRef<Record<string, string>>({});
-  const lastProcessedDayOffsRef = useRef<string | null>(null);
-  const pendingDayOffsRef = useRef<Record<string, boolean>>({});
-  const dayOffsSaveTimeoutRef = useRef<number | null>(null);
-  const isSavingDayOffsRef = useRef(false);
-  const lastServerSavedDayOffsRef = useRef<string | null>(null);
-  const lastProcessedSickDaysRef = useRef<string | null>(null);
-  const pendingSickDaysRef = useRef<Record<string, boolean>>({});
-  const sickDaysSaveTimeoutRef = useRef<number | null>(null);
-  const isSavingSickDaysRef = useRef(false);
-  const lastServerSavedSickDaysRef = useRef<string | null>(null);
-  const lastServerSavedProfileRef = useRef<string | null>(null);
-  const hasLoadedServerDataRef = useRef(false);
 
-  const triggerScheduleSave = useCallback(() => {
-    if (!userEmail || isDemoMode) {
-      return;
-    }
-
-    const pendingSerialized = JSON.stringify(pendingScheduleRef.current ?? {});
-    if (lastServerSavedScheduleRef.current === pendingSerialized) {
-      return;
-    }
-
-    if (isSavingScheduleRef.current) {
-      return;
-    }
-
-    const dataToSave = pendingScheduleRef.current;
-    const serializedToSave = pendingSerialized;
-
-    isSavingScheduleRef.current = true;
-    void (async () => {
-      try {
-        await saveSchedule(dataToSave);
-        lastServerSavedScheduleRef.current = serializedToSave;
-      } catch (error) {
-        console.error("Failed to persist schedule", error);
-      } finally {
-        isSavingScheduleRef.current = false;
-        const latestSerialized = JSON.stringify(pendingScheduleRef.current ?? {});
-        if (
-          userEmail &&
-          !isDemoMode &&
-          latestSerialized !== serializedToSave &&
-          !scheduleSaveTimeoutRef.current
-        ) {
-          scheduleSaveTimeoutRef.current = window.setTimeout(() => {
-            scheduleSaveTimeoutRef.current = null;
-            triggerScheduleSave();
-          }, 200);
-        }
-      }
-    })();
-  }, [userEmail, isDemoMode]);
-
-  const triggerGoalsSave = useCallback(() => {
-    if (!userEmail || isDemoMode) {
-      return;
-    }
-
-    const pendingSerialized = JSON.stringify(pendingGoalsRef.current ?? []);
-    if (lastServerSavedGoalsRef.current === pendingSerialized) {
-      return;
-    }
-
-    if (isSavingGoalsRef.current) {
-      return;
-    }
-
-    const dataToSave = pendingGoalsRef.current;
-
-    // Safety check: Don't save if goals data looks incomplete
-    // This prevents accidentally wiping keyResults
-    if (!dataToSave || dataToSave.length === 0) {
-      return;
-    }
-
-    const serializedToSave = pendingSerialized;
-
-    isSavingGoalsRef.current = true;
-    void (async () => {
-      try {
-        await saveGoals(dataToSave);
-        lastServerSavedGoalsRef.current = serializedToSave;
-      } catch (error) {
-        console.error("Failed to persist goals", error);
-      } finally {
-        isSavingGoalsRef.current = false;
-        const latestSerialized = JSON.stringify(pendingGoalsRef.current ?? []);
-        if (
-          userEmail &&
-          !isDemoMode &&
-          latestSerialized !== serializedToSave &&
-          !goalsSaveTimeoutRef.current
-        ) {
-          goalsSaveTimeoutRef.current = window.setTimeout(() => {
-            goalsSaveTimeoutRef.current = null;
-            triggerGoalsSave();
-          }, 200);
-        }
-      }
-    })();
-  }, [userEmail, isDemoMode]);
-
-  const saveGoalsNow = useCallback((nextGoals: Goal[]) => {
-    if (!userEmail || isDemoMode || !hasLoadedServerDataRef.current) {
-      return;
-    }
-
-    pendingGoalsRef.current = combineGoalsForSave(nextGoals, archivedGoals);
-
-    if (goalsSaveTimeoutRef.current) {
-      window.clearTimeout(goalsSaveTimeoutRef.current);
-      goalsSaveTimeoutRef.current = null;
-    }
-
-    triggerGoalsSave();
-  }, [userEmail, isDemoMode, archivedGoals, triggerGoalsSave]);
-
-  const triggerProductivitySave = useCallback(() => {
-    if (!userEmail || isDemoMode) {
-      return;
-    }
-
-    const pendingSerialized = JSON.stringify(pendingProductivityRef.current ?? {});
-    if (lastServerSavedProductivityRef.current === pendingSerialized) {
-      return;
-    }
-
-    if (isSavingProductivityRef.current) {
-      return;
-    }
-
-    const dataToSave = pendingProductivityRef.current;
-    const serializedToSave = pendingSerialized;
-
-    isSavingProductivityRef.current = true;
-    void (async () => {
-      try {
-        await saveProductivity(dataToSave);
-        lastServerSavedProductivityRef.current = serializedToSave;
-      } catch (error) {
-        console.error("Failed to persist productivity ratings", error);
-      } finally {
-        isSavingProductivityRef.current = false;
-        const latestSerialized = JSON.stringify(pendingProductivityRef.current ?? {});
-        if (
-          userEmail &&
-          !isDemoMode &&
-          latestSerialized !== serializedToSave &&
-          !productivitySaveTimeoutRef.current
-        ) {
-          productivitySaveTimeoutRef.current = window.setTimeout(() => {
-            productivitySaveTimeoutRef.current = null;
-            triggerProductivitySave();
-          }, 200);
-        }
-      }
-    })();
-  }, [userEmail, isDemoMode]);
-
-  const flushWeeklyNoteSave = useCallback((weekKey: string) => {
-    if (!userEmail || isDemoMode) {
-      return;
-    }
-
-    const pendingEntry = pendingWeeklyNotesRef.current[weekKey];
-    if (!pendingEntry) {
-      return;
-    }
-
-    const pendingSerialized = JSON.stringify(createWeeklyNoteEntry(pendingEntry));
-    if (lastServerSavedWeeklyNotesByKeyRef.current[weekKey] === pendingSerialized) {
-      return;
-    }
-
-    if (isSavingWeeklyNoteKeysRef.current[weekKey]) {
-      return;
-    }
-
-    isSavingWeeklyNoteKeysRef.current[weekKey] = true;
-
-    void (async () => {
-      try {
-        const saved = await saveWeeklyNoteForWeek(weekKey, pendingEntry);
-        if (!saved) {
-          return;
-        }
-
-        const normalizedSaved = createWeeklyNoteEntry(saved);
-        const savedSerialized = JSON.stringify(normalizedSaved);
-        lastServerSavedWeeklyNotesByKeyRef.current[weekKey] = savedSerialized;
-        pendingWeeklyNotesRef.current[weekKey] = normalizedSaved;
-
-        setWeeklyNotes((prev) => {
-          const current = createWeeklyNoteEntry(prev[weekKey]);
-          if (JSON.stringify(current) === pendingSerialized) {
-            return {
-              ...prev,
-              [weekKey]: normalizedSaved,
-            };
-          }
-          return prev;
-        });
-      } catch (error) {
-        console.error("Failed to persist weekly note", error);
-      } finally {
-        isSavingWeeklyNoteKeysRef.current[weekKey] = false;
-        const latestPending = pendingWeeklyNotesRef.current[weekKey];
-        if (!latestPending) {
-          return;
-        }
-        const latestSerialized = JSON.stringify(createWeeklyNoteEntry(latestPending));
-        if (latestSerialized !== lastServerSavedWeeklyNotesByKeyRef.current[weekKey]) {
-          const existing = weeklyNotesSaveTimeoutsRef.current[weekKey];
-          if (existing) {
-            window.clearTimeout(existing);
-          }
-          weeklyNotesSaveTimeoutsRef.current[weekKey] = window.setTimeout(() => {
-            delete weeklyNotesSaveTimeoutsRef.current[weekKey];
-            flushWeeklyNoteSave(weekKey);
-          }, 200);
-        }
-      }
-    })();
-  }, [userEmail, isDemoMode]);
-
-  const queueWeeklyNoteSave = useCallback(
-    (weekKey: string, entry: WeeklyNoteEntry, options?: { immediate?: boolean }) => {
-      if (!weekKey || !userEmail || isDemoMode || !hasLoadedServerDataRef.current) {
-        return;
-      }
-
-      const normalizedEntry = createWeeklyNoteEntry(entry);
-      pendingWeeklyNotesRef.current[weekKey] = normalizedEntry;
-
-      const existing = weeklyNotesSaveTimeoutsRef.current[weekKey];
-      if (existing) {
-        window.clearTimeout(existing);
-        delete weeklyNotesSaveTimeoutsRef.current[weekKey];
-      }
-
-      if (options?.immediate) {
-        flushWeeklyNoteSave(weekKey);
-        return;
-      }
-
-      weeklyNotesSaveTimeoutsRef.current[weekKey] = window.setTimeout(() => {
-        delete weeklyNotesSaveTimeoutsRef.current[weekKey];
-        flushWeeklyNoteSave(weekKey);
-      }, 600);
-    },
-    [flushWeeklyNoteSave, userEmail, isDemoMode]
-  );
-
-  const triggerDayOffsSave = useCallback(() => {
-    if (!userEmail || isDemoMode) {
-      return;
-    }
-
-    const pendingSerialized = JSON.stringify(pendingDayOffsRef.current ?? {});
-    if (lastServerSavedDayOffsRef.current === pendingSerialized) {
-      return;
-    }
-
-    if (isSavingDayOffsRef.current) {
-      return;
-    }
-
-    const dataToSave = pendingDayOffsRef.current;
-    const serializedToSave = pendingSerialized;
-
-    isSavingDayOffsRef.current = true;
-    void (async () => {
-      try {
-        await saveDayOffs(dataToSave);
-        lastServerSavedDayOffsRef.current = serializedToSave;
-      } catch (error) {
-        console.error("Failed to persist day offs", error);
-      } finally {
-        isSavingDayOffsRef.current = false;
-        const latestSerialized = JSON.stringify(pendingDayOffsRef.current ?? {});
-        if (
-          userEmail &&
-          !isDemoMode &&
-          latestSerialized !== serializedToSave &&
-          !dayOffsSaveTimeoutRef.current
-        ) {
-          dayOffsSaveTimeoutRef.current = window.setTimeout(() => {
-            dayOffsSaveTimeoutRef.current = null;
-            triggerDayOffsSave();
-          }, 200);
-        }
-      }
-    })();
-  }, [userEmail, isDemoMode]);
-
-  const triggerSickDaysSave = useCallback(() => {
-    if (!userEmail || isDemoMode) {
-      return;
-    }
-
-    const pendingSerialized = JSON.stringify(pendingSickDaysRef.current ?? {});
-    if (lastServerSavedSickDaysRef.current === pendingSerialized) {
-      return;
-    }
-
-    if (isSavingSickDaysRef.current) {
-      return;
-    }
-
-    const dataToSave = pendingSickDaysRef.current;
-    const serializedToSave = pendingSerialized;
-
-    isSavingSickDaysRef.current = true;
-    void (async () => {
-      try {
-        await saveSickDays(dataToSave);
-        lastServerSavedSickDaysRef.current = serializedToSave;
-      } catch (error) {
-        console.error("Failed to persist sick days", error);
-      } finally {
-        isSavingSickDaysRef.current = false;
-        const latestSerialized = JSON.stringify(pendingSickDaysRef.current ?? {});
-        if (
-          userEmail &&
-          !isDemoMode &&
-          latestSerialized !== serializedToSave &&
-          !sickDaysSaveTimeoutRef.current
-        ) {
-          sickDaysSaveTimeoutRef.current = window.setTimeout(() => {
-            sickDaysSaveTimeoutRef.current = null;
-            triggerSickDaysSave();
-          }, 200);
-        }
-      }
-    })();
-  }, [userEmail, isDemoMode]);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
-
-  useEffect(() => {
-    lastServerSavedScheduleRef.current = null;
-    pendingScheduleRef.current = {};
-    lastProcessedScheduleRef.current = null;
-    if (scheduleSaveTimeoutRef.current) {
-      window.clearTimeout(scheduleSaveTimeoutRef.current);
-      scheduleSaveTimeoutRef.current = null;
-    }
-    lastServerSavedGoalsRef.current = null;
-    pendingGoalsRef.current = [];
-    lastProcessedGoalsRef.current = null;
-    if (goalsSaveTimeoutRef.current) {
-      window.clearTimeout(goalsSaveTimeoutRef.current);
-      goalsSaveTimeoutRef.current = null;
-    }
-    lastServerSavedProductivityRef.current = null;
-    pendingProductivityRef.current = {};
-    lastProcessedProductivityRef.current = null;
-    if (productivitySaveTimeoutRef.current) {
-      window.clearTimeout(productivitySaveTimeoutRef.current);
-      productivitySaveTimeoutRef.current = null;
-    }
-    pendingWeeklyNotesRef.current = {};
-    lastServerSavedWeeklyNotesByKeyRef.current = {};
-    lastProcessedWeeklyNotesRef.current = null;
-    Object.values(weeklyNotesSaveTimeoutsRef.current).forEach((timeoutId) => {
-      window.clearTimeout(timeoutId);
-    });
-    weeklyNotesSaveTimeoutsRef.current = {};
-    isSavingWeeklyNoteKeysRef.current = {};
-    lastServerSavedDayOffsRef.current = null;
-    pendingDayOffsRef.current = {};
-    lastProcessedDayOffsRef.current = null;
-    if (dayOffsSaveTimeoutRef.current) {
-      window.clearTimeout(dayOffsSaveTimeoutRef.current);
-      dayOffsSaveTimeoutRef.current = null;
-    }
-    hasLoadedServerDataRef.current = false;
-    lastServerSavedProfileRef.current = null;
-  }, [userEmail]);
-
-  const fetchShares = useCallback(async () => {
-    if (!userEmail) {
-      return;
-    }
-    setIsLoadingShares(true);
-    setShareError(null);
-    try {
-      const response = await fetch("/api/shares");
-      if (!response.ok) {
-        throw new Error("Failed to load shares");
-      }
-      const data = await response.json();
-      setSharedWithMe(data.sharedWithMe ?? []);
-      setSharedByMe(data.sharedByMe ?? []);
-    } catch (error) {
-      setShareError("Unable to load shares right now.");
-    } finally {
-      setIsLoadingShares(false);
-    }
-  }, [userEmail]);
-
-  useEffect(() => {
-    if (isEditingProfile || isShareEditorVisible) {
-      void fetchShares();
-    }
-  }, [isEditingProfile, isShareEditorVisible, fetchShares]);
-
-  useEffect(() => {
-    if (!isShareOptionsOpen) return;
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsShareOptionsOpen(false);
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isShareOptionsOpen]);
-
-  useEffect(() => {
-    if (!activeShareOptionsId) return;
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setActiveShareOptionsId(null);
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [activeShareOptionsId]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const updateHeight = () => {
-      const leftColumn = calendarColumnRef.current;
-      if (!leftColumn) {
-        setWeeklyGoalsMinHeight(null);
-        return;
-      }
-      const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
-      if (!isDesktop) {
-        setWeeklyGoalsMinHeight(null);
-        return;
-      }
-      setWeeklyGoalsMinHeight(Math.ceil(leftColumn.getBoundingClientRect().height));
-    };
-
-    updateHeight();
-
-    const leftColumn = calendarColumnRef.current;
-    if (!leftColumn) {
-      return;
-    }
-
-    const observer = typeof ResizeObserver !== "undefined"
-      ? new ResizeObserver(() => {
-          updateHeight();
-        })
-      : null;
-    observer?.observe(leftColumn);
-    window.addEventListener("resize", updateHeight);
-
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", updateHeight);
-    };
-  }, [view]);
-
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    async function loadData() {
-      let shouldOpenProfileModal: boolean | null = null;
-      let hasProfileLegend = false;
-      let hasProfileWeeklyTemplate = false;
-      try {
-        // Check session first
-        const sessionRes = await fetch("/api/auth/session");
-        const sessionContentType = sessionRes.headers.get("content-type") || "";
-        const session = sessionContentType.includes("application/json")
-          ? await sessionRes.json()
-          : null;
-
-        const isLoggedIn = !!session?.user?.email;
-        setUserEmail(session?.user?.email || null);
-
-        if (isLoggedIn) {
-          setIsDemoMode(false);
-          try {
-            window.localStorage.setItem(storageKey("demo-mode"), "false");
-          } catch (error) {
-            console.error("Failed to update demo mode flag", error);
-          }
-          // Logged in - load from database
-          await migrateFromLocalStorage();
-          cleanupOldScheduleEntries();
-
-          const data = await loadAllData();
-
-          if (data) {
-            // Remove duplicate goals (same title, case-insensitive)
-            const uniqueGoals = (data.goals ?? []).reduce((acc: Goal[], goal: Goal) => {
-              const isDuplicate = acc.some(g => g.title.toLowerCase() === goal.title.toLowerCase());
-              if (!isDuplicate) {
-                // Ensure archived/order fields exist with default values
-                acc.push({
-                  ...goal,
-                  archived: goal.archived ?? false,
-                  sortOrder: goal.sortOrder ?? acc.length,
-                  keyResults: (goal.keyResults ?? []).map((kr, krIndex) => ({
-                    ...kr,
-                    sortOrder: kr.sortOrder ?? krIndex,
-                  })),
-                });
-              }
-              return acc;
-            }, []);
-            const normalizedGoals = normalizeGoalOrder(uniqueGoals);
-            setGoals(normalizedGoals);
-            const serializedGoals = JSON.stringify(normalizedGoals);
-            lastProcessedGoalsRef.current = serializedGoals;
-            lastServerSavedGoalsRef.current = serializedGoals;
-            pendingGoalsRef.current = normalizedGoals;
-
-            const normalizedSchedule = normalizeScheduleEntryColors(data.scheduleEntries ?? {});
-            setScheduleEntries(normalizedSchedule);
-            const serializedSchedule = JSON.stringify(normalizedSchedule);
-            lastProcessedScheduleRef.current = serializedSchedule;
-            lastServerSavedScheduleRef.current = serializedSchedule;
-            pendingScheduleRef.current = normalizedSchedule;
-
-            // Set profile data
-            const profile = data.profile;
-            let nextWeekStartDay: WeekdayIndex = 1;
-            let nextRecentYears = recentYears;
-            let nextGoalsSectionTitle = goalsSectionTitle;
-            let nextPersonName = "";
-            let nextDateOfBirth = "";
-            let nextProductivityScaleMode: "3" | "4" = productivityScaleMode;
-            let nextShowLegend = showLegend;
-            let nextWeeklyGoalsTemplate = weeklyGoalsTemplate;
-            let nextDayOffAllowance = dayOffAllowance;
-
-            if (profile) {
-              nextPersonName = profile.personName ?? "";
-              nextDateOfBirth = profile.dateOfBirth ?? "";
-              setPersonName(nextPersonName);
-              setDateOfBirth(nextDateOfBirth);
-              if (profile.weekStartDay !== undefined) {
-                nextWeekStartDay = profile.weekStartDay as WeekdayIndex;
-              }
-              setWeekStartDay(nextWeekStartDay);
-              if (profile.showLegend !== undefined) {
-                nextShowLegend = Boolean(profile.showLegend);
-                setShowLegend(nextShowLegend);
-                hasProfileLegend = true;
-              }
-              if (profile.weeklyGoalsTemplate) {
-                nextWeeklyGoalsTemplate = normalizeWeeklyGoalsTemplate(profile.weeklyGoalsTemplate);
-                setWeeklyGoalsTemplate(nextWeeklyGoalsTemplate);
-                hasProfileWeeklyTemplate = true;
-              }
-              if (profile.dayOffAllowance !== undefined && profile.dayOffAllowance !== null) {
-                nextDayOffAllowance = Number(profile.dayOffAllowance);
-                setDayOffAllowance(nextDayOffAllowance);
-              }
-              if (profile.workDays) {
-                const parsedWorkDays = profile.workDays.split(',').map((d: string) => Number(d)).filter((d: number) => d >= 0 && d <= 6) as WeekdayIndex[];
-                setWorkDays(parsedWorkDays.length > 0 ? parsedWorkDays : [0, 1, 2, 3, 4, 5, 6]);
-              }
-              if (profile.autoMarkWeekendsOff !== undefined && profile.autoMarkWeekendsOff !== null) {
-                setAutoMarkWeekendsOff(profile.autoMarkWeekendsOff);
-              }
-              if (profile.recentYears) {
-                nextRecentYears = profile.recentYears;
-                setRecentYears(nextRecentYears);
-              }
-              if (profile.goalsSectionTitle) {
-                nextGoalsSectionTitle = profile.goalsSectionTitle;
-                setGoalsSectionTitle(nextGoalsSectionTitle);
-              }
-              if (profile.productivityViewMode !== undefined) {
-                setProductivityMode(profile.productivityViewMode as "day" | "week");
-              }
-              if (profile.productivityScaleMode === "3" || profile.productivityScaleMode === "4") {
-                nextProductivityScaleMode = profile.productivityScaleMode;
-                setProductivityScaleMode(nextProductivityScaleMode);
-              }
-              if (profile.theme === "light" || profile.theme === "dark") {
-                setTheme(profile.theme);
-              }
-
-              const complete = Boolean(profile.personName);
-              shouldOpenProfileModal = !complete;
-            } else {
-              setWeekStartDay(1);
-            }
-
-            const migrationKey = storageKey(`weekkey-migration-done-${session?.user?.email ?? "unknown"}`);
-            const hasMigratedWeekKeys =
-              window.localStorage.getItem(migrationKey) === "true";
-
-            const productivityData = data.productivityRatings ?? {};
-            const migratedProductivity = hasMigratedWeekKeys
-              ? { migrated: productivityData, didMigrate: false }
-              : migrateWeekKeys(productivityData, nextWeekStartDay);
-            setProductivityRatings(migratedProductivity.migrated);
-            const serializedProductivity = JSON.stringify(migratedProductivity.migrated);
-            lastProcessedProductivityRef.current = migratedProductivity.didMigrate ? null : serializedProductivity;
-            lastServerSavedProductivityRef.current = migratedProductivity.didMigrate ? null : serializedProductivity;
-            pendingProductivityRef.current = migratedProductivity.migrated;
-
-            const weeklyNotesData = data.weeklyNotes ?? {};
-            const migratedWeekly = hasMigratedWeekKeys
-              ? { migrated: weeklyNotesData, didMigrate: false }
-              : migrateWeekKeys(weeklyNotesData, nextWeekStartDay);
-            const normalizedWeekly = normalizeWeeklyNotes(migratedWeekly.migrated);
-            setWeeklyNotes(normalizedWeekly);
-            const serializedWeekly = JSON.stringify(normalizedWeekly);
-            lastProcessedWeeklyNotesRef.current = migratedWeekly.didMigrate ? null : serializedWeekly;
-            lastServerSavedWeeklyNotesByKeyRef.current = Object.fromEntries(
-              Object.entries(normalizedWeekly).map(([weekKey, entry]) => [
-                weekKey,
-                JSON.stringify(createWeeklyNoteEntry(entry)),
-              ])
-            );
-            pendingWeeklyNotesRef.current = normalizedWeekly;
-
-            const dayOffsData = data.dayOffs ?? {};
-            setDayOffs(dayOffsData);
-            const serializedDayOffs = JSON.stringify(dayOffsData);
-            lastProcessedDayOffsRef.current = serializedDayOffs;
-            lastServerSavedDayOffsRef.current = serializedDayOffs;
-            pendingDayOffsRef.current = dayOffsData;
-
-            const sickDaysData = data.sickDays ?? {};
-            setSickDays(sickDaysData);
-            const serializedSickDays = JSON.stringify(sickDaysData);
-            lastProcessedSickDaysRef.current = serializedSickDays;
-            lastServerSavedSickDaysRef.current = serializedSickDays;
-            pendingSickDaysRef.current = sickDaysData;
-
-            if (migratedProductivity.didMigrate || migratedWeekly.didMigrate) {
-              window.localStorage.setItem(migrationKey, "true");
-            }
-
-            const profilePayload = {
-              personName: nextPersonName.trim() ? nextPersonName : null,
-              dateOfBirth: nextDateOfBirth.trim() ? nextDateOfBirth : null,
-              weekStartDay: nextWeekStartDay,
-              recentYears: nextRecentYears,
-              goalsSectionTitle: nextGoalsSectionTitle,
-              productivityScaleMode: nextProductivityScaleMode,
-              showLegend: nextShowLegend,
-              weeklyGoalsTemplate: nextWeeklyGoalsTemplate,
-              dayOffAllowance: nextDayOffAllowance,
-              workDays: [0, 1, 2, 3, 4, 5, 6].join(',')
-            };
-            lastServerSavedProfileRef.current = JSON.stringify(profilePayload);
-          }
-          hasLoadedServerDataRef.current = true;
-        } else {
-          setIsDemoMode(true);
-          try {
-            window.localStorage.setItem(storageKey("demo-mode"), "true");
-          } catch (error) {
-            console.error("Failed to update demo mode flag", error);
-          }
-          // Guest - load demo data
-          setGoals(demoGoals);
-          setScheduleEntries(normalizeScheduleEntryColors(demoScheduleEntries));
-          setProductivityRatings(demoProductivityRatings);
-          setWeeklyNotes(
-            normalizeWeeklyNotes(
-              buildDemoWeeklyNotes(new Date().getFullYear(), demoProfile.weekStartDay as WeekdayIndex)
-            )
-          );
-          setPersonName(demoProfile.personName);
-          setDateOfBirth(demoProfile.dateOfBirth);
-          setWeekStartDay(demoProfile.weekStartDay as WeekdayIndex);
-          setRecentYears(demoProfile.recentYears);
-          setGoalsSectionTitle(demoProfile.goalsSectionTitle ?? "2026 Goals");
-          setShowLegend(demoProfile.showLegend ?? true);
-          setDayOffAllowance(demoProfile.dayOffAllowance ?? 15);
-          setDayOffs(demoDayOffs);
-          setSickDays(demoSickDays);
-          setProductivityScaleMode((demoProfile.productivityScaleMode as "3" | "4") ?? "3");
-          setAutoMarkWeekendsOff(demoProfile.autoMarkWeekendsOff ?? false);
-          setWorkDays(demoProfile.workDays ? demoProfile.workDays.split(',').map(Number) as WeekdayIndex[] : [0, 1, 2, 3, 4, 5, 6]);
-          setWeeklyGoalsTemplate(
-            normalizeWeeklyGoalsTemplate(demoProfile.weeklyGoalsTemplate ?? weeklyGoalsTemplate)
-          );
-          setProductivityMode("day");
-          setView("productivity");
-        }
-
-        // Also load UI preferences from localStorage (these are not in DB)
-        const storedProductivityGoal = window.localStorage.getItem(storageKey("productivity-goals"));
-        if (storedProductivityGoal) {
-          const parsedGoals = JSON.parse(storedProductivityGoal) as Record<number, string>;
-          if (parsedGoals && typeof parsedGoals === "object") {
-            setProductivityGoals(parsedGoals);
-          }
-        }
-        const storedView = window.localStorage.getItem(storageKey("active-view"));
-        if (storedView === "life" || storedView === "productivity") {
-          if (isLoggedIn) {
-            setView(storedView);
-          } else {
-            setView("productivity");
-          }
-        } else if (!isLoggedIn) {
-          setView("productivity");
-        }
-
-        if (!isLoggedIn || !hasProfileLegend) {
-          const storedShowLegend = window.localStorage.getItem(storageKey("show-legend"));
-          if (storedShowLegend === "true") {
-            setShowLegend(true);
-          } else if (storedShowLegend === "false") {
-            setShowLegend(false);
-          } else {
-            const storedLegendHidden = window.localStorage.getItem(legacyStorageKey("hide-legend"));
-            if (storedLegendHidden === "true") {
-              setShowLegend(false);
-            }
-          }
-        }
-
-        if (!isLoggedIn || !hasProfileWeeklyTemplate) {
-          const storedWeeklyTemplate = window.localStorage.getItem(storageKey("weekly-goals-template"));
-          if (storedWeeklyTemplate) {
-            setWeeklyGoalsTemplate(normalizeWeeklyGoalsTemplate(storedWeeklyTemplate));
-          }
-        }
-
-        if (!isLoggedIn) {
-          const storedDayOffs = window.localStorage.getItem(storageKey("day-offs"));
-          if (storedDayOffs) {
-            try {
-              const parsedDayOffs = JSON.parse(storedDayOffs) as Record<string, boolean>;
-              if (parsedDayOffs && typeof parsedDayOffs === "object") {
-                setDayOffs(parsedDayOffs);
-              }
-            } catch (error) {
-              console.error("Failed to parse cached day offs", error);
-            }
-          }
-        }
-
-        const storedProfileModalPreference = window.localStorage.getItem(storageKey("profile-modal-open"));
-        if (storedProfileModalPreference === "true") {
-          shouldOpenProfileModal = true;
-        } else if (storedProfileModalPreference === "false") {
-          shouldOpenProfileModal = false;
-        }
-
-        setIsEditingProfile(shouldOpenProfileModal ?? false);
-        setIsHydrated(true);
-      } catch (error) {
-        console.error("Failed to load data", error);
-        setIsHydrated(true);
-      }
-    }
-
-    loadData();
-  }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
-    try {
-      window.localStorage.setItem(
-        storageKey("profile-modal-open"),
-        isEditingProfile ? "true" : "false"
-      );
-    } catch (error) {
-      console.error("Failed to cache profile modal state", error);
-    }
-  }, [isEditingProfile, isHydrated]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-
-    try {
-      // Save to localStorage as backup
-      window.localStorage.setItem(
-        storageKey("profile"),
-        JSON.stringify({
-          name: personName,
-          dateOfBirth,
-          email,
-          goalsSectionTitle,
-        })
-      );
-    } catch (error) {
-      console.error("Failed to save profile", error);
-    }
-
-    if (!userEmail || !hasLoadedServerDataRef.current || isDemoMode) {
-      return;
-    }
-
-    const profilePayload = {
-      personName: personName || null,
-      dateOfBirth: dateOfBirth || null,
-      weekStartDay,
-      recentYears,
-      goalsSectionTitle,
-      productivityScaleMode,
-      showLegend,
-      weeklyGoalsTemplate,
-      dayOffAllowance,
-      workDays: workDays.join(','),
-      productivityViewMode: productivityMode,
-      autoMarkWeekendsOff,
-      theme
-    };
-    const serializedProfile = JSON.stringify(profilePayload);
-    if (lastServerSavedProfileRef.current === serializedProfile) {
-      return;
-    }
-
-    void (async () => {
-      try {
-        await saveProfile(profilePayload);
-        lastServerSavedProfileRef.current = serializedProfile;
-      } catch (error) {
-        console.error("Failed to save profile", error);
-      }
-    })();
-  }, [personName, dateOfBirth, email, weekStartDay, recentYears, goalsSectionTitle, productivityScaleMode, showLegend, weeklyGoalsTemplate, dayOffAllowance, workDays, productivityMode, autoMarkWeekendsOff, theme, isHydrated, userEmail, isDemoMode]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(storageKey("active-view"), view);
-    } catch (error) {
-      console.error("Failed to cache active view", error);
-    }
-  }, [view]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-
-    const serialized = JSON.stringify(productivityRatings);
-    if (lastProcessedProductivityRef.current === serialized) {
-      return;
-    }
-    lastProcessedProductivityRef.current = serialized;
-
-    if (!userEmail) {
-      try {
-        window.localStorage.setItem(storageKey("productivity-ratings"), serialized);
-      } catch (error) {
-        console.error("Failed to cache productivity ratings", error);
-      }
-      return;
-    }
-
-    if (!hasLoadedServerDataRef.current || isDemoMode) {
-      return;
-    }
-
-    pendingProductivityRef.current = productivityRatings;
-
-    if (productivitySaveTimeoutRef.current) {
-      window.clearTimeout(productivitySaveTimeoutRef.current);
-    }
-
-    productivitySaveTimeoutRef.current = window.setTimeout(() => {
-      productivitySaveTimeoutRef.current = null;
-      triggerProductivitySave();
-    }, 600);
-
-    return () => {
-      if (productivitySaveTimeoutRef.current) {
-        window.clearTimeout(productivitySaveTimeoutRef.current);
-        productivitySaveTimeoutRef.current = null;
-      }
-    };
-  }, [productivityRatings, isHydrated, userEmail, isDemoMode, triggerProductivitySave]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-
-    const serialized = JSON.stringify(dayOffs);
-    if (lastProcessedDayOffsRef.current === serialized) {
-      return;
-    }
-    lastProcessedDayOffsRef.current = serialized;
-
-    if (!userEmail) {
-      try {
-        window.localStorage.setItem(storageKey("day-offs"), serialized);
-      } catch (error) {
-        console.error("Failed to cache day offs", error);
-      }
-      return;
-    }
-
-    if (!hasLoadedServerDataRef.current || isDemoMode) {
-      return;
-    }
-
-    pendingDayOffsRef.current = dayOffs;
-
-    if (dayOffsSaveTimeoutRef.current) {
-      window.clearTimeout(dayOffsSaveTimeoutRef.current);
-    }
-
-    dayOffsSaveTimeoutRef.current = window.setTimeout(() => {
-      dayOffsSaveTimeoutRef.current = null;
-      triggerDayOffsSave();
-    }, 600);
-
-    return () => {
-      if (dayOffsSaveTimeoutRef.current) {
-        window.clearTimeout(dayOffsSaveTimeoutRef.current);
-        dayOffsSaveTimeoutRef.current = null;
-      }
-    };
-  }, [dayOffs, isHydrated, userEmail, isDemoMode, triggerDayOffsSave]);
-
-  useEffect(() => {
-    if (!isHydrated || !userEmail || isDemoMode) {
-      return;
-    }
-
-    const currentSerialized = JSON.stringify(sickDays);
-    if (lastProcessedSickDaysRef.current === currentSerialized) {
-      return;
-    }
-    lastProcessedSickDaysRef.current = currentSerialized;
-
-    pendingSickDaysRef.current = sickDays;
-
-    if (sickDaysSaveTimeoutRef.current) {
-      window.clearTimeout(sickDaysSaveTimeoutRef.current);
-    }
-
-    sickDaysSaveTimeoutRef.current = window.setTimeout(() => {
-      sickDaysSaveTimeoutRef.current = null;
-      triggerSickDaysSave();
-    }, 600);
-
-    return () => {
-      if (sickDaysSaveTimeoutRef.current) {
-        window.clearTimeout(sickDaysSaveTimeoutRef.current);
-        sickDaysSaveTimeoutRef.current = null;
-      }
-    };
-  }, [sickDays, isHydrated, userEmail, isDemoMode, triggerSickDaysSave]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        storageKey("productivity-goals"),
-        JSON.stringify(productivityGoals)
-      );
-    } catch (error) {
-      console.error("Failed to cache productivity goals", error);
-    }
-  }, [productivityGoals]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-    try {
-      window.localStorage.setItem(storageKey("show-legend"), showLegend ? "true" : "false");
-    } catch (error) {
-      console.error("Failed to cache legend preference", error);
-    }
-  }, [showLegend, isHydrated]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-    try {
-      window.localStorage.setItem(storageKey("weekly-goals-template"), weeklyGoalsTemplate);
-    } catch (error) {
-      console.error("Failed to cache weekly goals template", error);
-    }
-  }, [weeklyGoalsTemplate, isHydrated]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-
-    const serializedSchedule = JSON.stringify(scheduleEntries);
-    if (lastProcessedScheduleRef.current === serializedSchedule) {
-      return;
-    }
-    lastProcessedScheduleRef.current = serializedSchedule;
-
-    try {
-      // Filter to keep only recent entries (last 90 days) to prevent quota issues
-      const recentEntries = filterRecentScheduleEntries(scheduleEntries);
-
-      // Save to localStorage as backup with quota error handling
-      const saved = safeLocalStorageSetItem(
-        storageKey("schedule-entries"),
-        JSON.stringify(recentEntries),
-        () => {
-          // If quota is still exceeded after filtering, try to clear and retry
-          console.warn("Attempting to clear old data and retry...");
-          cleanupOldScheduleEntries();
-        }
-      );
-
-      if (!saved) {
-        console.warn("Could not save schedule entries to localStorage due to quota limits");
-      }
-
-      if (!userEmail || isDemoMode) {
-        return;
-      }
-
-      if (!hasLoadedServerDataRef.current) {
-        return;
-      }
-
-      pendingScheduleRef.current = scheduleEntries;
-
-      if (scheduleSaveTimeoutRef.current) {
-        window.clearTimeout(scheduleSaveTimeoutRef.current);
-      }
-      scheduleSaveTimeoutRef.current = window.setTimeout(() => {
-        scheduleSaveTimeoutRef.current = null;
-        triggerScheduleSave();
-      }, 600);
-    } catch (error) {
-      console.error("Failed to save schedule entries", error);
-    }
-
-    return () => {
-      if (scheduleSaveTimeoutRef.current) {
-        window.clearTimeout(scheduleSaveTimeoutRef.current);
-        scheduleSaveTimeoutRef.current = null;
-      }
-    };
-  }, [scheduleEntries, isHydrated, userEmail, triggerScheduleSave]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-
-    const goalsToSave = combineGoalsForSave(goals, archivedGoals);
-    const serializedGoals = JSON.stringify(goalsToSave);
-    if (lastProcessedGoalsRef.current === serializedGoals) {
-      return;
-    }
-    lastProcessedGoalsRef.current = serializedGoals;
-
-    if (!userEmail) {
-      try {
-        window.localStorage.setItem(storageKey("goals"), serializedGoals);
-      } catch (error) {
-        console.error("Failed to cache goals for guest", error);
-      }
-      return;
-    }
-
-    if (!hasLoadedServerDataRef.current || isDemoMode) {
-      return;
-    }
-
-    pendingGoalsRef.current = goalsToSave;
-
-    if (goalsSaveTimeoutRef.current) {
-      window.clearTimeout(goalsSaveTimeoutRef.current);
-    }
-
-    goalsSaveTimeoutRef.current = window.setTimeout(() => {
-      goalsSaveTimeoutRef.current = null;
-      triggerGoalsSave();
-    }, 600);
-
-    return () => {
-      if (goalsSaveTimeoutRef.current) {
-        window.clearTimeout(goalsSaveTimeoutRef.current);
-        goalsSaveTimeoutRef.current = null;
-      }
-    };
-  }, [goals, archivedGoals, isHydrated, userEmail, isDemoMode, triggerGoalsSave]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-
-    try {
-      // Save to localStorage as backup
-      window.localStorage.setItem(
-        storageKey("week-start"),
-        String(weekStartDay)
-      );
-      // weekStartDay is saved as part of profile in the database
-    } catch (error) {
-      console.error("Failed to save week start preference", error);
-    }
-  }, [weekStartDay, isHydrated]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-
-    const serialized = JSON.stringify(weeklyNotes);
-    if (lastProcessedWeeklyNotesRef.current === serialized) {
-      return;
-    }
-    lastProcessedWeeklyNotesRef.current = serialized;
-
-    try {
-      window.localStorage.setItem(storageKey("weekly-notes"), serialized);
-    } catch (error) {
-      console.error("Failed to cache weekly notes", error);
-    }
-  }, [weeklyNotes, isHydrated]);
-
-  const selectedWeek = useMemo(
-    () => (selectedWeekKey ? weeksForYear.find((week) => week.weekKey === selectedWeekKey) : null),
-    [selectedWeekKey, weeksForYear]
-  );
-
-  useEffect(() => {
-    setSelectedWeekKey(null);
-  }, [weekStartDay]);
-
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
-    if (lastWeekStartDayRef.current === null) {
-      lastWeekStartDayRef.current = weekStartDay;
-      return;
-    }
-    if (lastWeekStartDayRef.current === weekStartDay) {
-      return;
-    }
-
-    setProductivityRatings((prev) => remapWeekKeys(prev, weekStartDay));
-    setWeeklyNotes((prev) => remapWeekKeys(prev, weekStartDay));
-    lastWeekStartDayRef.current = weekStartDay;
-  }, [weekStartDay, isHydrated]);
-
-  // Set current week as selected by default when viewing productivity tracker
-  useEffect(() => {
-    if (view === "productivity" && selectedWeekKey === null) {
-      const today = new Date();
-      const currentWeek = weeksForYear.find((week) =>
-        week.dayKeys.some((dayKey) => {
-          const [y, m, d] = dayKey.split("-").map(Number);
-          const keyDate = new Date(y!, m! - 1, d);
-          return (
-            keyDate.getFullYear() === today.getFullYear() &&
-            keyDate.getMonth() === today.getMonth() &&
-            keyDate.getDate() === today.getDate()
-          );
-        })
-      );
-      if (currentWeek) {
-        setSelectedWeekKey(currentWeek.weekKey);
-      }
-    }
-  }, [view, weeksForYear, selectedWeekKey]);
-
-  const isProfileComplete = Boolean(personName && dateOfBirth && email);
-  const isProfileEditorVisible = isEditingProfile;
-
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
-  };
-
-  const goalsHeaderLabel = useMemo(() => {
-    const findWeekForDate = (date: Date) =>
-      weeksForYear.find((week) =>
-        week.dayKeys.some((dayKey) => {
-          const [y, m, d] = dayKey.split("-").map(Number);
-          const keyDate = new Date(y!, m! - 1, d);
-          return (
-            keyDate.getFullYear() === date.getFullYear() &&
-            keyDate.getMonth() === date.getMonth() &&
-            keyDate.getDate() === date.getDate()
-          );
-        })
-      );
-
-    const activeWeek = selectedWeek ?? findWeekForDate(new Date());
-
-    if (!activeWeek) {
-      return "Goals";
-    }
-
-    return `Goals for ${activeWeek.rangeLabel}`;
-  }, [weeksForYear, selectedWeek]);
-
-  const shiftSelectedWeek = (direction: -1 | 1) => {
-    if (!weeksForYear.length) return;
-    let currentIndex = selectedWeekKey
-      ? weeksForYear.findIndex((week) => week.weekKey === selectedWeekKey)
-      : -1;
-    if (currentIndex === -1) {
-      const today = new Date();
-      currentIndex = weeksForYear.findIndex((week) =>
-        week.dayKeys.some((dayKey) => {
-          const [y, m, d] = dayKey.split("-").map(Number);
-          const keyDate = new Date(y!, m! - 1, d);
-          return (
-            keyDate.getFullYear() === today.getFullYear() &&
-            keyDate.getMonth() === today.getMonth() &&
-            keyDate.getDate() === today.getDate()
-          );
-        })
-      );
-    }
-    if (currentIndex === -1) {
-      currentIndex = 0;
-    }
-    let targetIndex = currentIndex + direction;
-    if (targetIndex < 0 || targetIndex >= weeksForYear.length) {
-      const nextYear = productivityYear + (direction === 1 ? 1 : -1);
-      const nextWeeks = buildWeeksForYear(nextYear, weekStartDay);
-      if (!nextWeeks.length) {
-        return;
-      }
-      setProductivityYear(nextYear);
-      setSelectedWeekKey(
-        direction === 1 ? nextWeeks[0]!.weekKey : nextWeeks[nextWeeks.length - 1]!.weekKey
-      );
-      return;
-    }
-    setSelectedWeekKey(weeksForYear[targetIndex]!.weekKey);
-  };
-
-  const handleCreateShare = async () => {
-    const trimmedEmail = shareEmail.trim();
-    if (!trimmedEmail) {
-      setShareError("Enter an email to share.");
-      return;
-    }
-    setShareError(null);
-    const optimisticId = `temp-${Date.now()}`;
-    const optimisticShare: ShareListItem = {
-      id: optimisticId,
-      recipientEmail: trimmedEmail,
-      ...shareOptions,
-    };
-    setSharedByMe((prev) => [optimisticShare, ...prev]);
-    setShareEmail("");
-    try {
-      const response = await fetch("/api/shares", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipientEmail: trimmedEmail, options: shareOptions }),
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        setShareError(data.error || "Unable to share right now.");
-        setSharedByMe((prev) => prev.filter((share) => share.id !== optimisticId));
-        return;
-      }
-      await fetchShares();
-    } catch (error) {
-      setShareError("Unable to share right now.");
-      setSharedByMe((prev) => prev.filter((share) => share.id !== optimisticId));
-    }
-  };
-
-  const handleEditShareOptions = (share: ShareListItem) => {
-    if (activeShareOptionsId === share.id) {
-      setActiveShareOptionsId(null);
-      return;
-    }
-    setActiveShareOptionsId(share.id);
-    setShareEditOptions({
-      showSelfRating: share.showSelfRating !== false,
-      showDosDonts: share.showDosDonts !== false,
-      showWeeklyGoals: share.showWeeklyGoals !== false,
-      showOkrs: share.showOkrs !== false,
-    });
-  };
-
-  const handleUpdateShareOptions = async (shareId: string) => {
-    setShareError(null);
-    const previousShares = sharedByMe;
-    setSharedByMe((prev) =>
-      prev.map((share) =>
-        share.id === shareId
-          ? { ...share, ...shareEditOptions }
-          : share
-      )
-    );
-    setActiveShareOptionsId(null);
-    try {
-      const response = await fetch(`/api/shares/${shareId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ options: shareEditOptions }),
-      });
-      if (!response.ok) {
-        setShareError("Unable to update share options.");
-        setSharedByMe(previousShares);
-        return;
-      }
-    } catch (error) {
-      setShareError("Unable to update share options.");
-      setSharedByMe(previousShares);
-    }
-  };
-
-  const handlePrint = () => {
-    setIsPrintOptionsOpen(false);
-    window.setTimeout(() => {
-      window.print();
-    }, 0);
-  };
-
-  const handleRevokeShare = async (shareId: string) => {
-    const previousShares = sharedByMe;
-    setSharedByMe((prev) => prev.filter((share) => share.id !== shareId));
-    try {
-      const response = await fetch(`/api/shares/${shareId}`, { method: "DELETE" });
-      if (!response.ok) {
-        setShareError("Unable to revoke share.");
-        setSharedByMe(previousShares);
-        return;
-      }
-      await fetchShares();
-    } catch (error) {
-      setShareError("Unable to revoke share.");
-      setSharedByMe(previousShares);
-    }
-  };
-
-  const generateId = () =>
-    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-
-  const handleAddGoal = () => {
-    const title = newGoalTitle.trim();
-    if (!title) {
-      return;
-    }
-
-    // Check if a goal with the exact same title already exists
-    const duplicateExists = goals.some(goal => goal.title.toLowerCase() === title.toLowerCase());
-    if (duplicateExists) {
-      alert("A goal with this name already exists. Please use a different name.");
-      return;
-    }
-
-    const nextGoal: Goal = {
-      id: generateId(),
-      title,
-      timeframe: "",
-      keyResults: [],
-      sortOrder: goals.length,
-      archived: false,
-    };
-    setGoals((prev) => {
-      const updatedGoals = normalizeGoalOrder([...prev, nextGoal]);
-      saveGoalsNow(updatedGoals);
-      return updatedGoals;
-    });
-    setNewGoalTitle("");
-    setIsAddingGoal(false);
-  };
-
-  const handleRemoveGoal = (goalId: string) => {
-    setGoals((prev) => prev.filter((goal) => goal.id !== goalId));
-    setKrDrafts((prev) => {
-      if (!(goalId in prev)) {
-        return prev;
-      }
-      const next = { ...prev };
-      delete next[goalId];
-      return next;
-    });
-  };
-
-  const handleArchiveGoal = async (goalId: string) => {
-    const goalToArchive = goals.find((g) => g.id === goalId);
-    if (!goalToArchive) {
-      return;
-    }
-
-    const previousGoals = goals;
-    const previousArchivedGoals = archivedGoals;
-    const updatedGoal = {
-      ...goalToArchive,
-      archived: true,
-      sortOrder: archivedGoals.length,
-    };
-
-    // Optimistic update
-    setGoals((prev) => normalizeGoalOrder(prev.filter((goal) => goal.id !== goalId)));
-    setArchivedGoals((prev) => [...prev, updatedGoal]);
-
-    try {
-      const response = await fetch('/api/goals/archive', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goalId, archived: true })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to archive goal');
-      }
-    } catch (error) {
-      console.error('Error archiving goal:', error);
-      setGoals(previousGoals);
-      setArchivedGoals(previousArchivedGoals);
-      alert('Failed to archive goal. Please try again.');
-    }
-  };
-
-  const handleUnarchiveGoal = async (goalId: string) => {
-    const goalToUnarchive = archivedGoals.find((g) => g.id === goalId);
-    if (!goalToUnarchive) {
-      return;
-    }
-
-    const previousGoals = goals;
-    const previousArchivedGoals = archivedGoals;
-    const updatedGoal = {
-      ...goalToUnarchive,
-      archived: false,
-      sortOrder: goals.length,
-    };
-
-    // Optimistic update
-    setArchivedGoals((prev) => normalizeGoalOrder(prev.filter((goal) => goal.id !== goalId)));
-    setGoals((prev) => normalizeGoalOrder([...prev, updatedGoal]));
-
-    try {
-      const response = await fetch('/api/goals/archive', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goalId, archived: false })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to unarchive goal');
-      }
-    } catch (error) {
-      console.error('Error unarchiving goal:', error);
-      setGoals(previousGoals);
-      setArchivedGoals(previousArchivedGoals);
-      alert('Failed to unarchive goal. Please try again.');
-    }
-  };
-
-  const fetchArchivedGoals = async () => {
-    if (!userEmail || isDemoMode) return;
-
-    try {
-      const response = await fetch('/api/goals/archive');
-      if (!response.ok) {
-        throw new Error('Failed to fetch archived goals');
-      }
-      const data = await response.json();
-      setArchivedGoals(normalizeGoalOrder(data.goals || []));
-    } catch (error) {
-      console.error('Error fetching archived goals:', error);
-    }
-  };
-
-  const moveGoal = (goalId: string, direction: "up" | "down") => {
-    setGoals((prev) => {
-      const currentIndex = prev.findIndex((goal) => goal.id === goalId);
-      if (currentIndex === -1) {
-        return prev;
-      }
-      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-      if (targetIndex < 0 || targetIndex >= prev.length) {
-        return prev;
-      }
-
-      const reordered = [...prev];
-      const [movedGoal] = reordered.splice(currentIndex, 1);
-      reordered.splice(targetIndex, 0, movedGoal!);
-      const normalized = normalizeGoalOrder(reordered);
-      saveGoalsNow(normalized);
-      return normalized;
-    });
-  };
-
-const handleKrDraftChange = (goalId: string, value: string) => {
-  setKrDrafts((prev) => ({
-    ...prev,
-    [goalId]: {
-      title: value,
-    },
+const isWeekend = (date: Date, workDays: WeekdayIndex[]) =>
+  !workDays.includes(date.getDay() as WeekdayIndex);
+
+const normalizeGoalOrder = (goalList: Goal[]) =>
+  goalList.map((goal, index) => ({
+    ...goal,
+    sortOrder: index,
+    keyResults: goal.keyResults.map((kr, krIndex) => ({
+      ...kr,
+      sortOrder: krIndex,
+    })),
   }));
-};
-
-  const startKeyResultDraft = (goalId: string) => {
-    setActiveKrDraftGoalId(goalId);
-    setKrDrafts((prev) => ({
-      ...prev,
-      [goalId]: prev[goalId] ?? { title: "" },
-    }));
-  };
-
-  const cancelKeyResultDraft = (goalId: string) => {
-    setActiveKrDraftGoalId((prev) => (prev === goalId ? null : prev));
-    setKrDrafts((prev) => {
-      if (!(goalId in prev)) {
-        return prev;
-      }
-      const next = { ...prev };
-      delete next[goalId];
-      return next;
-    });
-  };
-
-  const updateWeeklyNoteEntry = (
-    weekKey: string,
-    updates: Partial<WeeklyNoteEntry>,
-    options?: { persistNow?: boolean }
-  ) => {
-    setWeeklyNotes((prev) => {
-      const existing = prev[weekKey] ?? createWeeklyNoteEntry();
-      const nextEntry = createWeeklyNoteEntry({
-        content: updates.content ?? existing.content,
-        dos: updates.dos ?? existing.dos,
-        donts: updates.donts ?? existing.donts,
-      });
-      const next = {
-        ...prev,
-        [weekKey]: nextEntry,
-      };
-      queueWeeklyNoteSave(weekKey, nextEntry, {
-        immediate: options?.persistNow,
-      });
-      return {
-        ...next,
-      };
-    });
-  };
-
-  const startGoalDraft = () => {
-    setIsAddingGoal(true);
-  };
-
-  const cancelGoalDraft = () => {
-    setIsAddingGoal(false);
-    setNewGoalTitle("");
-  };
-
-  const beginGoalFieldEdit = (goal: Goal, field: "title") => {
-    const currentValue = goal.title;
-    setActiveGoalFieldEdit({ goalId: goal.id, field });
-    setGoalFieldDrafts((prev) => ({
-      ...prev,
-      [goal.id]: {
-        ...prev[goal.id],
-        [field]: prev[goal.id]?.[field] ?? currentValue,
-      },
-    }));
-  };
-
-  const handleGoalFieldDraftChange = (goalId: string, field: "title", value: string) => {
-    setGoalFieldDrafts((prev) => ({
-      ...prev,
-      [goalId]: {
-        ...prev[goalId],
-        [field]: value,
-      },
-    }));
-  };
-
-  const clearGoalFieldDraft = (goalId: string, field: "title") => {
-    setGoalFieldDrafts((prev) => {
-      const existing = prev[goalId];
-      if (!existing) {
-        return prev;
-      }
-      const nextFieldState = { ...existing };
-      delete nextFieldState[field];
-      if (Object.keys(nextFieldState).length === 0) {
-        const next = { ...prev };
-        delete next[goalId];
-        return next;
-      }
-      return {
-        ...prev,
-        [goalId]: nextFieldState,
-      };
-    });
-  };
-
-  const commitGoalFieldEdit = (goalId: string, field: "title") => {
-    const draftValue = goalFieldDrafts[goalId]?.[field];
-    const trimmed = draftValue?.trim();
-    if (!trimmed) {
-      cancelGoalFieldEdit(goalId, field);
-      return;
-    }
-    setGoals((prev) =>
-      prev.map((goal) =>
-        goal.id === goalId
-          ? {
-              ...goal,
-              title: trimmed,
-            }
-          : goal
-      )
-    );
-    if (
-      activeGoalFieldEdit?.goalId === goalId &&
-      activeGoalFieldEdit.field === field
-    ) {
-      setActiveGoalFieldEdit(null);
-    }
-    clearGoalFieldDraft(goalId, field);
-  };
-
-  const cancelGoalFieldEdit = (goalId: string, field: "title") => {
-    if (
-      activeGoalFieldEdit?.goalId === goalId &&
-      activeGoalFieldEdit.field === field
-    ) {
-      setActiveGoalFieldEdit(null);
-    }
-    clearGoalFieldDraft(goalId, field);
-  };
-
-  const krFieldKey = (goalId: string, krId: string) => `${goalId}-${krId}`;
-
-const beginKrFieldEdit = (
-  goalId: string,
-  kr: KeyResult,
-  field: "title"
-) => {
-  const currentValue = kr.title;
-  setActiveKrFieldEdit({ goalId, krId: kr.id, field });
-  const key = krFieldKey(goalId, kr.id);
-  setKrFieldDrafts((prev) => ({
-    ...prev,
-    [key]: {
-      title: prev[key]?.title ?? currentValue,
-    },
-  }));
-};
-
-  const handleKrFieldDraftChange = (
-    goalId: string,
-    krId: string,
-    value: string
-  ) => {
-    const key = krFieldKey(goalId, krId);
-    setKrFieldDrafts((prev) => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        title: value,
-      },
-    }));
-  };
-
-  const clearKrFieldDraft = (
-    goalId: string,
-    krId: string,
-    field: "title"
-  ) => {
-    const key = krFieldKey(goalId, krId);
-    setKrFieldDrafts((prev) => {
-      const existing = prev[key];
-      if (!existing) {
-        return prev;
-      }
-      const nextFieldState = { ...existing };
-      delete nextFieldState[field];
-      if (Object.keys(nextFieldState).length === 0) {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      }
-      return {
-        ...prev,
-        [key]: nextFieldState,
-      };
-    });
-  };
-
-  const commitKrFieldEdit = (
-    goalId: string,
-    krId: string,
-    field: "title"
-  ) => {
-    const key = krFieldKey(goalId, krId);
-    const draftValue = krFieldDrafts[key]?.title;
-    const trimmed = draftValue?.trim();
-    if (!trimmed) {
-      cancelKrFieldEdit(goalId, krId, field);
-      return;
-    }
-    setGoals((prev) =>
-      prev.map((goal) =>
-      goal.id === goalId
-        ? {
-            ...goal,
-            keyResults: goal.keyResults.map((kr) =>
-              kr.id === krId
-                ? {
-                    ...kr,
-                    title: trimmed,
-                  }
-                : kr
-            ),
-          }
-        : goal
-      )
-    );
-    if (
-      activeKrFieldEdit?.goalId === goalId &&
-      activeKrFieldEdit.krId === krId &&
-      activeKrFieldEdit.field === field
-    ) {
-      setActiveKrFieldEdit(null);
-    }
-    clearKrFieldDraft(goalId, krId, field);
-  };
-
-  const cancelKrFieldEdit = (
-    goalId: string,
-    krId: string,
-    field: "title"
-  ) => {
-    if (
-      activeKrFieldEdit?.goalId === goalId &&
-      activeKrFieldEdit.krId === krId &&
-      activeKrFieldEdit.field === field
-    ) {
-      setActiveKrFieldEdit(null);
-    }
-    clearKrFieldDraft(goalId, krId, field);
-  };
-
-  const handleGoalFieldKeyDown = (
-    event: KeyboardEvent<HTMLInputElement>,
-    goalId: string,
-    field: "title"
-  ) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      commitGoalFieldEdit(goalId, field);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      cancelGoalFieldEdit(goalId, field);
-    }
-  };
-
-  const handleKeyResultFieldKeyDown = (
-    event: KeyboardEvent<HTMLInputElement>,
-    goalId: string,
-    krId: string,
-    field: "title"
-  ) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      commitKrFieldEdit(goalId, krId, field);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      cancelKrFieldEdit(goalId, krId, field);
-    }
-  };
-
-  const handleAddKeyResult = (goalId: string) => {
-    const draft = krDrafts[goalId];
-    const title = draft?.title?.trim() ?? "";
-    if (!title) {
-      return;
-    }
-    const newKr: KeyResult = {
-      id: generateId(),
-      title,
-      sortOrder: 0,
-      status: "started",
-    };
-    setGoals((prev) => {
-      const updatedGoals = prev.map((goal) =>
-        goal.id === goalId
-          ? {
-              ...goal,
-              keyResults: [...goal.keyResults, { ...newKr, sortOrder: goal.keyResults.length }],
-            }
-          : goal
-      );
-      const normalized = normalizeGoalOrder(updatedGoals);
-      saveGoalsNow(normalized);
-      return normalized;
-    });
-    setKrDrafts((prev) => {
-      const next = { ...prev };
-      delete next[goalId];
-      return next;
-    });
-    setActiveKrDraftGoalId((prev) => (prev === goalId ? null : prev));
-  };
-
-  const handleRemoveKeyResult = (goalId: string, krId: string) => {
-    setGoals((prev) => {
-      const updatedGoals = prev.map((goal) =>
-        goal.id === goalId
-          ? {
-              ...goal,
-              keyResults: goal.keyResults.filter((kr) => kr.id !== krId),
-            }
-          : goal
-      );
-      const normalized = normalizeGoalOrder(updatedGoals);
-      saveGoalsNow(normalized);
-      return normalized;
-    });
-  };
-
-  const moveKeyResult = (goalId: string, krId: string, direction: "up" | "down") => {
-    setGoals((prev) => {
-      const updatedGoals = prev.map((goal) => {
-        if (goal.id !== goalId) {
-          return goal;
-        }
-        const currentIndex = goal.keyResults.findIndex((kr) => kr.id === krId);
-        if (currentIndex === -1) {
-          return goal;
-        }
-        const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-        if (targetIndex < 0 || targetIndex >= goal.keyResults.length) {
-          return goal;
-        }
-        const reorderedKeyResults = [...goal.keyResults];
-        const [movedKr] = reorderedKeyResults.splice(currentIndex, 1);
-        reorderedKeyResults.splice(targetIndex, 0, movedKr!);
-        return { ...goal, keyResults: reorderedKeyResults };
-      });
-
-      const normalized = normalizeGoalOrder(updatedGoals);
-      saveGoalsNow(normalized);
-      return normalized;
-    });
-  };
-
-  const cycleKeyResultStatus = (goalId: string, krId: string) => {
-    const order: KeyResultStatus[] = ["on-hold", "started", "completed"];
-    setGoals((prev) =>
-      prev.map((goal) =>
-        goal.id === goalId
-          ? {
-              ...goal,
-              keyResults: goal.keyResults.map((kr) => {
-                if (kr.id !== krId) {
-                  return kr;
-                }
-                const currentIndex = order.indexOf(kr.status);
-                const nextStatus = order[(currentIndex + 1) % order.length];
-                return { ...kr, status: nextStatus };
-              }),
-            }
-          : goal
-      )
-    );
-  };
 
 const goalStatusBadge = (status: KeyResultStatus) => {
   switch (status) {
@@ -2537,93 +123,325 @@ const goalStatusBadge = (status: KeyResultStatus) => {
   }
 };
 
-  const cycleGoalStatusOverride = (goalId: string) => {
-    const order: KeyResultStatus[] = ["on-hold", "started", "completed"];
-    setGoals((prev) =>
-      prev.map((goal) => {
-        if (goal.id !== goalId) {
-          return goal;
-        }
-        const current =
-          goal.statusOverride ?? deriveGoalStatusFromKeyResults(goal);
-        const currentIndex = order.indexOf(current);
-        const isOverrideActive = Boolean(goal.statusOverride);
-        const shouldClear =
-          isOverrideActive && currentIndex === order.length - 1;
-        if (shouldClear) {
-          return {
-            ...goal,
-            statusOverride: undefined,
-          };
-        }
-        const nextStatus = order[(currentIndex + 1) % order.length];
-        return {
-          ...goal,
-          statusOverride: nextStatus,
-        };
-      })
+const StatusIcon = ({ status }: { status: KeyResultStatus }) => {
+  if (status === "started") {
+    return (
+      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M8 5v14l11-7z" />
+      </svg>
     );
-  };
+  }
 
-  const deriveGoalStatusFromKeyResults = (goal: Goal): KeyResultStatus => {
-    if (
-      goal.keyResults.length > 0 &&
-      goal.keyResults.every((kr) => kr.status === "completed")
-    ) {
-      return "completed";
-    }
-    if (goal.keyResults.some((kr) => kr.status === "on-hold")) {
-      return "on-hold";
-    }
-    return "started";
-  };
+  if (status === "on-hold") {
+    return (
+      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+      </svg>
+    );
+  }
 
-  const deriveGoalStatus = (goal: Goal): KeyResultStatus => {
-    if (goal.statusOverride) {
-      return goal.statusOverride;
-    }
-    return deriveGoalStatusFromKeyResults(goal);
-  };
+  return (
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+    </svg>
+  );
+};
 
-  const { monthsLived, hasValidBirthdate } = useMemo(() => {
-    if (!dateOfBirth) {
-      return { monthsLived: 0, hasValidBirthdate: false };
-    }
+export default function PitchPage() {
+  const initialDate = useMemo(() => new Date(), []);
+  const [monthCursor, setMonthCursor] = useState(
+    () => new Date(initialDate.getFullYear(), initialDate.getMonth(), 1)
+  );
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [theme, setTheme] = useState<Theme>("light");
+  const [ratings, setRatings] = useState<Record<string, number | null>>({});
+  const [dayOffs, setDayOffs] = useState<Record<string, boolean>>({});
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [weeklyNotes, setWeeklyNotes] = useState<Record<string, WeeklyNoteEntry>>({});
+  const [isDayOffMode, setIsDayOffMode] = useState(false);
+  const [showLegend, setShowLegend] = useState(true);
+  const [scaleMode, setScaleMode] = useState<"3" | "4">("3");
+  const [weeklyGoalsTemplate, setWeeklyGoalsTemplate] = useState(DEFAULT_WEEKLY_TEMPLATE);
+  const [isTemplateEditorVisible, setIsTemplateEditorVisible] = useState(false);
+  const [newGoalTitle, setNewGoalTitle] = useState("");
+  const [krDrafts, setKrDrafts] = useState<Record<string, string>>({});
+  const [activeGoalCardId, setActiveGoalCardId] = useState<string | null>(null);
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
+  const [selectedWeekKey, setSelectedWeekKey] = useState<string | null>(null);
+  const [weekStartDay, setWeekStartDay] = useState<WeekdayIndex>(1);
+  const [autoMarkWeekendsOff, setAutoMarkWeekendsOff] = useState(false);
+  const [workDays, setWorkDays] = useState<WeekdayIndex[]>([0, 1, 2, 3, 4, 5, 6]);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const saveRatingsTimeout = useRef<number | null>(null);
+  const saveDayOffsTimeout = useRef<number | null>(null);
+  const saveGoalsTimeout = useRef<number | null>(null);
+  const saveWeeklyNoteTimeout = useRef<number | null>(null);
+  const goalsSectionRef = useRef<HTMLElement | null>(null);
 
-    const dob = new Date(dateOfBirth);
-    const now = new Date();
-
-    if (Number.isNaN(dob.getTime()) || dob > now) {
-      return { monthsLived: 0, hasValidBirthdate: false };
-    }
-
-    let months =
-      (now.getFullYear() - dob.getFullYear()) * 12 +
-      (now.getMonth() - dob.getMonth());
-
-    if (now.getDate() < dob.getDate()) {
-      months -= 1;
-    }
-
-    const clampedMonths = Math.max(0, Math.min(months, 90 * 12));
-    return { monthsLived: clampedMonths, hasValidBirthdate: true };
-  }, [dateOfBirth]);
+  const scale = scaleMode === "4" ? PRODUCTIVITY_SCALE_FOUR : PRODUCTIVITY_SCALE_THREE;
+  const monthDays = useMemo(
+    () => getMonthDays(monthCursor.getFullYear(), monthCursor.getMonth()),
+    [monthCursor]
+  );
+  const todayKey = formatDayKey(initialDate);
+  const monthLabel = monthCursor.toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+  const currentWeekKey = useMemo(
+    () => formatWeekKey(getWeekStart(initialDate, weekStartDay), weekStartDay),
+    [initialDate, weekStartDay]
+  );
+  const activeWeekKey = selectedWeekKey ?? currentWeekKey;
+  const activeWeekEntry = useMemo(
+    () => weeklyNotes[activeWeekKey] ?? { content: "", dos: "", donts: "" },
+    [weeklyNotes, activeWeekKey]
+  );
+  const activeWeekContentText = activeWeekEntry.content.replace(/<[^>]*>/g, "").trim();
+  const templateContentText = weeklyGoalsTemplate.replace(/<[^>]*>/g, "").trim();
+  const showTemplateActions = !activeWeekContentText && templateContentText;
+  const editorInit = useMemo(
+    () => ({
+      ...createWeeklyGoalsEditorInit(theme, {
+        height: 360,
+        minHeight: 240,
+        placeholder: "What matters this week?",
+      }),
+      content_style: `
+        html, body {
+          background-color: ${theme === "dark" ? "rgba(37, 99, 235, 0.14)" : "rgba(238, 245, 255, 0.66)"} !important;
+        }
+        body {
+          color: ${theme === "dark" ? "#d1d5db" : "#0f172a"} !important;
+          font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          font-size: 14px;
+          line-height: 1.55;
+          padding: 18px 30px;
+          margin: 0;
+          outline: none !important;
+          box-shadow: none !important;
+        }
+        .mce-content-body,
+        .mce-content-body:focus,
+        [contenteditable="true"],
+        [contenteditable="true"]:focus {
+          outline: none !important;
+          box-shadow: none !important;
+        }
+        .mce-content-body {
+          box-sizing: border-box !important;
+          padding-left: 30px !important;
+          padding-right: 30px !important;
+        }
+        .mce-content-body:before {
+          left: 30px !important;
+        }
+        * { background-color: transparent !important; }
+        input.task-checkbox {
+          width: 14px;
+          height: 14px;
+          margin-right: 8px;
+          vertical-align: -1px;
+          accent-color: ${theme === "dark" ? "#93c5fd" : "#1d4ed8"};
+        }
+      `,
+    }),
+    [theme]
+  );
 
   useEffect(() => {
-    if (!activeGoalCardId) {
-      return undefined;
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  useEffect(() => {
+    async function loadPitchData() {
+      try {
+        const sessionRes = await fetch("/api/auth/session");
+        const session = sessionRes.headers
+          .get("content-type")
+          ?.includes("application/json")
+          ? await sessionRes.json()
+          : null;
+        const email = session?.user?.email ?? null;
+        setUserEmail(email);
+
+        if (email) {
+          setIsDemoMode(false);
+          const data = await loadAllData();
+          const profile = data?.profile;
+          setRatings(data?.productivityRatings ?? {});
+          setDayOffs(data?.dayOffs ?? {});
+          setGoals(normalizeGoalOrder((data?.goals ?? []).filter((goal: Goal) => !goal.archived)));
+          setWeeklyNotes(data?.weeklyNotes ?? {});
+          if (profile?.theme === "light" || profile?.theme === "dark") {
+            setTheme(profile.theme);
+          }
+          if (profile?.weekStartDay !== undefined) {
+            setWeekStartDay(profile.weekStartDay as WeekdayIndex);
+          }
+          if (profile?.showLegend !== undefined) {
+            setShowLegend(Boolean(profile.showLegend));
+          }
+          if (profile?.weeklyGoalsTemplate) {
+            setWeeklyGoalsTemplate(profile.weeklyGoalsTemplate);
+          }
+          if (profile?.productivityScaleMode === "3" || profile?.productivityScaleMode === "4") {
+            setScaleMode(profile.productivityScaleMode);
+          }
+          if (profile?.autoMarkWeekendsOff !== undefined) {
+            setAutoMarkWeekendsOff(Boolean(profile.autoMarkWeekendsOff));
+          }
+          if (profile?.workDays) {
+            const parsed = String(profile.workDays)
+              .split(",")
+              .map(Number)
+              .filter((day) => day >= 0 && day <= 6) as WeekdayIndex[];
+            setWorkDays(parsed.length > 0 ? parsed : [0, 1, 2, 3, 4, 5, 6]);
+          }
+        } else {
+          setIsDemoMode(true);
+          const cachedRatings = window.localStorage.getItem(storageKey("productivity-ratings"));
+          const cachedDayOffs = window.localStorage.getItem(storageKey("day-offs"));
+          setRatings(cachedRatings ? JSON.parse(cachedRatings) : demoProductivityRatings);
+          setDayOffs(cachedDayOffs ? JSON.parse(cachedDayOffs) : demoDayOffs);
+          const cachedGoals = window.localStorage.getItem(storageKey("goals"));
+          const cachedWeeklyNotes = window.localStorage.getItem(storageKey("weekly-notes"));
+          const cachedWeeklyTemplate = window.localStorage.getItem(storageKey("weekly-goals-template"));
+          setGoals(
+            normalizeGoalOrder(
+              cachedGoals
+                ? (JSON.parse(cachedGoals) as Goal[]).filter((goal) => !goal.archived)
+                : (demoGoals as Goal[]).filter((goal) => !goal.archived)
+            )
+          );
+          setWeeklyNotes(cachedWeeklyNotes ? JSON.parse(cachedWeeklyNotes) : {});
+          setWeeklyGoalsTemplate(cachedWeeklyTemplate || demoProfile.weeklyGoalsTemplate || DEFAULT_WEEKLY_TEMPLATE);
+          const cachedShowLegend = window.localStorage.getItem(storageKey("show-legend"));
+          if (cachedShowLegend === "true" || cachedShowLegend === "false") {
+            setShowLegend(cachedShowLegend === "true");
+          } else {
+            setShowLegend(demoProfile.showLegend ?? true);
+          }
+          setScaleMode((demoProfile.productivityScaleMode as "3" | "4") ?? "3");
+          setWeekStartDay(demoProfile.weekStartDay as WeekdayIndex);
+          setAutoMarkWeekendsOff(demoProfile.autoMarkWeekendsOff ?? false);
+          setWorkDays(
+            demoProfile.workDays
+              ? (demoProfile.workDays.split(",").map(Number) as WeekdayIndex[])
+              : [0, 1, 2, 3, 4, 5, 6]
+          );
+        }
+      } catch (error) {
+        console.error("Failed to load pitch data", error);
+      } finally {
+        setIsHydrated(true);
+      }
     }
 
+    loadPitchData();
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    if (!userEmail || isDemoMode) {
+      window.localStorage.setItem(storageKey("productivity-ratings"), JSON.stringify(ratings));
+      return;
+    }
+
+    if (saveRatingsTimeout.current) {
+      window.clearTimeout(saveRatingsTimeout.current);
+    }
+    saveRatingsTimeout.current = window.setTimeout(() => {
+      void saveProductivity(ratings);
+    }, 500);
+
+    return () => {
+      if (saveRatingsTimeout.current) {
+        window.clearTimeout(saveRatingsTimeout.current);
+      }
+    };
+  }, [ratings, isHydrated, userEmail, isDemoMode]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    if (!userEmail || isDemoMode) {
+      window.localStorage.setItem(storageKey("day-offs"), JSON.stringify(dayOffs));
+      return;
+    }
+
+    if (saveDayOffsTimeout.current) {
+      window.clearTimeout(saveDayOffsTimeout.current);
+    }
+    saveDayOffsTimeout.current = window.setTimeout(() => {
+      void saveDayOffs(dayOffs);
+    }, 500);
+
+    return () => {
+      if (saveDayOffsTimeout.current) {
+        window.clearTimeout(saveDayOffsTimeout.current);
+      }
+    };
+  }, [dayOffs, isHydrated, userEmail, isDemoMode]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    if (!userEmail || isDemoMode) {
+      window.localStorage.setItem(storageKey("goals"), JSON.stringify(goals));
+      return;
+    }
+
+    if (saveGoalsTimeout.current) {
+      window.clearTimeout(saveGoalsTimeout.current);
+    }
+    saveGoalsTimeout.current = window.setTimeout(() => {
+      void saveGoals(goals);
+    }, 500);
+
+    return () => {
+      if (saveGoalsTimeout.current) {
+        window.clearTimeout(saveGoalsTimeout.current);
+      }
+    };
+  }, [goals, isHydrated, userEmail, isDemoMode]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    if (!userEmail || isDemoMode) {
+      window.localStorage.setItem(storageKey("weekly-notes"), JSON.stringify(weeklyNotes));
+      return;
+    }
+
+    if (saveWeeklyNoteTimeout.current) {
+      window.clearTimeout(saveWeeklyNoteTimeout.current);
+    }
+
+    saveWeeklyNoteTimeout.current = window.setTimeout(() => {
+      void saveWeeklyNoteForWeek(activeWeekKey, activeWeekEntry);
+    }, 600);
+
+    return () => {
+      if (saveWeeklyNoteTimeout.current) {
+        window.clearTimeout(saveWeeklyNoteTimeout.current);
+      }
+    };
+  }, [weeklyNotes, activeWeekKey, activeWeekEntry, isHydrated, userEmail, isDemoMode]);
+
+  useEffect(() => {
+    if (!activeGoalCardId) return;
+
     const handlePointerDown = (event: PointerEvent) => {
-      const current = okrCardRefs.current[activeGoalCardId];
-      if (!current) {
+      if (
+        goalsSectionRef.current &&
+        event.target instanceof Node &&
+        !goalsSectionRef.current.contains(event.target)
+      ) {
         setActiveGoalCardId(null);
-        return;
       }
-      if (event.target instanceof Node && current.contains(event.target)) {
-        return;
-      }
-      setActiveGoalCardId(null);
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
@@ -2632,870 +450,269 @@ const goalStatusBadge = (status: KeyResultStatus) => {
     };
   }, [activeGoalCardId]);
 
-  const currentProductivityGoal = useMemo(() => {
-    return productivityGoals[productivityYear] ?? "";
-  }, [productivityGoals, productivityYear]);
-
-  // Get previous week's key for carryover logic
-  const getPreviousWeekKey = (weekKey: string | null): string | null => {
-    if (!weekKey) {
-      return null;
-    }
-    const parsed = parseWeekKey(weekKey);
-    if (!parsed) {
-      return null;
-    }
-    parsed.weekStart.setDate(parsed.weekStart.getDate() - 7);
-    return formatWeekKey(parsed.weekStart, parsed.weekStartDay);
+  const shiftMonth = (direction: -1 | 1) => {
+    setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() + direction, 1));
   };
 
-  const getWeekEntryWithCarryover = (weekKey: string | null): WeeklyNoteEntry | null => {
-    if (!weekKey) return null;
-
-    const currentEntry = weeklyNotes[weekKey];
-
-    // Return current entry if it exists, otherwise return empty entry
-    if (currentEntry) {
-      return createWeeklyNoteEntry(currentEntry);
-    }
-
-    return createWeeklyNoteEntry();
+  const resetToCurrentMonth = () => {
+    setMonthCursor(new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
   };
 
-  const selectedWeekEntry = getWeekEntryWithCarryover(selectedWeekKey);
-  const selectedWeekContentText =
-    selectedWeekEntry?.content?.replace(/<[^>]*>/g, "").trim() ?? "";
-  const templateContentText = weeklyGoalsTemplate.replace(/<[^>]*>/g, "").trim();
-  const isWeeklyGoalsEmpty = selectedWeekKey ? selectedWeekContentText.length === 0 : true;
-
-  const resizeTextareaToFit = (target: HTMLTextAreaElement | null) => {
-    if (!target) return;
-    const safetyBufferPx = 2;
-    target.style.height = "auto";
-    target.style.height = `${target.scrollHeight + safetyBufferPx}px`;
+  const isDayOffComputed = (date: Date, key: string) => {
+    if (dayOffs[key] !== undefined) {
+      return dayOffs[key];
+    }
+    return autoMarkWeekendsOff && isWeekend(date, workDays);
   };
 
-  const resizeDoDontTextareas = useCallback(() => {
-    resizeTextareaToFit(dosTextareaRef.current);
-    resizeTextareaToFit(dontsTextareaRef.current);
-  }, []);
+  const handleDayClick = (date: Date, key: string) => {
+    const targetWeekKey = formatWeekKey(getWeekStart(date, weekStartDay), weekStartDay);
+    const isAlreadySelected = selectedDayKey === key;
 
-  useEffect(() => {
-    resizeDoDontTextareas();
-    const rafId = window.requestAnimationFrame(() => {
-      resizeDoDontTextareas();
-    });
-    return () => {
-      window.cancelAnimationFrame(rafId);
-    };
-  }, [
-    selectedWeekEntry?.dos,
-    selectedWeekEntry?.donts,
-    productivityMode,
-    resizeDoDontTextareas,
-  ]);
+    setSelectedDayKey(key);
+    setSelectedWeekKey(targetWeekKey);
 
-  useEffect(() => {
-    const handleViewportResize = () => {
-      resizeDoDontTextareas();
-    };
-
-    window.addEventListener("resize", handleViewportResize);
-    window.visualViewport?.addEventListener("resize", handleViewportResize);
-
-    if ("fonts" in document) {
-      void document.fonts.ready.then(() => {
-        resizeDoDontTextareas();
-      });
-    }
-
-    return () => {
-      window.removeEventListener("resize", handleViewportResize);
-      window.visualViewport?.removeEventListener("resize", handleViewportResize);
-    };
-  }, [resizeDoDontTextareas]);
-
-  const copyFromPreviousWeek = (field: 'dos' | 'donts') => {
-    if (!selectedWeekKey) return;
-
-    const prevWeekKey = getPreviousWeekKey(selectedWeekKey);
-    if (!prevWeekKey) return;
-
-    const prevEntry = weeklyNotes[prevWeekKey];
-    if (!prevEntry) return;
-
-    const valueToCopy = field === 'dos' ? prevEntry.dos : prevEntry.donts;
-    if (!valueToCopy) return;
-
-    updateWeeklyNoteEntry(selectedWeekKey, { [field]: valueToCopy }, { persistNow: true });
-
-    // Resize the textarea after copying
-    setTimeout(() => {
-      const textarea = field === 'dos' ? dosTextareaRef.current : dontsTextareaRef.current;
-      resizeTextareaToFit(textarea);
-    }, 0);
-  };
-
-  const previousWeekKeyForCopy = selectedWeekKey ? getPreviousWeekKey(selectedWeekKey) : null;
-  const previousWeekEntryForCopy = previousWeekKeyForCopy ? weeklyNotes[previousWeekKeyForCopy] : null;
-  const canCopyDos = Boolean(
-    selectedWeekKey &&
-    !selectedWeekEntry?.dos?.trim() &&
-    previousWeekEntryForCopy?.dos?.trim()
-  );
-  const canCopyDonts = Boolean(
-    selectedWeekKey &&
-    !selectedWeekEntry?.donts?.trim() &&
-    previousWeekEntryForCopy?.donts?.trim()
-  );
-  const showCopyDos = Boolean(selectedWeekKey && !selectedWeekEntry?.dos?.trim());
-  const showCopyDonts = Boolean(selectedWeekKey && !selectedWeekEntry?.donts?.trim());
-
-  const dosDontsPanel = selectedWeekKey ? (
-    <div className="rounded-md bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]">
-      <div className="grid gap-0 sm:grid-cols-2">
-      <div className="flex flex-col gap-1 px-4 pt-4 pb-2">
-        <div
-          className={`flex items-center justify-between group/dos ${
-            canCopyDos ? "cursor-pointer" : ""
-          }`}
-          onMouseDown={canCopyDos ? (event) => event.preventDefault() : undefined}
-          onClick={canCopyDos ? () => copyFromPreviousWeek("dos") : undefined}
-          title={canCopyDos ? "Copy from last week" : undefined}
-        >
-          <span className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600 dark:text-emerald-400">
-            Do&apos;s
-          </span>
-          {showCopyDos ? (
-            <span
-              className={`opacity-100 transition-opacity ${
-                canCopyDos
-                  ? "text-emerald-600 dark:text-emerald-400 group-hover/dos:text-emerald-700 dark:group-hover/dos:text-emerald-300"
-                  : "text-[color-mix(in_srgb,var(--foreground)_35%,transparent)]"
-              }`}
-              aria-hidden="true"
-            >
-              <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            </span>
-          ) : null}
-        </div>
-        <textarea
-          ref={dosTextareaRef}
-          value={selectedWeekEntry?.dos ?? ""}
-          onChange={(event) => {
-            updateWeeklyNoteEntry(selectedWeekKey, { dos: event.target.value });
-            resizeTextareaToFit(event.target);
-          }}
-          onInput={(event) => {
-            const target = event.target as HTMLTextAreaElement;
-            resizeTextareaToFit(target);
-          }}
-          onBlur={(event) => {
-            updateWeeklyNoteEntry(selectedWeekKey, { dos: event.target.value }, { persistNow: true });
-          }}
-          placeholder="Behaviors to reinforce"
-          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 pb-2 pt-1 text-[13px] outline-none focus:ring-0 sm:pb-0 sm:pl-3 sm:pr-2 sm:text-sm textarea-text-color placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
-          style={{ height: "auto" }}
-        />
-      </div>
-      <div className="flex flex-col gap-1 px-4 pt-4 pb-2 sm:pl-5">
-        <div
-          className={`flex items-center justify-between group/donts ${
-            canCopyDonts ? "cursor-pointer" : ""
-          }`}
-          onMouseDown={canCopyDonts ? (event) => event.preventDefault() : undefined}
-          onClick={canCopyDonts ? () => copyFromPreviousWeek("donts") : undefined}
-          title={canCopyDonts ? "Copy from last week" : undefined}
-        >
-          <span className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 dark:text-rose-400">
-            Don&apos;ts
-          </span>
-          {showCopyDonts ? (
-            <span
-              className={`opacity-100 transition-opacity ${
-                canCopyDonts
-                  ? "text-rose-600 dark:text-rose-400 group-hover/donts:text-rose-700 dark:group-hover/donts:text-rose-300"
-                  : "text-[color-mix(in_srgb,var(--foreground)_35%,transparent)]"
-              }`}
-              aria-hidden="true"
-            >
-              <svg className="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            </span>
-          ) : null}
-        </div>
-        <textarea
-          ref={dontsTextareaRef}
-          value={selectedWeekEntry?.donts ?? ""}
-          onChange={(event) => {
-            updateWeeklyNoteEntry(selectedWeekKey, { donts: event.target.value });
-            resizeTextareaToFit(event.target);
-          }}
-          onInput={(event) => {
-            const target = event.target as HTMLTextAreaElement;
-            resizeTextareaToFit(target);
-          }}
-          onBlur={(event) => {
-            updateWeeklyNoteEntry(selectedWeekKey, { donts: event.target.value }, { persistNow: true });
-          }}
-          placeholder="Behaviors to avoid"
-          className="min-h-22 resize-none overflow-hidden border-none bg-transparent px-1 pb-2 pt-1 text-[13px] outline-none focus:ring-0 sm:px-2 sm:pb-0 sm:text-sm textarea-text-color placeholder:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
-          style={{ height: "auto" }}
-        />
-      </div>
-      </div>
-    </div>
-  ) : null;
-
-  const parsedRecentYears = useMemo(() => {
-    const parsed = Number.parseInt(recentYears, 10);
-    if (Number.isNaN(parsed) || parsed <= 0) {
-      return 0;
-    }
-    return Math.min(parsed, 90);
-  }, [recentYears]);
-
-  const scrollToGoalsSection = () => {
-    setView("productivity");
-    if (typeof window === "undefined") {
+    if (!isAlreadySelected) {
       return;
     }
-    window.requestAnimationFrame(() => {
-      goalsSectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
+
+    if (isDayOffMode) {
+      setDayOffs((previous) => {
+        const next = { ...previous };
+        const hasRating = ratings[key] !== null && ratings[key] !== undefined;
+        const manuallyStored = next[key];
+        const computedDayOff = isDayOffComputed(date, key);
+
+        if (computedDayOff) {
+          if (manuallyStored === true || manuallyStored === false) {
+            delete next[key];
+          } else {
+            next[key] = false;
+          }
+        } else if (!hasRating) {
+          next[key] = true;
+        }
+
+        return next;
       });
+      return;
+    }
+
+    setRatings((previous) => {
+      const current = previous[key];
+      const nextValue =
+        current === undefined || current === null
+          ? 0
+          : current >= scale.length - 1
+            ? null
+            : current + 1;
+      return { ...previous, [key]: nextValue };
     });
   };
 
-  const renderGoalsSection = (
-    spacingClass = "mt-8",
-    sectionRef?: RefObject<HTMLDivElement | null>
-  ) => (
-    <section
-      ref={sectionRef}
-      className={`mx-auto ${spacingClass} flex max-w-4xl flex-col gap-4 pt-16 text-left`}
-    >
-      <div className="space-y-4 pt-6">
-        <div className="text-center">
-          {isEditingGoalsSectionTitle ? (
-            <input
-              type="text"
-              value={goalsSectionTitle}
-              onChange={(e) => setGoalsSectionTitle(e.target.value)}
-              onBlur={() => setIsEditingGoalsSectionTitle(false)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  setIsEditingGoalsSectionTitle(false);
-                }
-              }}
-              autoFocus
-              className="w-full border-b border-foreground bg-transparent pb-[5px] text-center text-4xl sm:text-5xl font-bold kr-apple-font heading-text-color outline-none"
-            />
-          ) : (
-            <h2
-              onClick={() => setIsEditingGoalsSectionTitle(true)}
-              className="pb-[5px] text-4xl sm:text-5xl font-bold kr-apple-font heading-text-color cursor-pointer transition hover:opacity-70"
-            >
-              {goalsSectionTitle}
-            </h2>
-          )}
-        </div>
-        {!isViewingArchived && goals.length === 0 && (
-          <p className="text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] text-center">
-            No goals yet. Define your first objective above to start tracking OKRs.
-          </p>
-        )}
-        {isViewingArchived && archivedGoals.length === 0 && (
-          <p className="text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] text-center">
-            No archived goals yet.
-          </p>
-        )}
-        {(isViewingArchived ? archivedGoals : goals).map((goal, goalIndex) => {
-          const draft = krDrafts[goal.id] ?? { title: "" };
-          return (
-            <div
-              key={goal.id}
-              className="okr-card border-none px-7 pt-6 pb-4"
-              onClick={() => setActiveGoalCardId(goal.id)}
-              onFocusCapture={() => setActiveGoalCardId(goal.id)}
-              ref={(node) => {
-                if (node) {
-                  okrCardRefs.current[goal.id] = node;
-                } else {
-                  delete okrCardRefs.current[goal.id];
-                }
-              }}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex flex-1 flex-col">
-                  {activeGoalFieldEdit?.goalId === goal.id &&
-                  activeGoalFieldEdit.field === "title" &&
-                  !isViewingArchived ? (
-                    <input
-                      type="text"
-                      value={goalFieldDrafts[goal.id]?.title ?? goal.title}
-                      onChange={(event) =>
-                        handleGoalFieldDraftChange(
-                          goal.id,
-                          "title",
-                          event.target.value
-                        )
-                      }
-                      onBlur={() => commitGoalFieldEdit(goal.id, "title")}
-                      onKeyDown={(event) =>
-                        handleGoalFieldKeyDown(event, goal.id, "title")
-                      }
-                      autoFocus
-                      className="w-full border-b border-transparent bg-transparent text-2xl font-light kr-apple-font text-foreground outline-none focus:border-foreground"
-                    />
-                  ) : isViewingArchived ? (
-                    <h3 className="text-left text-base sm:text-2xl font-light kr-apple-font text-foreground">
-                      {goal.title}
-                    </h3>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => beginGoalFieldEdit(goal, "title")}
-                      className="text-left text-base sm:text-2xl font-light kr-apple-font text-foreground transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
-                    >
-                      {goal.title}
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  {activeGoalCardId === goal.id && (
-                    <>
-                      {!isViewingArchived ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => moveGoal(goal.id, "up")}
-                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-                            aria-label="Move goal up"
-                            disabled={goalIndex === 0}
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveGoal(goal.id, "down")}
-                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-                            aria-label="Move goal down"
-                            disabled={goalIndex === goals.length - 1}
-                          >
-                            ↓
-                          </button>
-                        </>
-                      ) : null}
-                      {isViewingArchived ? (
-                        <button
-                          type="button"
-                          onClick={() => handleUnarchiveGoal(goal.id)}
-                          className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
-                          aria-label="Unarchive goal"
-                        >
-                          Unarchive
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleArchiveGoal(goal.id)}
-                          className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
-                          aria-label="Archive goal"
-                        >
-                          Archive
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveGoal(goal.id)}
-                        className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
-                        aria-label="Remove goal"
-                      >
-                        ✕
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
+  const cycleKeyResultStatus = (goalId: string, krId: string) => {
+    const order: KeyResultStatus[] = ["on-hold", "started", "completed"];
+    setGoals((previous) =>
+      normalizeGoalOrder(
+        previous.map((goal) =>
+          goal.id === goalId
+            ? {
+                ...goal,
+                keyResults: goal.keyResults.map((kr) => {
+                  if (kr.id !== krId) return kr;
+                  const currentIndex = order.indexOf(kr.status);
+                  return { ...kr, status: order[(currentIndex + 1) % order.length]! };
+                }),
+              }
+            : goal
+        )
+      )
+    );
+  };
 
-              <div className="mt-3 space-y-0">
-                {goal.keyResults.map((kr, krIndex) => {
-                  const krKey = krFieldKey(goal.id, kr.id);
-                  const isEditingKrTitle =
-                    activeKrFieldEdit?.goalId === goal.id &&
-                    activeKrFieldEdit.krId === kr.id &&
-                    activeKrFieldEdit.field === "title" &&
-                    !isViewingArchived;
-                  return (
-                    <div key={kr.id} className="rounded-2xl px-3 py-1">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex-1 space-y-1">
-                          {isEditingKrTitle ? (
-                            <input
-                              type="text"
-                              value={
-                                krFieldDrafts[krKey]?.title ?? kr.title
-                              }
-                              onChange={(event) =>
-                                handleKrFieldDraftChange(
-                                  goal.id,
-                                  kr.id,
-                                  event.target.value
-                                )
-                              }
-                              onBlur={() =>
-                                commitKrFieldEdit(goal.id, kr.id, "title")
-                              }
-                              onKeyDown={(event) =>
-                                handleKeyResultFieldKeyDown(
-                                  event,
-                                  goal.id,
-                                  kr.id,
-                                  "title"
-                                )
-                              }
-                              autoFocus
-                              className="kr-apple-font w-full border-b border-transparent bg-transparent text-[15px] font-medium text-foreground outline-none focus:border-foreground"
-                            />
-                          ) : isViewingArchived ? (
-                            <span className="kr-apple-font text-left text-[15px] font-medium text-foreground">
-                              {kr.title || "Untitled key result"}
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                beginKrFieldEdit(goal.id, kr, "title")
-                              }
-                              className="kr-apple-font text-left text-[15px] font-medium text-foreground transition hover:text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
-                            >
-                              {kr.title || "Untitled key result"}
-                            </button>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {!isViewingArchived && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                cycleKeyResultStatus(goal.id, kr.id)
-                              }
-                              className={`rounded-full px-2 sm:px-2.5 py-0 sm:py-0 text-base sm:text-lg ${goalStatusBadge(
-                                kr.status
-                              )}`}
-                              title={kr.status === "started"
-                                ? "Started"
-                                : kr.status === "on-hold"
-                                  ? "On hold"
-                                  : "Completed"}
-                            >
-                              <span className="sm:hidden">
-                                {kr.status === "started" ? (
-                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z" />
-                                  </svg>
-                                ) : kr.status === "on-hold" ? (
-                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                                  </svg>
-                                ) : (
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                )}
-                              </span>
-                              <span className="hidden sm:inline">
-                                {kr.status === "started" ? (
-                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z" />
-                                  </svg>
-                                ) : kr.status === "on-hold" ? (
-                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                                  </svg>
-                                ) : (
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                )}
-                              </span>
-                            </button>
-                          )}
-                          {isViewingArchived && (
-                            <span
-                              className={`rounded-full px-2 sm:px-2.5 py-0 sm:py-0 text-base sm:text-lg ${goalStatusBadge(
-                                kr.status
-                              )}`}
-                              title={kr.status === "started"
-                                ? "Started"
-                                : kr.status === "on-hold"
-                                  ? "On hold"
-                                  : "Completed"}
-                            >
-                              <span className="sm:hidden">
-                                {kr.status === "started" ? (
-                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z" />
-                                  </svg>
-                                ) : kr.status === "on-hold" ? (
-                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                                  </svg>
-                                ) : (
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                )}
-                              </span>
-                              <span className="hidden sm:inline">
-                                {kr.status === "started" ? (
-                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z" />
-                                  </svg>
-                                ) : kr.status === "on-hold" ? (
-                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                                  </svg>
-                                ) : (
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                )}
-                              </span>
-                            </span>
-                          )}
-                          {activeGoalCardId === goal.id && !isViewingArchived && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => moveKeyResult(goal.id, kr.id, "up")}
-                                className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-                                aria-label="Move key result up"
-                                disabled={krIndex === 0}
-                              >
-                                ↑
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => moveKeyResult(goal.id, kr.id, "down")}
-                                className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-                                aria-label="Move key result down"
-                                disabled={krIndex === goal.keyResults.length - 1}
-                              >
-                                ↓
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleRemoveKeyResult(goal.id, kr.id)
-                                }
-                                className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] transition hover:text-foreground"
-                                aria-label="Remove key result"
-                              >
-                                ✕
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {activeKrDraftGoalId === goal.id && (
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <div className="flex-1 rounded-2xl border border-dashed border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] p-4">
-                      <input
-                        type="text"
-                        value={draft.title}
-                        onChange={(event) =>
-                          handleKrDraftChange(goal.id, event.target.value)
-                        }
-                        placeholder="Add a key result"
-                        className="w-full border-b border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleAddKeyResult(goal.id)}
-                        className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-1.5 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => cancelKeyResultDraft(goal.id)}
-                        className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {activeGoalCardId === goal.id && activeKrDraftGoalId !== goal.id && !isViewingArchived && (
-                  <div className="pt-3">
-                    <button
-                      type="button"
-                      onClick={() => startKeyResultDraft(goal.id)}
-                      className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_75%,transparent)] transition hover:text-foreground"
-                    >
-                      + Add KR
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+  const updateGoalTitle = (goalId: string, title: string) => {
+    setGoals((previous) =>
+      normalizeGoalOrder(
+        previous.map((goal) => (goal.id === goalId ? { ...goal, title } : goal))
+      )
+    );
+  };
 
-      <div className="mt-6 flex justify-center gap-3">
-        {!isAddingGoal ? (
-          <>
-            <button
-              type="button"
-              onClick={startGoalDraft}
-              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-5 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-            >
-              + Add OKR
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setIsViewingArchived(!isViewingArchived);
-                if (!isViewingArchived && archivedGoals.length === 0) {
-                  fetchArchivedGoals();
-                }
-              }}
-              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-              title={isViewingArchived ? 'Back to Active' : 'View Archived'}
-            >
-              {isViewingArchived ? (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                </svg>
-              )}
-            </button>
-          </>
-        ) : (
-          <div className="w-full max-w-3xl okr-card border-none p-6">
-            <div className="grid gap-6 lg:grid-cols-2">
-              <input
-                type="text"
-                value={newGoalTitle}
-                onChange={(event) => setNewGoalTitle(event.target.value)}
-                placeholder="Objective title"
-                className="border-b border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
-              />
-            </div>
-            <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={cancelGoalDraft}
-                className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleAddGoal}
-                className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </section>
+  const removeGoal = (goalId: string) => {
+    setGoals((previous) => normalizeGoalOrder(previous.filter((goal) => goal.id !== goalId)));
+  };
+
+  const addGoal = () => {
+    const title = newGoalTitle.trim();
+    if (!title) return;
+    setGoals((previous) =>
+      normalizeGoalOrder([
+        ...previous,
+        {
+          id: `goal-${Date.now()}`,
+          title,
+          timeframe: "",
+          archived: false,
+          keyResults: [],
+        },
+      ])
+    );
+    setNewGoalTitle("");
+  };
+
+  const updateKeyResultTitle = (goalId: string, krId: string, title: string) => {
+    setGoals((previous) =>
+      normalizeGoalOrder(
+        previous.map((goal) =>
+          goal.id === goalId
+            ? {
+                ...goal,
+                keyResults: goal.keyResults.map((kr) =>
+                  kr.id === krId ? { ...kr, title } : kr
+                ),
+              }
+            : goal
+        )
+      )
+    );
+  };
+
+  const removeKeyResult = (goalId: string, krId: string) => {
+    setGoals((previous) =>
+      normalizeGoalOrder(
+        previous.map((goal) =>
+          goal.id === goalId
+            ? {
+                ...goal,
+                keyResults: goal.keyResults.filter((kr) => kr.id !== krId),
+              }
+            : goal
+        )
+      )
+    );
+  };
+
+  const addKeyResult = (goalId: string) => {
+    const title = krDrafts[goalId]?.trim();
+    if (!title) return;
+    setGoals((previous) =>
+      normalizeGoalOrder(
+        previous.map((goal) =>
+          goal.id === goalId
+            ? {
+                ...goal,
+                keyResults: [
+                  ...goal.keyResults,
+                  {
+                    id: `kr-${Date.now()}`,
+                    title,
+                    status: "started",
+                  },
+                ],
+              }
+            : goal
+        )
+      )
+    );
+    setKrDrafts((previous) => ({ ...previous, [goalId]: "" }));
+  };
+
+  const updateCurrentWeekContent = (content: string) => {
+    setWeeklyNotes((previous) => ({
+      ...previous,
+      [activeWeekKey]: {
+        ...activeWeekEntry,
+        content,
+      },
+    }));
+  };
+
+  const applyWeeklyTemplate = () => {
+    updateCurrentWeekContent(weeklyGoalsTemplate);
+  };
+
+  const monthStats = monthDays.reduce(
+    (stats, day) => {
+      const value = ratings[day.key];
+      if (value !== null && value !== undefined) {
+        stats.logged += 1;
+        stats.total += Math.min(value, scale.length - 1);
+      }
+      if (isDayOffComputed(day.date, day.key)) {
+        stats.daysOff += 1;
+      }
+      return stats;
+    },
+    { logged: 0, total: 0, daysOff: 0 }
   );
+  const maxScore = Math.max(1, scale.length - 1);
+  const averageScore =
+    monthStats.logged > 0 ? Math.round((monthStats.total / (monthStats.logged * maxScore)) * 100) : 0;
 
   if (!isHydrated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-foreground border-r-transparent"></div>
-          <p className="text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-            Loading...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!userEmail && !showGuestDemo) {
-    return (
-      <div className="app-shell relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 text-foreground">
-        <button
-          type="button"
-          onClick={() => signIn("google", { callbackUrl: "/" })}
-          className="absolute right-6 top-6 z-20 rounded-full border border-[color-mix(in_srgb,var(--foreground)_35%,transparent)] bg-[color-mix(in_srgb,var(--background)_78%,transparent)] px-5 py-2 text-sm font-semibold text-foreground transition hover:border-[color-mix(in_srgb,var(--foreground)_55%,transparent)]"
-        >
-          Sign in
-        </button>
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_12%,color-mix(in_srgb,var(--foreground)_20%,transparent),transparent_42%),radial-gradient(circle_at_15%_20%,rgba(59,130,246,0.16),transparent_35%),radial-gradient(circle_at_82%_18%,rgba(14,165,233,0.14),transparent_34%)]" />
-        <div className="pointer-events-none absolute inset-0 opacity-70">
-          <span className="absolute left-[8%] top-[14%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_55%,transparent)]" />
-          <span className="absolute left-[18%] top-[32%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_45%,transparent)]" />
-          <span className="absolute left-[32%] top-[20%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]" />
-          <span className="absolute left-[64%] top-[16%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_45%,transparent)]" />
-          <span className="absolute left-[74%] top-[28%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_40%,transparent)]" />
-          <span className="absolute left-[88%] top-[18%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]" />
-          <span className="absolute left-[12%] top-[58%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]" />
-          <span className="absolute left-[78%] top-[62%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_45%,transparent)]" />
-          <span className="absolute left-[90%] top-[54%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]" />
-        </div>
-        <main className="relative z-10 w-full max-w-5xl text-center">
-          <img
-            src="/cadencia-app-logo.png"
-            alt="Cadencia"
-            className="mx-auto h-16 w-auto sm:h-20 drop-shadow-[0_0_24px_rgba(59,130,246,0.35)]"
-          />
-          <h1 className="mt-5 text-6xl sm:text-7xl font-black tracking-[-0.03em] text-[color-mix(in_srgb,#60a5fa_72%,#0ea5e9_28%)]">
-            Cadencia
-          </h1>
-          <p className="mt-4 text-sm sm:text-base uppercase tracking-[0.24em] text-[color-mix(in_srgb,#60a5fa_82%,#0ea5e9_18%)]">
-            You keep drifting through life? Stop and use Cadencia.
-          </p>
-          <p className="mx-auto mt-7 max-w-4xl text-base sm:text-2xl leading-relaxed text-[color-mix(in_srgb,var(--foreground)_78%,transparent)]">
-            Built for goal tracking, personal accountability, mentor check-ins, and lightweight team visibility
-            without micromanagement.
-          </p>
-          <p className="mx-auto mt-2 max-w-4xl text-xs sm:text-sm text-[color-mix(in_srgb,var(--foreground)_62%,transparent)]">
-            Inspired by GitHub&apos;s productivity heatmap.
-          </p>
-          <p className="mx-auto mt-4 max-w-3xl text-sm sm:text-base text-[color-mix(in_srgb,var(--foreground)_68%,transparent)]">
-            Free to use. Open source on{" "}
-            <a
-              href="https://github.com/serdarsalim/cadencia.xyz"
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2 hover:opacity-80"
-            >
-              GitHub
-            </a>
-            .
-          </p>
-          <p className="mx-auto mt-2 max-w-3xl text-sm sm:text-base text-[color-mix(in_srgb,var(--foreground)_68%,transparent)]">
-            Built by{" "}
-            <a
-              href="https://serdarsalim.com"
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2 hover:opacity-80"
-            >
-              Serdar Salim
-            </a>
-            .
-          </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <button
-              type="button"
-              onClick={() => {
-                setProductivityMode("day");
-                setView("productivity");
-                setShowGuestDemo(true);
-              }}
-              className="rounded-full bg-[color-mix(in_srgb,#60a5fa_70%,#0ea5e9_30%)] px-8 py-3 text-sm font-semibold text-white transition hover:brightness-105"
-            >
-              Demo
-            </button>
-            <button
-              type="button"
-              onClick={() => signIn("google", { callbackUrl: "/" })}
-              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_35%,transparent)] bg-[color-mix(in_srgb,var(--background)_78%,transparent)] px-8 py-3 text-sm font-semibold text-foreground transition hover:border-[color-mix(in_srgb,var(--foreground)_55%,transparent)]"
-            >
-              Sign up
-            </button>
-          </div>
-        </main>
+      <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-foreground border-r-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="app-shell flex min-h-screen flex-col text-foreground transition-colors">
-      {!userEmail && isHydrated ? (
-        <div className="w-full bg-[#d8c06c] px-4 py-3 text-center text-base sm:text-lg font-semibold text-[#2c2410]">
-          Sign up and start tracking your goals. Time is running out.
+    <div className="app-shell min-h-screen text-foreground">
+      {!userEmail ? (
+        <div className="w-full bg-[#d8c06c] px-4 py-3 text-center text-sm font-semibold text-[#2c2410]">
+          Demo data.{" "}
           <button
             type="button"
             onClick={() => signIn("google", { callbackUrl: "/" })}
-            className="ml-2 text-base sm:text-lg font-bold underline underline-offset-2 hover:opacity-80"
+            className="font-bold underline underline-offset-2"
           >
-            Sign up
+            Sign in
           </button>
         </div>
       ) : null}
-      <header className="sticky top-0 z-40 w-full bg-[linear-gradient(90deg,color-mix(in_srgb,#a78bfa_14%,var(--background))_0%,color-mix(in_srgb,#818cf8_12%,var(--background))_50%,color-mix(in_srgb,#60a5fa_14%,var(--background))_100%)] backdrop-blur-md">
-        <div className="flex h-14 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2">
-            <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-5 sm:h-6" />
-            <span className="hidden sm:inline text-[20px] text-foreground" style={{ fontFamily: "var(--font-outfit)", fontWeight: 600 }}>
-              Cadencia
-            </span>
-          </div>
 
-          <div className="flex items-center gap-0.5 sm:gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                setIsShareEditorVisible((prev) => !prev);
-              }}
-              className="flex items-center rounded-full px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
-              aria-label="Open sharing"
-              aria-pressed={isShareEditorVisible}
+      <header className="sticky top-0 z-40 w-full bg-slate-900 text-white">
+        <div className="flex h-14 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center gap-2">
+            <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-5 sm:h-6" />
+            <span className="hidden text-[20px] font-semibold sm:inline">Cadencia</span>
+          </Link>
+          <div className="flex items-center gap-1">
+            <Link
+              href="/365"
+              className="flex items-center rounded-full px-2 py-1.5 text-xs text-white/70 transition hover:bg-white/10 hover:text-white sm:px-3 sm:py-2 sm:text-sm"
+              aria-label="Open sharing in main app"
             >
               🔗
-            </button>
+            </Link>
             <button
               type="button"
-              onClick={() => setIsPrintOptionsOpen(true)}
-              className="flex items-center rounded-full px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
+              onClick={() => window.print()}
+              className="flex items-center rounded-full px-2 py-1.5 text-xs text-white/70 transition hover:bg-white/10 hover:text-white sm:px-3 sm:py-2 sm:text-sm"
               aria-label="Print"
             >
               <span role="img" aria-hidden="true">
                 🖨️
               </span>
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setIsEditingProfile((prev) => !prev);
-              }}
-              className="flex items-center rounded-full px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
-              aria-label="Toggle profile settings"
-              aria-pressed={isProfileEditorVisible}
+            <Link
+              href="/365"
+              className="flex items-center rounded-full px-2 py-1.5 text-xs text-white/70 transition hover:bg-white/10 hover:text-white sm:px-3 sm:py-2 sm:text-sm"
+              aria-label="Open profile settings in main app"
             >
               ⚙️
-            </button>
+            </Link>
+            <Link
+              href="/365"
+              className="rounded-full px-3 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+            >
+              365
+            </Link>
             <button
               type="button"
-              onClick={() => {
-                const newTheme = theme === "light" ? "dark" : "light";
-                setTheme(newTheme);
-                if (!isDemoMode) {
-                  saveProfile({
-                    personName, dateOfBirth, weekStartDay, recentYears,
-                    goalsSectionTitle, productivityScaleMode, showLegend,
-                    weeklyGoalsTemplate, dayOffAllowance,
-                    workDays: workDays.join(','),
-                    productivityViewMode: productivityMode,
-                    autoMarkWeekendsOff,
-                    theme: newTheme,
-                  });
-                }
-              }}
-              className="flex items-center rounded-full px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
+              onClick={() => setTheme((current) => (current === "light" ? "dark" : "light"))}
+              className="flex items-center rounded-full px-2 py-1.5 text-xs text-white/70 transition hover:bg-white/10 hover:text-white sm:px-3 sm:py-2 sm:text-sm"
               aria-label="Toggle theme"
             >
               {theme === "light" ? (
@@ -3512,3076 +729,291 @@ const goalStatusBadge = (status: KeyResultStatus) => {
         </div>
       </header>
 
-      <main className="flex flex-1 items-start justify-center px-4 sm:px-6">
-        <div className="w-full py-2 text-center">
-          {view === "life" && (
-            <section className="mt-8 space-y-6">
-              <WeeklySchedule
-                scheduleEntries={scheduleEntries}
-                setScheduleEntries={setScheduleEntries}
-                weekStartDay={weekStartDay}
-              />
-            </section>
-          )}
-
-          {view === "productivity" && (
-            <>
-              <section className="mx-auto mt-8 grid max-w-480 gap-8 text-left lg:grid-cols-[1fr_1.2fr] lg:items-stretch">
-                <div
-                  ref={calendarColumnRef}
-                  className="space-y-4 order-2 lg:order-1"
-                  data-print-hidden={printOptions.showCalendar ? "false" : "true"}
-                >
-                  {dosDontsPanel ? (
-                    <div
-                      className="mb-4"
-                      data-print-hidden={printOptions.showDosDonts ? "false" : "true"}
-                    >
-                      {dosDontsPanel}
-                    </div>
-                  ) : null}
-                  <ProductivityGrid
-                    year={productivityYear}
-                    setYear={setProductivityYear}
-                    ratings={productivityRatings}
-                    setRatings={setProductivityRatings}
-                    dayOffs={dayOffs}
-                    setDayOffs={setDayOffs}
-                    sickDays={sickDays}
-                    setSickDays={setSickDays}
-                    scale={productivityScale}
-                    mode={productivityMode}
-                    showLegend={showLegend}
-                    onToggleMode={() => {
-                      const newMode = productivityMode === "day" ? "week" : "day";
-                      setProductivityMode(newMode);
-                      // Save preference to profile
-                      if (!isDemoMode) {
-                        saveProfile({
-                          personName,
-                          dateOfBirth,
-                          weekStartDay,
-                          recentYears,
-                          goalsSectionTitle,
-                          productivityScaleMode,
-                          showLegend,
-                          weeklyGoalsTemplate,
-                          dayOffAllowance,
-                          workDays: workDays.join(','),
-                          productivityViewMode: newMode,
-                          autoMarkWeekendsOff,
-                        });
-                      }
-                    }}
-                    dayOffMode={isDayOffMode}
-                    setDayOffMode={setIsDayOffMode}
-                    isSickDayMode={isSickDayMode}
-                    setIsSickDayMode={setIsSickDayMode}
-                    dayOffsRemaining={dayOffsRemaining}
-                    dayOffAllowance={dayOffAllowance}
-                    selectedWeekKey={selectedWeekKey}
-                    setSelectedWeekKey={setSelectedWeekKey}
-                    weekStartDay={weekStartDay}
-                    autoMarkWeekendsOff={autoMarkWeekendsOff}
-                    setAutoMarkWeekendsOff={setAutoMarkWeekendsOff}
-                    workDays={workDays}
-                    isDemoMode={isDemoMode}
-                    personName={personName}
-                    dateOfBirth={dateOfBirth}
-                    recentYears={recentYears}
-                    goalsSectionTitle={goalsSectionTitle}
-                    productivityScaleMode={productivityScaleMode}
-                    weeklyGoalsTemplate={weeklyGoalsTemplate}
-                    productivityMode={productivityMode}
-                    theme={theme}
-                  />
-                </div>
-
-                <div className="flex flex-col rounded-3xl px-0 pb-4 pt-0 order-1 lg:order-2 lg:px-4 lg:h-full">
-                <div
-                  className="flex-1 px-0 pt-4 pb-0 weekly-goals-bg sm:px-4 sm:pb-4 rounded-md border border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] lg:h-full"
-                  style={weeklyGoalsMinHeight ? { minHeight: `${weeklyGoalsMinHeight}px` } : undefined}
-                  data-print-hidden={printOptions.showWeeklyGoals ? "false" : "true"}
-                >
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-3 px-4 sm:px-0">
-                    <div className="flex flex-1 items-center justify-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => shiftSelectedWeek(-1)}
-                        className="rounded-full px-2 py-1 text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
-                        aria-label="Previous week"
-                      >
-                        ←
-                      </button>
-                      <span
-                        className="block text-[19px] text-foreground"
-                        style={{ fontFamily: "var(--font-outfit)", fontWeight: 600 }}
-                      >
-                        {goalsHeaderLabel}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => shiftSelectedWeek(1)}
-                        className="rounded-full px-2 py-1 text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
-                        aria-label="Next week"
-                      >
-                        →
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {selectedWeekKey && isWeeklyGoalsEmpty && templateContentText ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateWeeklyNoteEntry(selectedWeekKey, {
-                              content: weeklyGoalsTemplate,
-                            })
-                          }
-                          className="text-[10px] uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:text-foreground"
-                        >
-                          Use template
-                        </button>
-                      ) : null}
-                      {selectedWeekKey && isWeeklyGoalsEmpty && templateContentText ? (
-                        <button
-                          type="button"
-                          onClick={() => setIsWeeklyTemplateEditorOpen(true)}
-                          className="text-[10px] uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition hover:text-foreground"
-                        >
-                          (Edit)
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className={theme === "dark" ? "bg-[#0a0a0a]" : "bg-[#fdfcfb]"}>
-                  <TinyEditor
-                    key={selectedWeekKey ? `week-notes-${selectedWeekKey}-${theme}` : `productivity-goal-${productivityYear}-${theme}`}
-                    tinymceScriptSrc={TINYMCE_CDN}
-                    value={selectedWeekKey ? selectedWeekEntry?.content ?? "" : currentProductivityGoal}
-                    init={createWeeklyGoalsEditorInit(theme, {
-                      placeholder: selectedWeekKey
-                        ? "What are your goals this week, and did you accomplish them?"
-                        : "",
-                    })}
-                    onEditorChange={(content) =>
-                      selectedWeekKey
-                        ? updateWeeklyNoteEntry(selectedWeekKey, { content })
-                        : setProductivityGoals((prev) => ({
-                            ...prev,
-                            [productivityYear]: content,
-                          }))
-                    }
-                  />
-                  </div>
-                </div>
-                </div>
-              </section>
-              <div data-print-hidden={printOptions.showOkrs ? "false" : "true"}>
-                {renderGoalsSection("mt-12", goalsSectionRef)}
-              </div>
-            </>
-          )}
-
-          <datalist id="time-select-options">
-            {TIME_OPTIONS.map((time) => (
-              <option key={`time-option-${time}`} value={time} />
-            ))}
-          </datalist>
-        </div>
-      </main>
-
-      {isProfileEditorVisible && (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4 overflow-y-auto"
-          onClick={() => setIsEditingProfile(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="w-full max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 text-left shadow-2xl my-8 max-h-[90vh] overflow-y-auto"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                  Profile & preferences
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEditingProfile(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              {userEmail && (
-                <div className="rounded-2xl bg-[color-mix(in_srgb,var(--foreground)_4%,transparent)] p-4">
-                  <UserInfo showLabel />
-                </div>
-              )}
-              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                <input
-                  type="text"
-                  value={personName}
-                  onChange={(event) => setPersonName(event.target.value)}
-                  placeholder="Your name"
-                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
-                />
-              </label>
-              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                <div className="mt-1 flex items-center justify-between rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2">
-                  <span className="text-sm normal-case tracking-normal text-foreground">
-                    Enable 4-tier scale ({">"}75%)
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={productivityScaleMode === "4"}
-                    onChange={(event) =>
-                      setProductivityScaleMode(event.target.checked ? "4" : "3")
-                    }
-                    className="h-4 w-4 accent-foreground"
-                  />
-                </div>
-              </label>
-              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                <div className="mt-1 flex items-center justify-between rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2">
-                  <span className="text-sm normal-case tracking-normal text-foreground">
-                    Show goals achieved legend
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={showLegend}
-                    onChange={(event) => setShowLegend(event.target.checked)}
-                    className="h-4 w-4 accent-foreground"
-                  />
-                </div>
-              </label>
-              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                <div className="mt-1 flex items-center justify-between rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2">
-                  <span className="text-sm normal-case tracking-normal text-foreground">
-                    Day off days per year
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={365}
-                    value={dayOffAllowance}
-                    onChange={(event) => {
-                      const nextValue = Number(event.target.value);
-                      if (Number.isFinite(nextValue)) {
-                        setDayOffAllowance(Math.max(0, Math.min(365, nextValue)));
-                      }
-                    }}
-                    className="w-20 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-3 py-1 text-sm text-foreground outline-none focus:border-foreground"
-                  />
-                </div>
-              </label>
-              <label className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                <div className="flex flex-col gap-2 sm:items-start">
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                    Week starts
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {[0, 1].map((day) => (
-                      <button
-                        key={day}
-                        type="button"
-                        onClick={() => setWeekStartDay(day as WeekdayIndex)}
-                        className={`rounded-full border px-3 py-1 text-[10px] transition sm:px-4 sm:py-1.5 sm:text-xs ${
-                          weekStartDay === day
-                            ? "border-foreground bg-foreground text-background"
-                            : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:border-foreground"
-                        }`}
-                      >
-                        {day === 0 ? "Sunday" : "Monday"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </label>
-              <div className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] lg:col-span-2 flex flex-col gap-2 sm:flex-col sm:items-start">
-                <span className="text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                  Work days
-                </span>
-                <div className="flex flex-wrap items-center gap-2">
-                  {[0, 1, 2, 3, 4, 5, 6].map((day) => (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => {
-                        const newWorkDays = workDays.includes(day as WeekdayIndex)
-                          ? workDays.filter(d => d !== day)
-                          : [...workDays, day as WeekdayIndex].sort((a, b) => a - b);
-                        setWorkDays(newWorkDays as WeekdayIndex[]);
-                        if (!isDemoMode) {
-                          saveProfile({
-                            personName,
-                            dateOfBirth,
-                            weekStartDay,
-                            recentYears,
-                            goalsSectionTitle,
-                            productivityScaleMode,
-                            showLegend,
-                            weeklyGoalsTemplate,
-                            dayOffAllowance,
-                            workDays: newWorkDays.join(','),
-                            productivityViewMode: productivityMode,
-                            autoMarkWeekendsOff,
-                          });
-                        }
-                      }}
-                      className={`rounded-full border px-3 py-1 text-[10px] transition sm:px-3 sm:py-1 sm:text-[10px] ${
-                        workDays.includes(day as WeekdayIndex)
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:border-foreground"
-                      }`}
-                    >
-                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isWeeklyTemplateEditorOpen && (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4 overflow-y-auto"
-          onClick={() => setIsWeeklyTemplateEditorOpen(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="w-full max-w-3xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 text-left shadow-2xl my-8 max-h-[90vh] overflow-y-auto"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                  Weekly goals template
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsWeeklyTemplateEditorOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent p-2">
-              <TinyEditor
-                tinymceScriptSrc={TINYMCE_CDN}
-                value={weeklyGoalsTemplate}
-                init={createWeeklyGoalsEditorInit(theme, { height: 300, minHeight: 220 })}
-                onEditorChange={(content) =>
-                  setWeeklyGoalsTemplate(normalizeWeeklyGoalsTemplate(content))
-                }
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isShareEditorVisible && (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4 overflow-y-auto"
-          onClick={() => setIsShareEditorVisible(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="w-full max-w-2xl rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 text-left shadow-2xl my-8 max-h-[90vh] overflow-y-auto"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                  Sharing
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsShareEditorVisible(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
-              >
-                ✕
-              </button>
-            </div>
-            {!userEmail ? (
-              <p className="text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
-                Sign in to share your goals and view shared pages.
-              </p>
-            ) : (
-              <div className="grid gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="email"
-                    value={shareEmail}
-                    onChange={(event) => setShareEmail(event.target.value)}
-                    placeholder="Email address"
-                    className="flex-1 min-w-55 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-2 text-sm normal-case tracking-normal text-foreground outline-none focus:border-foreground"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setIsShareOptionsOpen(true)}
-                    className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:border-foreground"
-                  >
-                    Options
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCreateShare}
-                    className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
-                  >
-                    Share
-                  </button>
-                </div>
-                {shareError && (
-                  <p className="text-xs normal-case tracking-normal text-[#f87171]">
-                    {shareError}
-                  </p>
-                )}
-                {isLoadingShares && (
-                  <p className="text-xs normal-case tracking-normal text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                    Loading shares...
-                  </p>
-                )}
-                {sharedByMe.length > 0 && (
-                  <div className="space-y-2 text-xs normal-case tracking-normal text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
-                    <span className="block text-[11px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-                      Goals you're sharing
-                    </span>
-                        {sharedByMe.map((share) => (
-                          <div key={share.id} className="flex flex-wrap items-center gap-2">
-                            <span>{share.recipientUser?.email || share.recipientEmail}</span>
-                            <Link
-                              href={`/shared/${share.id}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
-                            >
-                              Preview
-                            </Link>
-                            <button
-                              type="button"
-                              onClick={() => handleEditShareOptions(share)}
-                              className="text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
-                            >
-                              Options
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRevokeShare(share.id)}
-                              className="text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
-                            >
-                              Revoke
-                            </button>
-                          </div>
-                        ))}
-                  </div>
-                )}
-                {sharedWithMe.length > 0 && (
-                  <div className="space-y-2 text-xs normal-case tracking-normal text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
-                    <span className="block text-[11px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-                      Goals shared with me
-                    </span>
-                    {sharedWithMe.map((share) => (
-                      <div key={share.id} className="flex flex-wrap items-center gap-2">
-                        <span>
-                          {share.owner?.profile?.personName ||
-                            share.owner?.email ||
-                            "Shared account"}
-                        </span>
-                        <Link
-                          href={`/shared/${share.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
-                        >
-                          Open
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {activeShareOptionsId ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
-          onClick={() => setActiveShareOptionsId(null)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="w-full max-w-md rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                Share includes
-              </p>
-              <button
-                type="button"
-                onClick={() => setActiveShareOptionsId(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="space-y-2 text-sm text-foreground">
-              {[
-                { key: "showSelfRating", label: "Self rating" },
-                { key: "showDosDonts", label: "Do's & Don'ts" },
-                { key: "showWeeklyGoals", label: "Weekly goals" },
-                { key: "showOkrs", label: "OKRs" },
-              ].map((option) => (
-                <label
-                  key={option.key}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] px-4 py-3"
-                >
-                  <span>{option.label}</span>
-                  <input
-                    type="checkbox"
-                    checked={shareEditOptions[option.key as keyof typeof shareEditOptions]}
-                    onChange={(event) =>
-                      setShareEditOptions((prev) => ({
-                        ...prev,
-                        [option.key]: event.target.checked,
-                      }))
-                    }
-                    className="h-4 w-4 accent-foreground"
-                  />
-                </label>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => handleUpdateShareOptions(activeShareOptionsId)}
-              className="mt-5 w-full rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.3em] text-foreground transition hover:border-foreground"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {isShareOptionsOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 print-hidden"
-          onClick={() => setIsShareOptionsOpen(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="w-full max-w-md rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                Share includes
-              </p>
-              <button
-                type="button"
-                onClick={() => setIsShareOptionsOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="space-y-2 text-sm text-foreground">
-              {[
-                { key: "showSelfRating", label: "Self rating" },
-                { key: "showDosDonts", label: "Do's & Don'ts" },
-                { key: "showWeeklyGoals", label: "Weekly goals" },
-                { key: "showOkrs", label: "OKRs" },
-              ].map((option) => (
-                <label
-                  key={option.key}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] px-4 py-3"
-                >
-                  <span>{option.label}</span>
-                  <input
-                    type="checkbox"
-                    checked={shareOptions[option.key as keyof typeof shareOptions]}
-                    onChange={(event) =>
-                      setShareOptions((prev) => ({
-                        ...prev,
-                        [option.key]: event.target.checked,
-                      }))
-                    }
-                    className="h-4 w-4 accent-foreground"
-                  />
-                </label>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsShareOptionsOpen(false)}
-              className="mt-5 w-full rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.3em] text-foreground transition hover:border-foreground"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {isPrintOptionsOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 print-hidden"
-          onClick={() => setIsPrintOptionsOpen(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="w-full max-w-md rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                Print includes
-              </p>
-              <button
-                type="button"
-                onClick={() => setIsPrintOptionsOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="space-y-2 text-sm text-foreground">
-              {[
-                { key: "showCalendar", label: "Calendar" },
-                { key: "showDosDonts", label: "Do's & Don'ts" },
-                { key: "showWeeklyGoals", label: "Weekly goals" },
-                { key: "showOkrs", label: "OKRs" },
-              ].map((option) => (
-                <label
-                  key={option.key}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] px-4 py-3"
-                >
-                  <span>{option.label}</span>
-                  <input
-                    type="checkbox"
-                    checked={printOptions[option.key as keyof typeof printOptions]}
-                    onChange={(event) =>
-                      setPrintOptions((prev) => ({
-                        ...prev,
-                        [option.key]: event.target.checked,
-                      }))
-                    }
-                    className="h-4 w-4 accent-foreground"
-                  />
-                </label>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="mt-5 w-full rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.3em] text-foreground transition hover:border-foreground"
-            >
-              Print
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      <footer
-        className={`mt-24 px-6 py-8 text-sm print-hidden md:px-24 ${
-          theme === "light"
-            ? "bg-slate-100 text-slate-800 border-t border-slate-200"
-            : "bg-slate-900 text-white"
-        }`}
-      >
-        <div className="flex flex-col items-center gap-8 text-center">
-          <div
-            className={`order-2 flex items-center justify-center gap-4 text-xs uppercase tracking-[0.3em] ${
-              theme === "light" ? "text-slate-500" : "text-white/70"
-            }`}
-          >
-            <Link href="/about" className={`transition ${theme === "light" ? "hover:text-slate-800" : "hover:text-white"}`}>
-              About
-            </Link>
-            <Link href="/ai" className={`transition ${theme === "light" ? "hover:text-slate-800" : "hover:text-white"}`}>
-              AI
-            </Link>
-            <Link href="/terms" className={`transition ${theme === "light" ? "hover:text-slate-800" : "hover:text-white"}`}>
-              Terms
-            </Link>
-            <Link href="/privacy" className={`transition ${theme === "light" ? "hover:text-slate-800" : "hover:text-white"}`}>
-              Privacy
-            </Link>
-          </div>
-
-          <div
-            className={`order-3 flex flex-wrap items-center justify-center gap-2 text-xs ${
-              theme === "light" ? "text-slate-600" : "text-white/60"
-            }`}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-4 w-4" />
-              <span style={{ fontFamily: "var(--font-outfit)", fontWeight: 600 }}>Cadencia</span>
-            </span>
-            <span aria-hidden="true">•</span>
-            <span>AGPL-3.0</span>
-            <span aria-hidden="true">•</span>
-            <a
-              href="https://github.com/serdarsalim/cadencia.xyz/blob/main/LICENSE"
-              target="_blank"
-              rel="noreferrer"
-              className={`transition ${
-                theme === "light" ? "hover:text-slate-900" : "hover:text-white"
-              }`}
-            >
-              License
-            </a>
-            <span aria-hidden="true">•</span>
-            <a
-              href="https://github.com/serdarsalim/cadencia.xyz"
-              target="_blank"
-              rel="noreferrer"
-              className={`transition ${
-                theme === "light" ? "hover:text-slate-900" : "hover:text-white"
-              }`}
-            >
-              Source Code
-            </a>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
-}
-
-type ProductivityLegendProps = {
-  className?: string;
-  scale: ProductivityScaleEntry[];
-};
-
-const ProductivityLegend = ({ className, scale }: ProductivityLegendProps) => (
-  <div
-    className={`flex flex-col gap-2 rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] p-4 text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:text-xs ${className ?? ""}`}
-  >
-    <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
-      Goals achieved (self-rated)
-    </span>
-    <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
-      {scale.map((item) => (
-        <div key={item.value} className="flex items-center gap-2 whitespace-nowrap">
-          <span
-            className={`h-3 w-3 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4`}
-            aria-hidden="true"
-          />
-          <span>{item.label}</span>
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-type ProductivityGridProps = {
-  year: number;
-  setYear: React.Dispatch<React.SetStateAction<number>>;
-  ratings: Record<string, number | null>;
-  setRatings?: React.Dispatch<React.SetStateAction<Record<string, number | null>>>;
-  dayOffs: Record<string, boolean>;
-  setDayOffs?: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-  sickDays: Record<string, boolean>;
-  setSickDays?: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-  scale: ProductivityScaleEntry[];
-  mode: "day" | "week";
-  showLegend: boolean;
-  onToggleMode: () => void;
-  dayOffMode?: boolean;
-  setDayOffMode?: React.Dispatch<React.SetStateAction<boolean>>;
-  isSickDayMode?: boolean;
-  setIsSickDayMode?: React.Dispatch<React.SetStateAction<boolean>>;
-  dayOffsRemaining?: number;
-  dayOffAllowance?: number;
-  selectedWeekKey: string | null;
-  setSelectedWeekKey: React.Dispatch<React.SetStateAction<string | null>>;
-  weekStartDay: WeekdayIndex;
-  readOnly?: boolean;
-  autoMarkWeekendsOff?: boolean;
-  setAutoMarkWeekendsOff?: React.Dispatch<React.SetStateAction<boolean>>;
-  workDays?: WeekdayIndex[];
-  isDemoMode?: boolean;
-  personName?: string;
-  dateOfBirth?: string;
-  recentYears?: string;
-  goalsSectionTitle?: string;
-  productivityScaleMode?: string;
-  weeklyGoalsTemplate?: string;
-  productivityMode?: "day" | "week";
-  theme?: Theme;
-};
-
-const ProductivityGrid = ({
-  year,
-  setYear,
-  ratings,
-  setRatings,
-  dayOffs,
-  setDayOffs,
-  sickDays,
-  setSickDays,
-  scale,
-  mode,
-  showLegend,
-  onToggleMode,
-  dayOffMode = false,
-  setDayOffMode,
-  isSickDayMode = false,
-  setIsSickDayMode,
-  dayOffsRemaining = 0,
-  dayOffAllowance = 0,
-  selectedWeekKey,
-  setSelectedWeekKey,
-  weekStartDay,
-  readOnly = false,
-  autoMarkWeekendsOff = false,
-  setAutoMarkWeekendsOff,
-  workDays = [0, 1, 2, 3, 4, 5, 6],
-  isDemoMode = false,
-  personName = "",
-  dateOfBirth = "",
-  recentYears = "10",
-  goalsSectionTitle = "2026 GOALS",
-  productivityScaleMode = "3",
-  weeklyGoalsTemplate = "",
-  productivityMode = "day",
-  theme = "light",
-}: ProductivityGridProps) => {
-  const dayGridRef = useRef<HTMLDivElement | null>(null);
-  const [hoveredDayDisplay, setHoveredDayDisplay] = useState<{
-    label: string;
-    x: number;
-    y: number;
-    align: "left" | "right";
-  } | null>(null);
-
-  // Helper function to check if a day is a weekend (not in workDays)
-  const isWeekend = (yearVal: number, monthIndex: number, dayOfMonth: number): boolean => {
-    const date = new Date(yearVal, monthIndex, dayOfMonth);
-    const dayOfWeek = date.getDay() as WeekdayIndex;
-    return !workDays.includes(dayOfWeek);
-  };
-
-  // Helper function to check if a day should be marked as day off
-  const isDayOffComputed = (key: string, yearVal: number, monthIndex: number, dayOfMonth: number): boolean => {
-    // Manual day-off always takes precedence
-    if (dayOffs[key] !== undefined) {
-      return dayOffs[key];
-    }
-    // If auto-mark weekends is enabled and this is a weekend, mark it as day off
-    if (autoMarkWeekendsOff && isWeekend(yearVal, monthIndex, dayOfMonth)) {
-      return true;
-    }
-    return false;
-  };
-
-  const days = Array.from({ length: 31 }, (_, idx) => idx + 1);
-  const months = Array.from({ length: 12 }, (_, idx) => idx);
-  const weeks = useMemo(() => buildWeeksForYear(year, weekStartDay), [year, weekStartDay]);
-  const weeksByMonth = useMemo(() => {
-    const grouped = Array.from({ length: 12 }, () => [] as WeekMeta[]);
-    weeks.forEach((week) => {
-      const bucket = Math.min(Math.max(week.primaryMonth, 0), 11);
-      grouped[bucket]!.push(week);
-    });
-    return grouped.map((monthWeeks) =>
-      monthWeeks.sort((a, b) => a.weekNumber - b.weekNumber)
-    );
-  }, [weeks]);
-  const [isYearMenuOpen, setIsYearMenuOpen] = useState(false);
-  const yearMenuRef = useRef<HTMLDivElement | null>(null);
-  const [isDayOffMenuOpen, setIsDayOffMenuOpen] = useState(false);
-  const dayOffMenuRef = useRef<HTMLDivElement | null>(null);
-  const toggleLabel = mode === "week" ? "Week" : "Day";
-  const toggleButton = (
-    <button
-      type="button"
-      onClick={onToggleMode}
-      className="flex items-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-      aria-label={`Switch to ${mode === "week" ? "day" : "week"} view`}
-    >
-      {toggleLabel}
-    </button>
-  );
-  const yearOptions = useMemo(() => [year - 1, year, year + 1], [year]);
-
-  useEffect(() => {
-    if (!isYearMenuOpen) return;
-    const handleClick = (event: MouseEvent) => {
-      if (!yearMenuRef.current) return;
-      if (event.target instanceof Node && !yearMenuRef.current.contains(event.target)) {
-        setIsYearMenuOpen(false);
-      }
-    };
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsYearMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isYearMenuOpen]);
-
-  useEffect(() => {
-    if (!isDayOffMenuOpen) return;
-    const handleClick = (event: MouseEvent) => {
-      if (!dayOffMenuRef.current) return;
-      if (event.target instanceof Node && !dayOffMenuRef.current.contains(event.target)) {
-        setIsDayOffMenuOpen(false);
-      }
-    };
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsDayOffMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isDayOffMenuOpen]);
-
-  const yearControl = (
-    <div ref={yearMenuRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsYearMenuOpen((prev) => !prev)}
-        className="flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] transition hover:border-foreground"
-        aria-label="Select year"
-        aria-expanded={isYearMenuOpen}
-      >
-        {year}
-        <svg
-          aria-hidden="true"
-          className={`h-3 w-3 transition ${isYearMenuOpen ? "rotate-180" : ""}`}
-          viewBox="0 0 20 20"
-          fill="none"
-        >
-          <path
-            d="M5 7l5 6 5-6"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
-      {isYearMenuOpen ? (
-        <div className="absolute right-0 z-10 mt-2 w-36 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-1 shadow-lg">
-          {yearOptions.map((optionYear) => (
-            <button
-              key={optionYear}
-              type="button"
-              onClick={() => {
-                setYear(optionYear);
-                setIsYearMenuOpen(false);
-              }}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                optionYear === year
-                  ? "bg-foreground text-background"
-                  : "text-foreground hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
-              }`}
-            >
-              <span>{optionYear}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-  const dayOffControl = (
-    <div ref={dayOffMenuRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsDayOffMenuOpen((prev) => !prev)}
-        className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition ${
-          dayOffMode
-            ? "border-[#8dc8e6] text-[#3f6f88]"
-            : "border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] hover:border-foreground"
-        }`}
-        aria-label="Day off options"
-        aria-expanded={isDayOffMenuOpen}
-      >
-        Day Off
-        <svg
-          aria-hidden="true"
-          className={`h-3 w-3 transition ${isDayOffMenuOpen ? "rotate-180" : ""}`}
-          viewBox="0 0 20 20"
-          fill="none"
-        >
-          <path
-            d="M5 7l5 6 5-6"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
-      {isDayOffMenuOpen ? (
-        <div className="absolute right-0 z-10 mt-2 w-56 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] p-3 shadow-lg backdrop-blur-sm">
-          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-            <span>Days left</span>
-            <span className="text-[11px] font-semibold text-foreground">
-              {Math.max(0, dayOffsRemaining)} / {dayOffAllowance}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setDayOffMode?.((prev) => !prev);
-              if (isSickDayMode && setIsSickDayMode) setIsSickDayMode(false);
-            }}
-            className={`mt-3 w-full rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
-              dayOffMode
-                ? "border-[#8dc8e6] bg-[#eef7fc] text-[#3f6f88]"
-                : "border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] hover:border-foreground"
-            }`}
-          >
-            {dayOffMode ? "Stop selecting" : "Add/remove day off"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsSickDayMode?.((prev) => !prev);
-              if (dayOffMode) setDayOffMode?.(false);
-            }}
-            className={`mt-2 w-full rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
-              isSickDayMode
-                ? "border-[#ff9999] bg-[#fff5f5] text-[#cc5555]"
-                : "border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)] hover:border-foreground"
-            }`}
-          >
-            {isSickDayMode ? "Stop selecting" : "Add/remove sick leave"}
-          </button>
-          <label className="mt-3 flex cursor-pointer items-center gap-2 text-[11px] text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]">
-            <input
-              type="checkbox"
-              checked={autoMarkWeekendsOff}
-              onChange={(e) => {
-                const newValue = e.target.checked;
-                setAutoMarkWeekendsOff?.(newValue);
-                if (!isDemoMode) {
-                  saveProfile({
-                    personName,
-                    dateOfBirth,
-                    weekStartDay,
-                    recentYears,
-                    goalsSectionTitle,
-                    productivityScaleMode,
-                    showLegend,
-                    weeklyGoalsTemplate,
-                    dayOffAllowance,
-                    workDays: workDays.join(','),
-                    productivityViewMode: productivityMode,
-                    autoMarkWeekendsOff: newValue,
-                  });
-                }
-              }}
-              className="h-3.5 w-3.5 cursor-pointer rounded border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] accent-[#3f6f88]"
-            />
-            <span>Auto-mark weekends as time off</span>
-          </label>
-        </div>
-      ) : null}
-    </div>
-  );
-
-  const handleCycle = (monthIndex: number, day: number) => {
-    const key = `${year}-${monthIndex + 1}-${day}`;
-
-    // Find which week this day belongs to
-    const targetDate = new Date(year, monthIndex, day);
-    const weekForDay = weeks.find((week) =>
-      week.dayKeys.some((dayKey) => {
-        const [y, m, d] = dayKey.split("-").map(Number);
-        return y === year && m === monthIndex + 1 && d === day;
-      })
-    );
-    if (weekForDay) {
-      if (selectedWeekKey !== weekForDay.weekKey) {
-        setSelectedWeekKey(weekForDay.weekKey);
-        return;
-      }
-    }
-
-    // Don't allow editing in read-only mode
-    if (readOnly) return;
-
-    if (dayOffMode && setDayOffs) {
-      setDayOffs((prev) => {
-        const next = { ...prev };
-        const hasRating = ratings[key] !== null && ratings[key] !== undefined;
-        const isCurrentlyDayOff = isDayOffComputed(key, year, monthIndex, day);
-        const isWeekendDay = isWeekend(year, monthIndex, day);
-
-        // If currently showing as day-off
-        if (isCurrentlyDayOff) {
-          // If manually marked as true, remove the manual marking
-          if (next[key] === true) {
-            delete next[key];
-          }
-          // If it's an auto-weekend with no manual marking, set to false to override
-          else if (autoMarkWeekendsOff && isWeekendDay && next[key] === undefined) {
-            next[key] = false;
-          }
-          // If manually set to false, remove it (clear the override)
-          else if (next[key] === false) {
-            delete next[key];
-          }
-        }
-        // If not currently showing as day-off and no rating, mark it
-        else if (!hasRating) {
-          next[key] = true;
-        }
-
-        return next;
-      });
-      return;
-    }
-
-    if (isSickDayMode && setSickDays) {
-      setSickDays((prev) => {
-        const next = { ...prev };
-        const hasRating = ratings[key] !== null && ratings[key] !== undefined;
-        const isCurrentlySickDay = next[key] === true;
-
-        // Toggle sick day
-        if (isCurrentlySickDay) {
-          delete next[key];
-        } else if (!hasRating) {
-          // Only mark as sick day if there's no rating
-          next[key] = true;
-          // If marking as sick day, remove day-off
-          if (setDayOffs) {
-            setDayOffs((prevDayOffs) => {
-              const nextDayOffs = { ...prevDayOffs };
-              delete nextDayOffs[key];
-              return nextDayOffs;
-            });
-          }
-        }
-
-        return next;
-      });
-      return;
-    }
-
-    // Allow rating even if day is marked as day off
-    if (setRatings) {
-      setRatings((prev) => {
-        const current = prev[key];
-        let next: number | null;
-        if (current === undefined || current === null) {
-          next = 0;
-        } else if (current >= scale.length - 1) {
-          next = null;
-        } else {
-          next = (current + 1) as number;
-        }
-
-        return { ...prev, [key]: next };
-      });
-    }
-  };
-
-  const handleWeekCycle = (weekKey: string, hasDayScores: boolean) => {
-    const key = weekKey;
-    if (selectedWeekKey !== weekKey) {
-      setSelectedWeekKey(weekKey);
-      return;
-    }
-
-    if (readOnly) return;
-
-    if (dayOffMode && setDayOffs) {
-      const targetWeek = weeks.find((week) => week.weekKey === weekKey);
-      if (!targetWeek) {
-        return;
-      }
-      setDayOffs((prev) => {
-        const next = { ...prev };
-        const eligibleKeys = targetWeek.dayKeys.filter(
-          (dayKey) => ratings[dayKey] === null || ratings[dayKey] === undefined
-        );
-        if (eligibleKeys.length === 0) {
-          return next;
-        }
-        const hasAll = eligibleKeys.every((dayKey) => next[dayKey]);
-        if (hasAll) {
-          eligibleKeys.forEach((dayKey) => {
-            delete next[dayKey];
-          });
-        } else {
-          eligibleKeys.forEach((dayKey) => {
-            next[dayKey] = true;
-          });
-        }
-        return next;
-      });
-      return;
-    }
-
-    if (isSickDayMode && setSickDays) {
-      const targetWeek = weeks.find((week) => week.weekKey === weekKey);
-      if (!targetWeek) {
-        return;
-      }
-      setSickDays((prev) => {
-        const next = { ...prev };
-        const eligibleKeys = targetWeek.dayKeys.filter(
-          (dayKey) => ratings[dayKey] === null || ratings[dayKey] === undefined
-        );
-        if (eligibleKeys.length === 0) {
-          return next;
-        }
-        const hasAll = eligibleKeys.every((dayKey) => next[dayKey]);
-        if (hasAll) {
-          eligibleKeys.forEach((dayKey) => {
-            delete next[dayKey];
-          });
-        } else {
-          eligibleKeys.forEach((dayKey) => {
-            next[dayKey] = true;
-          });
-        }
-        return next;
-      });
-      return;
-    }
-
-    // Only cycle rating if there are no day scores
-    if (!hasDayScores && setRatings) {
-      setRatings((prev) => {
-        const current = prev[key];
-        let next: number | null;
-        if (current === undefined || current === null) {
-          next = 0;
-        } else if (current >= scale.length - 1) {
-          next = null;
-        } else {
-          next = (current + 1) as number;
-        }
-
-        return { ...prev, [key]: next };
-      });
-    }
-  };
-
-  const daysInMonth = (targetYear: number, monthIndex: number) => {
-    return new Date(targetYear, monthIndex + 1, 0).getDate();
-  };
-
-  const handleDayHover = (
-    event: React.MouseEvent<HTMLButtonElement>,
-    monthIndex: number,
-    dayOfMonth: number
-  ) => {
-    if (mode !== "day") return;
-    const containerRect = dayGridRef.current?.getBoundingClientRect();
-    if (!containerRect) {
-      setHoveredDayDisplay(null);
-      return;
-    }
-    const date = new Date(year, monthIndex, dayOfMonth);
-    const label = date.toLocaleDateString(undefined, {
-      weekday: "short",
-      day: "2-digit",
-      month: "short",
-    });
-    const tooltipWidth = 160;
-    const tooltipHeight = 36;
-    const padding = 10;
-    const sideOffset = 10;
-    const cellRect = event.currentTarget.getBoundingClientRect();
-    const preferRightSide = monthIndex < 6;
-    const relativeCellCenterY =
-      cellRect.top - containerRect.top + cellRect.height / 2;
-
-    const targetX = preferRightSide
-      ? cellRect.right - containerRect.left + sideOffset
-      : cellRect.left - containerRect.left - sideOffset;
-    const clampedX = preferRightSide
-      ? Math.min(
-          containerRect.width - tooltipWidth - padding,
-          Math.max(padding, targetX)
-        )
-      : Math.max(
-          tooltipWidth + padding,
-          Math.min(containerRect.width - padding, targetX)
-        );
-    const clampedY = Math.min(
-      containerRect.height - tooltipHeight / 2 - padding,
-      Math.max(tooltipHeight / 2 + padding, relativeCellCenterY)
-    );
-    setHoveredDayDisplay({
-      label,
-      x: clampedX,
-      y: clampedY,
-      align: preferRightSide ? "right" : "left",
-    });
-  };
-
-  const clearDayHover = () => {
-    setHoveredDayDisplay(null);
-  };
-
-  const renderDayGrid = () => (
-    <div
-      className={`rounded-md px-3 py-4 sm:p-6 ${
-        theme === "dark"
-          ? "bg-[color-mix(in_srgb,var(--background)_92%,var(--foreground)_8%)]"
-          : "bg-[#ffffff]"
-      }`}
-    >
-      <div
-        className="grid gap-1.5 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] sm:gap-2"
-        style={{
-          gridTemplateColumns: `repeat(12, minmax(0, 1fr))`,
-        }}
-      >
-        {months.map((monthIndex) => {
-          const monthName = new Date(2020, monthIndex).toLocaleString(undefined, {
-            month: "short",
-          });
-          const quarterColor =
-            Math.floor(monthIndex / 3) % 2 === 0
-              ? "text-amber-600"
-              : "text-cyan-600";
-          return (
-            <span key={`month-${monthIndex}`} className={`text-center font-medium sm:font-bold ${quarterColor}`}>
-              {monthName}
-            </span>
-          );
-        })}
-      </div>
-      <div
-        ref={dayGridRef}
-        className="relative mt-2"
-        onMouseLeave={clearDayHover}
-      >
-        {hoveredDayDisplay && (
-          <div
-            className="pointer-events-none absolute z-50"
-            style={{
-              left: hoveredDayDisplay.x,
-              top: hoveredDayDisplay.y,
-              transform:
-                hoveredDayDisplay.align === "right"
-                  ? "translate(0, -50%)"
-                  : "translate(-100%, -50%)",
-            }}
-          >
-            <span className="rounded-full border border-foreground bg-background px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-foreground shadow whitespace-nowrap">
-              {hoveredDayDisplay.label}
-            </span>
-          </div>
-        )}
-        {days.map((dayOfMonth) => {
-          return (
-          <div
-            key={`row-${dayOfMonth}`}
-            className="grid items-center gap-x-1 sm:gap-x-2"
-            style={{
-              gridTemplateColumns: `repeat(12, minmax(0, 1fr))`,
-            }}
-          >
-            {months.map((monthIndex) => {
-              const key = `${year}-${monthIndex + 1}-${dayOfMonth}`;
-              const storedValue = ratings[key];
-              const hasValue =
-                storedValue !== null && storedValue !== undefined;
-              const currentValue = hasValue ? Math.min(storedValue!, scale.length - 1) : 0;
-              const scaleEntry = scale[currentValue];
-              const isDayOff = isDayOffComputed(key, year, monthIndex, dayOfMonth);
-              const isSickDay = sickDays[key] === true;
-              const validDay =
-                dayOfMonth <= daysInMonth(year, monthIndex);
-
-              if (!validDay) {
-                return (
-                  <span
-                    key={`${key}-empty`}
-                    className="h-4 w-full"
-                    aria-hidden="true"
-                  />
-                );
-              }
-
-              const today = new Date();
-              const isToday =
-                today.getFullYear() === year &&
-                today.getMonth() === monthIndex &&
-                today.getDate() === dayOfMonth;
-
-              // Check if the previous day (day above) is today (so this day should have golden top border)
-              const isPreviousDayToday =
-                today.getFullYear() === year &&
-                today.getMonth() === monthIndex &&
-                today.getDate() === dayOfMonth - 1;
-
-              // Week border logic (all months)
-              let weekBorderClass = "";
-              // Find the week this day belongs to
-              const currentWeek = weeks.find((week) =>
-                week.dayKeys.includes(`${year}-${monthIndex + 1}-${dayOfMonth}`)
-              );
-
-              if (currentWeek) {
-                // Check if this is the first day in this month that belongs to this week
-                const isFirstInMonth = !currentWeek.dayKeys.some(dayKey => {
-                  const [y, m, d] = dayKey.split("-").map(Number);
-                  return y === year && m === monthIndex + 1 && d! < dayOfMonth;
-                });
-
-                // Check if next day in this month is in same week
-                const nextDayInWeek = dayOfMonth < daysInMonth(year, monthIndex) && currentWeek.dayKeys.includes(`${year}-${monthIndex + 1}-${dayOfMonth + 1}`);
-
-                // Check if current day or previous day has a rating/color or is a day off
-                const currentDayHasColor = (ratings[key] !== null && ratings[key] !== undefined) || isDayOffComputed(key, year, monthIndex, dayOfMonth);
-                const previousDayKey = `${year}-${monthIndex + 1}-${dayOfMonth - 1}`;
-                const previousDayHasColor = (ratings[previousDayKey] !== null && ratings[previousDayKey] !== undefined) || isDayOffComputed(previousDayKey, year, monthIndex, dayOfMonth - 1);
-
-                // Check if current day or next day has a rating/color or is a day off
-                const nextDayKey = `${year}-${monthIndex + 1}-${dayOfMonth + 1}`;
-                const nextDayHasColor = (ratings[nextDayKey] !== null && ratings[nextDayKey] !== undefined) || isDayOffComputed(nextDayKey, year, monthIndex, dayOfMonth + 1);
-
-                // Keep separators visible when adjacent days are both 25-50% (rating value 1)
-                const currentIsMediumScore = ratings[key] === 1;
-                const previousIsMediumScore = ratings[previousDayKey] === 1;
-                const nextIsMediumScore = ratings[nextDayKey] === 1;
-                const mediumPairWithPrevious = currentIsMediumScore && previousIsMediumScore;
-                const mediumPairWithNext = currentIsMediumScore && nextIsMediumScore;
-
-                // Check if both current and previous are day-offs (no ratings)
-                const currentIsDayOff = isDayOff && !hasValue;
-                const previousIsDayOff = isDayOffComputed(previousDayKey, year, monthIndex, dayOfMonth - 1) && (ratings[previousDayKey] === null || ratings[previousDayKey] === undefined);
-                const bothDayOffs = currentIsDayOff && previousIsDayOff;
-
-                // Check if both current and next are day-offs (no ratings)
-                const nextIsDayOff = isDayOffComputed(nextDayKey, year, monthIndex, dayOfMonth + 1) && (ratings[nextDayKey] === null || ratings[nextDayKey] === undefined);
-                const bothDayOffsBottom = currentIsDayOff && nextIsDayOff;
-
-                // Darken separators when adjacent cells are both sick leave (blue)
-                const previousHasValue = ratings[previousDayKey] !== null && ratings[previousDayKey] !== undefined;
-                const nextHasValue = ratings[nextDayKey] !== null && ratings[nextDayKey] !== undefined;
-                const currentIsSickOnly = isSickDay && !hasValue;
-                const previousIsSickOnly = sickDays[previousDayKey] === true && !previousHasValue;
-                const nextIsSickOnly = sickDays[nextDayKey] === true && !nextHasValue;
-                const bothSickDays = currentIsSickOnly && previousIsSickOnly;
-                const bothSickDaysBottom = currentIsSickOnly && nextIsSickOnly;
-                const sickPairAtWeekBoundary = !nextDayInWeek && currentIsSickOnly && nextIsSickOnly;
-
-                const isSelectedWeek = selectedWeekKey === currentWeek.weekKey;
-                const isFirstDayOfWeek =
-                  currentWeek.dayKeys[0] === `${year}-${monthIndex + 1}-${dayOfMonth}`;
-                const isLastDayOfWeek =
-                  currentWeek.dayKeys[currentWeek.dayKeys.length - 1] ===
-                  `${year}-${monthIndex + 1}-${dayOfMonth}`;
-
-                // Top border: if first in month and (current or previous has color/PTO), make it darker
-                // In dark mode, if both are day-offs, use lighter border
-                const borderTop = isFirstInMonth
-                  ? (currentDayHasColor || previousDayHasColor ? "border-t border-t-gray-500" : "border-t border-t-gray-400")
-                  : (theme === "dark" && bothDayOffs
-                      ? "border-t-[0.5px] border-t-gray-600"
-                      : bothSickDays
-                        ? "border-t border-t-gray-400"
-                      : mediumPairWithPrevious
-                        ? (theme === "dark" ? "border-t-[0.5px] border-t-gray-500" : "border-t-[0.5px] border-t-[#e5e7eb]")
-                        : "border-t-[0.5px] border-t-gray-300");
-                // Bottom border: if last in week and (current or next has color/PTO), make it darker
-                // In dark mode, if both are day-offs, use lighter border
-                const borderBottom = !nextDayInWeek
-                  ? (sickPairAtWeekBoundary
-                      ? "border-b border-b-gray-700"
-                      : currentDayHasColor || nextDayHasColor
-                        ? "border-b border-b-gray-500"
-                        : "border-b border-b-gray-400")
-                  : (theme === "dark" && bothDayOffsBottom
-                      ? "border-b-[0.5px] border-b-gray-600"
-                      : bothSickDaysBottom
-                        ? "border-b border-b-gray-400"
-                      : mediumPairWithNext
-                        ? (theme === "dark" ? "border-b-[0.5px] border-b-gray-500" : "border-b-[0.5px] border-b-[#e5e7eb]")
-                        : "border-b-[0.5px] border-b-gray-300");
-
-                // Left and right borders: use white in dark mode for selected week
-                let borderSides = "";
-                if (isSelectedWeek) {
-                  borderSides = theme === "dark"
-                    ? "border-l-[3px] border-r-[3px] border-l-white border-r-white"
-                    : "border-l-2 border-r-2 border-l-slate-700 border-r-slate-700";
-                } else {
-                  borderSides = "border-l border-r border-l-gray-400 border-r-gray-400";
-                }
-
-                // Top and bottom overrides for selected week
-                let topBottomOverride = "";
-                if (isSelectedWeek) {
-                  if (isFirstDayOfWeek) {
-                    topBottomOverride = theme === "dark"
-                      ? "border-t-[3px] border-t-white"
-                      : "border-t-2 border-t-slate-700";
-                  } else if (isLastDayOfWeek) {
-                    topBottomOverride = theme === "dark"
-                      ? "border-b-[3px] border-b-white"
-                      : "border-b-2 border-b-slate-700";
-                  }
-                }
-
-                weekBorderClass = `${borderTop} ${borderBottom} ${borderSides} ${topBottomOverride}`;
-              }
-
-              const isTodayInSelectedWeek = isToday && currentWeek && selectedWeekKey === currentWeek.weekKey;
-
-              return (
+      <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
+        <section className="okr-card border-none px-4 py-3 sm:px-5 sm:py-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  key={key}
-                  onClick={() => handleCycle(monthIndex, dayOfMonth)}
-                  onMouseEnter={(event) =>
-                    handleDayHover(event, monthIndex, dayOfMonth)
-                  }
-                  onKeyDown={(e) => {
-                    if (!readOnly && setRatings) {
-                      // Handle Delete/Backspace to clear rating
-                      if (e.key === "Delete" || e.key === "Backspace") {
-                        e.preventDefault();
-                        setRatings((prev) => ({ ...prev, [key]: null }));
-                      }
-                      // Handle number keys 1-4 to set rating directly
-                      else if (e.key >= "1" && e.key <= "4") {
-                        const ratingValue = parseInt(e.key) - 1; // Map 1→0, 2→1, 3→2, 4→3
-                        // Only allow if within the current scale range
-                        if (ratingValue < scale.length) {
-                          e.preventDefault();
-                          setRatings((prev) => ({ ...prev, [key]: ratingValue }));
-                        }
-                      }
-                    }
-                  }}
-                  className={`h-4 w-full text-[10px] font-semibold text-transparent transition focus:text-transparent relative ${
-                    theme === "dark"
-                      ? "hover:outline hover:outline-1 hover:outline-offset-[-1px] hover:outline-slate-200"
-                      : "hover:outline hover:outline-2 hover:outline-offset-[-1px] hover:outline-orange-500"
-                  } ${weekBorderClass} ${
-                    hasValue
-                      ? scaleEntry.color
-                      : isSickDay
-                        ? "bg-[#bfdbfe] dark:bg-[#3b82f6]"
-                        : isDayOff
-                          ? "day-off-bg"
-                          : "bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]"
-                  }`}
-                  aria-label={`Day ${dayOfMonth} of ${new Date(2020, monthIndex).toLocaleString(undefined, {
-                    month: "long",
-                  })}, rating ${scaleEntry.label}`}
+                  onClick={() => shiftMonth(-1)}
+                  className="rounded-full px-2 py-1 text-lg text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+                  aria-label="Previous month"
                 >
-                  {isToday && (
-                    <span className={`absolute right-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-red-500 rounded-full ${isTodayInSelectedWeek ? 'today-dot' : ''}`} />
-                  )}
-                  {hasValue ? currentValue : ""}
+                  ‹
                 </button>
-              );
-            })}
-          </div>
-        );
-        })}
-      </div>
-      <div className="mt-6 flex flex-col gap-4 text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:flex-row sm:items-center sm:justify-between sm:text-xs">
-        <div className="flex flex-col gap-2">
-          {showLegend && (
-            <>
-              <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
-                Goals achieved (self-rated)
-              </span>
-              <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
-                {scale.map((item) => (
-                  <div key={item.value} className="flex items-center gap-2 whitespace-nowrap">
-                    <span
-                      className={`h-3 w-3 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4`}
-                      aria-hidden="true"
-                    />
-                    <span>{item.label}</span>
-                  </div>
-                ))}
+                <button
+                  type="button"
+                  onClick={resetToCurrentMonth}
+                  className="rounded-md px-2 py-1 text-xl font-bold tracking-normal transition hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] sm:text-2xl"
+                  aria-label="Return to current month"
+                >
+                  {monthLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => shiftMonth(1)}
+                  className="rounded-full px-2 py-1 text-lg text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+                  aria-label="Next month"
+                >
+                  ›
+                </button>
               </div>
-              <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
-                <div className="flex items-center gap-2 whitespace-nowrap">
-                  <span
-                    className="h-3 w-3 rounded day-off-bg border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4"
-                    aria-hidden="true"
-                  />
-                  <span>Day off</span>
-                </div>
-                <div className="flex items-center gap-2 whitespace-nowrap">
-                  <span
-                    className="h-3 w-3 rounded bg-[#bfdbfe] dark:bg-[#3b82f6] border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4"
-                    aria-hidden="true"
-                  />
-                  <span>Sick leave</span>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-        <div className="flex flex-row items-center justify-end gap-2 sm:gap-3">
-          {/* {yearControl} */}
-          {toggleButton}
-          {!readOnly && dayOffControl}
-        </div>
-          </div>
-        </div>
-  );
+            </div>
 
-  const renderWeekGrid = () => {
-    return (
-      <div
-        className={`rounded-md px-3 py-4 sm:p-6 ${
-          theme === "dark"
-            ? "bg-[color-mix(in_srgb,var(--background)_92%,var(--foreground)_8%)]"
-            : "bg-[#ffffff]"
-        }`}
-      >
-        <div
-          className="grid gap-1.5 text-xs text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] sm:gap-2"
-          style={{
-            gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
-          }}
-        >
-          {months.map((monthIndex) => {
-            const monthName = new Date(2020, monthIndex).toLocaleString(undefined, {
-              month: "short",
-            });
-            const quarterColor =
-              Math.floor(monthIndex / 3) % 2 === 0
-                ? "text-amber-600"
-                : "text-cyan-600";
-            return (
-              <span key={`week-month-${monthIndex}`} className={`text-center font-medium sm:font-bold ${quarterColor}`}>
-                {monthName}
+            <div className="flex flex-wrap items-center gap-3 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
+              <span className="font-semibold text-[color-mix(in_srgb,var(--foreground)_75%,transparent)]">
+                Score {averageScore}%
               </span>
-            );
-          })}
-        </div>
-        <div
-          className="mt-4 grid gap-1.5 sm:gap-3"
-          style={{
-            gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
-          }}
-        >
-          {months.map((monthIndex) => (
-            <div key={`month-col-${monthIndex}`} className="space-y-1 sm:space-y-2">
-              {weeksByMonth[monthIndex]!.map((week) => {
-                const dayScores = week.dayKeys
-                  .map((key) =>
-                    ratings[key] !== null && ratings[key] !== undefined
-                      ? (ratings[key] as number)
-                      : null
-                  )
-                  .filter((value): value is number => value !== null);
-                const hasDayScores = dayScores.length > 0;
-                const dayAverage = hasDayScores
-                  ? Number(
-                      (
-                        dayScores.reduce((sum, value) => sum + value, 0) /
-                        dayScores.length
-                      ).toFixed(1)
-                    )
-                  : null;
-                const manualWeekKey = week.weekKey;
-                const manualScoreRaw = ratings[manualWeekKey];
-                const manualScore =
-                  manualScoreRaw !== null && manualScoreRaw !== undefined
-                    ? (manualScoreRaw as number)
-                    : null;
-                const displayValue = hasDayScores
-                  ? ""
-                  : manualScore ?? "";
-                const colorIndex = hasDayScores
-                  ? Math.max(
-                      0,
-                      Math.min(
-                        scale.length - 1,
-                        Math.round(dayAverage ?? 0)
-                      )
-                    )
-                  : manualScore !== null && manualScore !== undefined
-                    ? Math.min(manualScore, scale.length - 1)
-                    : null;
-                const scaleClass =
-                  colorIndex !== null && colorIndex !== undefined
-                    ? scale[colorIndex].color
-                    : "bg-[color-mix(in_srgb,var(--foreground)_2%,transparent)]";
-                const isSelectedWeek = selectedWeekKey === week.weekKey;
-                const dayOffCount = week.dayKeys.reduce(
-                  (count, dayKey) => count + (dayOffs[dayKey] ? 1 : 0),
-                  0
-                );
-                const isFullWeekOff = dayOffCount === week.dayKeys.length;
-                const hasAnyDayOff = dayOffCount > 0;
-                const weekFillClass = isFullWeekOff ? "day-off-bg" : scaleClass;
-                const showPartialDayOff = !isFullWeekOff && hasAnyDayOff;
-                // Check if this week contains today
-                const today = new Date();
-                const isThisWeek = week.dayKeys.some((dayKey) => {
-                  const [y, m, d] = dayKey.split("-").map(Number);
-                  const keyDate = new Date(y!, m! - 1, d);
-                  return (
-                    keyDate.getFullYear() === today.getFullYear() &&
-                    keyDate.getMonth() === today.getMonth() &&
-                    keyDate.getDate() === today.getDate()
-                  );
-                });
-                const isThisWeekSelected = isThisWeek && isSelectedWeek;
-                // Determine if this is the first or last week in the month
-                const monthWeeks = weeksByMonth[monthIndex]!;
-                const weekIndexInMonth = monthWeeks.findIndex(w => w.weekKey === week.weekKey);
-                const isFirstWeekInMonth = weekIndexInMonth === 0;
-                const isLastWeekInMonth = weekIndexInMonth === monthWeeks.length - 1;
-                // Build selected week border classes
-                const selectedWeekBorderClass = isSelectedWeek ? (theme === "dark" ? "border-2 border-white" : "border-2 border-black") : "";
+              {showLegend ? (
+                <>
+                  {scale.map((item) => (
+                    <span key={item.value} className="flex items-center gap-1.5">
+                      <span
+                        className={`h-2.5 w-2.5 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]`}
+                      />
+                      {item.label}
+                    </span>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setIsDayOffMode((current) => !current)}
+                    className={`flex items-center gap-1.5 rounded-full border px-2 py-1 font-semibold transition ${
+                      isDayOffMode
+                        ? "border-[#8dc8e6] bg-[#eef7fc] text-[#3f6f88]"
+                        : "border-transparent hover:border-[color-mix(in_srgb,var(--foreground)_20%,transparent)]"
+                    }`}
+                    aria-pressed={isDayOffMode}
+                  >
+                    <span className="h-2.5 w-2.5 rounded day-off-bg border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]" />
+                    Day off
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-5 overflow-x-auto pb-2">
+            <div
+              className="grid min-w-[980px] gap-1"
+              style={{ gridTemplateColumns: `repeat(${monthDays.length}, minmax(28px, 1fr))` }}
+            >
+              {monthDays.map((day) => {
+                const storedValue = ratings[day.key];
+                const hasValue = storedValue !== null && storedValue !== undefined;
+                const currentValue = hasValue ? Math.min(storedValue!, scale.length - 1) : 0;
+                const scaleEntry = scale[currentValue];
+                const dayOff = isDayOffComputed(day.date, day.key);
+                const isToday = day.key === todayKey;
+                const isSelectedDay = day.key === selectedDayKey;
+
                 return (
-                  <div key={`week-card-${week.weekNumber}`}>
-                    <button
-                      type="button"
-                      onClick={() => handleWeekCycle(week.weekKey, hasDayScores)}
-                      onKeyDown={(e) => {
-                        if (!readOnly && setRatings && !hasDayScores) {
-                          const key = week.weekKey;
-                          // Handle Delete/Backspace to clear rating
-                          if (e.key === "Delete" || e.key === "Backspace") {
-                            e.preventDefault();
-                            setRatings((prev) => ({ ...prev, [key]: null }));
-                          }
-                          // Handle number keys 1-4 to set rating directly
-                          else if (e.key >= "1" && e.key <= "4") {
-                            const ratingValue = parseInt(e.key) - 1; // Map 1→0, 2→1, 3→2, 4→3
-                            // Only allow if within the current scale range
-                            if (ratingValue < scale.length) {
-                              e.preventDefault();
-                              setRatings((prev) => ({ ...prev, [key]: ratingValue }));
-                            }
-                          }
-                        }
-                      }}
-                      className={`relative flex h-5 w-full items-center justify-center border text-[10px] font-semibold text-transparent transition focus:text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:h-5 ${
-                        theme === "dark"
-                          ? "hover:outline hover:outline-1 hover:outline-offset-[-1px] hover:outline-slate-200"
-                          : "hover:outline hover:outline-2 hover:outline-offset-[-1px] hover:outline-orange-500"
-                      } ${
-                        hasDayScores
-                          ? "cursor-pointer"
-                          : "hover:opacity-90"
-                      } ${weekFillClass} border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] ${selectedWeekBorderClass}`}
-                      title={`${week.rangeLabel}${hasDayScores ? " (rating locked from daily view)" : ""}`}
-                      aria-label={
-                        hasDayScores
-                          ? `Week ${week.weekNumber} ${week.rangeLabel}, averaged score ${dayAverage}, click to select week`
-                          : `Week ${week.weekNumber} ${week.rangeLabel}, current score ${manualScore ?? "unset"}, click to cycle rating`
-                      }
-                    >
-                      {isThisWeek && (
-                        <span className={`absolute right-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-red-500 rounded-full ${isThisWeekSelected ? 'today-dot' : ''}`} />
+                  <button
+                    key={day.key}
+                    type="button"
+                    onClick={() => handleDayClick(day.date, day.key)}
+                    className={`group relative flex h-14 flex-col items-center justify-center gap-1 rounded-md border px-1.5 py-1 text-center transition hover:border-orange-500 ${
+                      hasValue
+                        ? `${scaleEntry.color} border-[color-mix(in_srgb,var(--foreground)_18%,transparent)]`
+                        : dayOff
+                          ? "day-off-bg border-[color-mix(in_srgb,var(--foreground)_14%,transparent)]"
+                          : "border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_3%,transparent)]"
+                    } ${isToday ? "ring-2 ring-inset ring-red-500" : isSelectedDay ? "ring-2 ring-inset ring-slate-700" : ""}`}
+                    aria-label={`${day.weekday}, ${monthLabel} ${day.dayOfMonth}`}
+                    title={`${day.weekday}, ${day.dayOfMonth}`}
+                  >
+                    <span className="text-[10px] font-semibold uppercase text-[color-mix(in_srgb,var(--foreground)_58%,transparent)]">
+                      {day.weekday}
+                    </span>
+                    <span className="text-lg font-bold leading-none text-foreground">{day.dayOfMonth}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-5 grid w-full gap-5 text-left lg:grid-cols-[minmax(0,42rem)_minmax(0,1fr)]">
+          <div ref={goalsSectionRef} className="w-full">
+          <div className="okr-card border-none px-5 py-5">
+            <div>
+              {goals.map((goal) => {
+                const isActiveGoal = activeGoalCardId === goal.id;
+                return (
+                  <div
+                    key={goal.id}
+                    className="relative py-4 first:pt-1 last:pb-2 after:absolute after:bottom-0 after:left-1/2 after:h-px after:w-1/2 after:-translate-x-1/2 after:bg-[color-mix(in_srgb,var(--foreground)_5%,transparent)] last:after:hidden"
+                    onClick={() => setActiveGoalCardId(goal.id)}
+                    onFocusCapture={() => setActiveGoalCardId(goal.id)}
+                  >
+                    <div className="flex items-start gap-3">
+                      {isActiveGoal ? (
+                        <input
+                          type="text"
+                          value={goal.title}
+                          onChange={(event) => updateGoalTitle(goal.id, event.target.value)}
+                          className="kr-apple-font min-w-0 flex-1 border-b border-transparent bg-transparent text-left text-base font-light text-foreground outline-none transition focus:border-foreground sm:text-2xl"
+                          aria-label="Goal title"
+                        />
+                      ) : (
+                        <h2 className="kr-apple-font min-w-0 flex-1 text-left text-base font-light text-foreground sm:text-2xl">
+                          {goal.title}
+                        </h2>
                       )}
-                      {displayValue}
-                    </button>
+                      {isActiveGoal ? (
+                        <button
+                          type="button"
+                          onClick={() => removeGoal(goal.id)}
+                          className="text-xs text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] transition hover:text-foreground"
+                          aria-label="Remove goal"
+                        >
+                          ✕
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="mt-2 space-y-0">
+                      {goal.keyResults.map((kr) => (
+                        <div key={kr.id} className="rounded-2xl px-3 py-0.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            {isActiveGoal ? (
+                              <input
+                                type="text"
+                                value={kr.title}
+                                onChange={(event) =>
+                                  updateKeyResultTitle(goal.id, kr.id, event.target.value)
+                                }
+                                className="kr-apple-font min-w-50 flex-1 border-b border-transparent bg-transparent text-left text-[15px] font-medium text-foreground outline-none transition focus:border-foreground"
+                                aria-label="Key result title"
+                              />
+                            ) : (
+                              <span className="kr-apple-font min-w-50 flex-1 text-left text-[15px] font-medium text-foreground">
+                                {kr.title || "Untitled key result"}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => cycleKeyResultStatus(goal.id, kr.id)}
+                              className={`rounded-full px-2.5 py-0 text-lg ${goalStatusBadge(kr.status)}`}
+                              title={
+                                kr.status === "started"
+                                  ? "Started"
+                                  : kr.status === "on-hold"
+                                    ? "On hold"
+                                    : "Completed"
+                              }
+                            >
+                              <StatusIcon status={kr.status} />
+                            </button>
+                            {isActiveGoal ? (
+                              <button
+                                type="button"
+                                onClick={() => removeKeyResult(goal.id, kr.id)}
+                                className="text-xs text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] transition hover:text-foreground"
+                                aria-label="Remove key result"
+                              >
+                                ✕
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                      {isActiveGoal ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-3 px-3">
+                          <input
+                            type="text"
+                            value={krDrafts[goal.id] ?? ""}
+                            onChange={(event) =>
+                              setKrDrafts((previous) => ({ ...previous, [goal.id]: event.target.value }))
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") addKeyResult(goal.id);
+                            }}
+                            placeholder="Add a key result"
+                            className="min-w-55 flex-1 border-b border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => addKeyResult(goal.id)}
+                            className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--foreground)_75%,transparent)] transition hover:border-foreground"
+                          >
+                            Add KR
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}
             </div>
-          ))}
-        </div>
-        <div className="mt-6 flex flex-col gap-4 text-[10px] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] sm:flex-row sm:items-center sm:justify-between sm:text-xs">
-          <div className="flex flex-col gap-2">
-            {showLegend && (
-              <>
-                <span className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">
-                  Goals achieved (self-rated)
-                </span>
-                <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
-                  {scale.map((item) => (
-                    <div key={item.value} className="flex items-center gap-2 whitespace-nowrap">
-                      <span
-                        className={`h-3 w-3 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4`}
-                        aria-hidden="true"
-                      />
-                      <span>{item.label}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
-                  <div className="flex items-center gap-2 whitespace-nowrap">
-                    <span
-                      className="h-3 w-3 rounded day-off-bg border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4"
-                      aria-hidden="true"
-                    />
-                    <span>Day off</span>
-                  </div>
-                  <div className="flex items-center gap-2 whitespace-nowrap">
-                    <span
-                      className="h-3 w-3 rounded bg-[#bfdbfe] dark:bg-[#3b82f6] border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] sm:h-4 sm:w-4"
-                      aria-hidden="true"
-                    />
-                    <span>Sick leave</span>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        <div className="flex flex-row items-center justify-end gap-2 sm:gap-3">
-          {/* {yearControl} */}
-          {toggleButton}
-          {!readOnly && dayOffControl}
-        </div>
-        </div>
-    </div>
-  );
-  };
-
-  return mode === "day" ? renderDayGrid() : renderWeekGrid();
-};
-
-type WeeklyScheduleProps = {
-  scheduleEntries: Record<string, ScheduleEntry[]>;
-  setScheduleEntries: React.Dispatch<
-    React.SetStateAction<Record<string, ScheduleEntry[]>>
-  >;
-  weekStartDay: WeekdayIndex;
-};
-
-const WeeklySchedule = ({
-  scheduleEntries,
-  setScheduleEntries,
-  weekStartDay,
-}: WeeklyScheduleProps) => {
-  const [currentWeekAnchor, setCurrentWeekAnchor] = useState(() =>
-    getWeekStart(new Date(), weekStartDay)
-  );
-  const [activeEntry, setActiveEntry] = useState<EditingEntryState | null>(null);
-  const [draggedEntry, setDraggedEntry] = useState<{ dayKey: string; index: number } | null>(null);
-
-  const currentWeekStart = useMemo(
-    () => getWeekStart(currentWeekAnchor, weekStartDay),
-    [currentWeekAnchor, weekStartDay]
-  );
-
-  const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, idx) => {
-      const day = new Date(currentWeekStart);
-      day.setDate(currentWeekStart.getDate() + idx);
-      return day;
-    });
-  }, [currentWeekStart]);
-
-  const weekRangeLabel = useMemo(() => {
-    const weekStart = weekDays[0];
-    if (!weekStart) {
-      return "";
-    }
-    return weekStart.toLocaleDateString(undefined, {
-      month: "long",
-      year: "numeric",
-    });
-  }, [weekDays]);
-
-  const weekInputValue = useMemo(
-    () => formatISOWeekInputValue(currentWeekStart),
-    [currentWeekStart]
-  );
-
-  const goToWeek = (date: Date) => {
-    setCurrentWeekAnchor(getWeekStart(date, weekStartDay));
-  };
-
-  const handleWeekNavigation = (direction: -1 | 1) => {
-    setCurrentWeekAnchor((prev) => {
-      const anchor = getWeekStart(prev, weekStartDay);
-      const next = new Date(anchor);
-      next.setDate(anchor.getDate() + direction * 7);
-      return next;
-    });
-  };
-
-  const handleWeekPickerChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const { value } = event.target;
-    if (!value) {
-      return;
-    }
-    const parsed = parseISOWeekInputValue(value);
-    if (parsed) {
-      setCurrentWeekAnchor(getWeekStart(parsed, weekStartDay));
-    }
-  };
-  const formatDayKey = (date: Date) => {
-    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-  };
-
-  const parseDayKey = (key: string) => {
-    const [yearStr, monthStr, dayStr] = key.split("-").map(Number);
-    if (
-      !Number.isFinite(yearStr) ||
-      !Number.isFinite(monthStr) ||
-      !Number.isFinite(dayStr)
-    ) {
-      return null;
-    }
-    const parsed = new Date(yearStr, monthStr - 1, dayStr);
-    if (Number.isNaN(parsed.getTime())) {
-      return null;
-    }
-    return parsed;
-  };
-
-  const getPreviousDayKey = (key: string) => {
-    const parsed = parseDayKey(key);
-    if (!parsed) {
-      return null;
-    }
-    parsed.setDate(parsed.getDate() - 1);
-    return formatDayKey(parsed);
-  };
-
-  const addEntry = (dayKey: string) => {
-    setScheduleEntries((prev) => {
-      const dayEntries = prev[dayKey] ?? [];
-      const { start, end } = nextEntryTimes(dayEntries);
-      const defaultTitle = "New task";
-      return {
-        ...prev,
-        [dayKey]: [
-          ...dayEntries,
-          createEntryWithColor({ time: start, endTime: end, title: defaultTitle }),
-        ],
-      };
-    });
-  };
-
-  const removeEntry = (
-    dayKey: string,
-    index: number,
-    meta?: EntryMeta,
-    scope: "single" | "future" = "future"
-  ): EntryResolution | null => {
-    let latestResolution: EntryResolution | null = null;
-    setScheduleEntries((prev) => {
-      const resolution = prepareEntriesForMutation(
-        prev,
-        dayKey,
-        index,
-        meta,
-        scope
-      );
-      latestResolution = resolution;
-      if (resolution.targetIndex === null) {
-        return prev;
-      }
-      const updated = { ...resolution.entries };
-      const entries = [...(updated[resolution.targetDayKey] || [])];
-      entries.splice(resolution.targetIndex, 1);
-      if (entries.length === 0) {
-        delete updated[resolution.targetDayKey];
-      } else {
-        updated[resolution.targetDayKey] = entries;
-      }
-      return updated;
-    });
-    return latestResolution;
-  };
-
-  const updateEntry = (
-    dayKey: string,
-    index: number,
-    field:
-      | "time"
-      | "endTime"
-      | "title"
-      | "color"
-      | "repeat"
-      | "repeatDays",
-    value: string | WeekdayIndex[],
-    meta?: EntryMeta,
-    scope: "single" | "future" = "future"
-  ): EntryResolution | null => {
-    let latestResolution: EntryResolution | null = null;
-    setScheduleEntries((prev) => {
-      const resolution = prepareEntriesForMutation(
-        prev,
-        dayKey,
-        index,
-        meta,
-        scope
-      );
-      latestResolution = resolution;
-      if (resolution.targetIndex === null) {
-        return prev;
-      }
-      const updated = { ...resolution.entries };
-      const entries = [...(updated[resolution.targetDayKey] || [])];
-      const currentEntry = { ...entries[resolution.targetIndex]! };
-
-      if (field === "repeat") {
-        const repeatValue = value as string;
-        if (repeatValue === "none") {
-          currentEntry.repeat = undefined;
-          currentEntry.repeatUntil = null;
-          currentEntry.repeatDays = undefined;
-        } else if (repeatValue === "daily") {
-          currentEntry.repeat = repeatValue as RepeatFrequency;
-          if (!currentEntry.repeatDays || currentEntry.repeatDays.length === 0) {
-            currentEntry.repeatDays = [...ALL_WEEKDAY_INDICES];
-          }
-        } else {
-          currentEntry.repeat = repeatValue as RepeatFrequency;
-          currentEntry.repeatDays = undefined;
-        }
-      } else if (field === "repeatDays") {
-        currentEntry.repeatDays = Array.isArray(value)
-          ? (value as WeekdayIndex[])
-          : undefined;
-      } else if (field === "time") {
-        currentEntry.time = value as string;
-      } else if (field === "endTime") {
-        currentEntry.endTime = value as string;
-      } else if (field === "title") {
-        currentEntry.title = value as string;
-      } else if (field === "color") {
-        currentEntry.color = value as string;
-      }
-
-      entries[resolution.targetIndex] = currentEntry;
-      updated[resolution.targetDayKey] = entries;
-      return updated;
-    });
-    return latestResolution;
-  };
-
-  const openEntryEditor = (
-    dayKey: string,
-    index: number,
-    meta: EntryMeta,
-    entryData: ScheduleEntry
-  ) => {
-    const isRecurring = Boolean(
-      entryData.repeat && entryData.repeat !== "none"
-    );
-    const canChooseScope =
-      isRecurring &&
-      Boolean(meta.originalDayKey) &&
-      meta.originalDayKey !== dayKey;
-
-    setActiveEntry({
-      dayKey,
-      index,
-      meta,
-      data: {
-        time: entryData.time ?? "",
-        endTime: entryData.endTime ?? "",
-        title: entryData.title ?? "",
-        color: entryData.color,
-        repeat: entryData.repeat,
-        repeatUntil: entryData.repeatUntil ?? null,
-        repeatDays: entryData.repeatDays ? [...entryData.repeatDays] : undefined,
-        skipDates: entryData.skipDates ? [...entryData.skipDates] : undefined,
-      },
-      scope: "future",
-      canChooseScope,
-    });
-  };
-
-  const closeEntryEditor = () => setActiveEntry(null);
-
-  const handleActiveFieldChange = (
-    field: "time" | "endTime" | "title" | "color" | "repeat",
-    value: string
-  ) => {
-    if (!activeEntry) {
-      return;
-    }
-    const resolution = updateEntry(
-      activeEntry.dayKey,
-      activeEntry.index,
-      field,
-      value,
-      activeEntry.meta,
-      activeEntry.scope
-    );
-    const nextEntryData = { ...activeEntry.data };
-    if (field === "repeat") {
-      const repeatValue = value as RepeatFrequency;
-      if (repeatValue === "none") {
-        nextEntryData.repeat = undefined;
-        nextEntryData.repeatUntil = null;
-        nextEntryData.repeatDays = undefined;
-      } else if (repeatValue === "daily") {
-        nextEntryData.repeat = repeatValue;
-        if (!nextEntryData.repeatDays || nextEntryData.repeatDays.length === 0) {
-          nextEntryData.repeatDays = [...ALL_WEEKDAY_INDICES];
-        }
-      } else {
-        nextEntryData.repeat = repeatValue;
-        nextEntryData.repeatDays = undefined;
-      }
-    } else {
-      nextEntryData[field] = value;
-    }
-    let nextState: EditingEntryState = {
-      ...activeEntry,
-      data: nextEntryData,
-    };
-    if (resolution && resolution.targetIndex !== null) {
-      nextState = {
-        ...nextState,
-        dayKey: resolution.targetDayKey,
-        index: resolution.targetIndex,
-        meta: {
-          originalDayKey: resolution.targetDayKey,
-          originalEntryIndex: resolution.targetIndex,
-        },
-      };
-      if (activeEntry.meta.originalDayKey !== resolution.targetDayKey) {
-        nextState = {
-          ...nextState,
-          canChooseScope: false,
-          scope: "single",
-          data: {
-            ...nextState.data,
-            repeat: undefined,
-            repeatUntil: null,
-            repeatDays: undefined,
-          },
-        };
-      }
-    }
-    setActiveEntry(nextState);
-  };
-
-  const handleActiveRepeatDaysToggle = (dayIndex: WeekdayIndex) => {
-    if (!activeEntry) {
-      return;
-    }
-    const currentDays = activeEntry.data.repeatDays ?? [];
-    const hasDay = currentDays.includes(dayIndex);
-    const nextDays = hasDay
-      ? currentDays.filter((day) => day !== dayIndex)
-      : [...currentDays, dayIndex].sort((a, b) => a - b);
-    const resolution = updateEntry(
-      activeEntry.dayKey,
-      activeEntry.index,
-      "repeatDays",
-      nextDays,
-      activeEntry.meta,
-      activeEntry.scope
-    );
-    let nextState: EditingEntryState = {
-      ...activeEntry,
-      data: {
-        ...activeEntry.data,
-        repeatDays: nextDays,
-      },
-    };
-    if (resolution && resolution.targetIndex !== null) {
-      nextState = {
-        ...nextState,
-        dayKey: resolution.targetDayKey,
-        index: resolution.targetIndex,
-        meta: {
-          originalDayKey: resolution.targetDayKey,
-          originalEntryIndex: resolution.targetIndex,
-        },
-      };
-      if (activeEntry.meta.originalDayKey !== resolution.targetDayKey) {
-        nextState = {
-          ...nextState,
-          canChooseScope: false,
-          scope: "single",
-          data: {
-            ...nextState.data,
-            repeat: undefined,
-            repeatUntil: null,
-            repeatDays: undefined,
-          },
-        };
-      }
-    }
-    setActiveEntry(nextState);
-  };
-
-  const convertEntryToSingleInstance = (
-    entry: EditingEntryState
-  ): EditingEntryState | null => {
-    if (
-      !entry.meta.originalDayKey ||
-      entry.meta.originalDayKey === entry.dayKey
-    ) {
-      return entry;
-    }
-    let latestResolution: EntryResolution | null = null;
-    setScheduleEntries((prev) => {
-      const resolution = prepareEntriesForMutation(
-        prev,
-        entry.dayKey,
-        entry.index,
-        entry.meta,
-        "single"
-      );
-      latestResolution = resolution;
-      return resolution.entries;
-    });
-    if (!latestResolution) {
-      return entry;
-    }
-    const resolutionResult = latestResolution as EntryResolution;
-    if (resolutionResult.targetIndex === null) {
-      return entry;
-    }
-    return {
-      ...entry,
-      dayKey: resolutionResult.targetDayKey,
-      index: resolutionResult.targetIndex,
-      meta: {
-        originalDayKey: resolutionResult.targetDayKey,
-        originalEntryIndex: resolutionResult.targetIndex,
-      },
-      canChooseScope: false,
-      scope: "single",
-      data: {
-        ...entry.data,
-        repeat: undefined,
-        repeatUntil: null,
-        repeatDays: undefined,
-      },
-    };
-  };
-
-  const handleScopeSelection = (scope: "single" | "future") => {
-    if (!activeEntry || !activeEntry.canChooseScope || scope === activeEntry.scope) {
-      return;
-    }
-    if (scope === "single" && activeEntry.scope !== "single") {
-      const converted = convertEntryToSingleInstance(activeEntry);
-      if (converted) {
-        setActiveEntry(converted);
-      }
-      return;
-    }
-    setActiveEntry({
-      ...activeEntry,
-      scope,
-    });
-  };
-
-  const handleDeleteActiveEntry = () => {
-    if (!activeEntry) {
-      return;
-    }
-    removeEntry(
-      activeEntry.dayKey,
-      activeEntry.index,
-      activeEntry.meta,
-      activeEntry.scope
-    );
-    setActiveEntry(null);
-  };
-
-  const isToday = (date: Date) => {
-    const today = new Date();
-    return (
-      date.getDate() === today.getDate() &&
-      date.getMonth() === today.getMonth() &&
-      date.getFullYear() === today.getFullYear()
-    );
-  };
-
-  const getEntriesForDay = (date: Date) => {
-    const dayKey = formatDayKey(date);
-    type EntryWithMeta = ScheduleEntry & {
-      repeatColor?: string;
-      originalDayKey: string;
-      originalEntryIndex: number;
-      isRepeated?: boolean;
-    };
-    const directEntries: EntryWithMeta[] = (scheduleEntries[dayKey] || []).map(
-      (entry, entryIndex) => {
-        const base: EntryWithMeta = {
-          ...entry,
-          originalDayKey: dayKey,
-          originalEntryIndex: entryIndex,
-        };
-
-        return {
-          ...base,
-          repeatColor: getRepeatColor(entry.title, entry.time, entry.color),
-        };
-      }
-    );
-    const repeatedEntries: EntryWithMeta[] = [];
-
-    // Check all stored entries for repeating tasks
-    Object.entries(scheduleEntries).forEach(([storedDayKey, entries]) => {
-      if (storedDayKey === dayKey) return; // Skip direct entries, already included
-
-      entries.forEach((entry, entryIdx) => {
-        if (!entry.repeat || entry.repeat === "none") return;
-
-        const originalDate = parseDayKey(storedDayKey);
-        if (!originalDate) {
-          return;
-        }
-        const repeatEnd = entry.repeatUntil ? parseDayKey(entry.repeatUntil) : null;
-
-        let shouldShow = false;
-
-        const daysDiff = Math.floor(
-          (date.getTime() - originalDate.getTime()) / (1000 * 60 * 60 * 24)
-        );
-        const isAfterStart = daysDiff >= 0;
-
-        if (!isAfterStart) {
-          shouldShow = false;
-        } else if (entry.repeat === "daily") {
-          const allowedDays = entry.repeatDays;
-          shouldShow =
-            !allowedDays ||
-            allowedDays.length === 0 ||
-            allowedDays.includes(date.getDay() as WeekdayIndex);
-        } else if (entry.repeat === "weekly") {
-          shouldShow = daysDiff % 7 === 0;
-        } else if (entry.repeat === "biweekly") {
-          shouldShow = daysDiff % 14 === 0;
-        } else if (entry.repeat === "monthly") {
-          shouldShow = date.getDate() === originalDate.getDate();
-        }
-
-        if (repeatEnd && date > repeatEnd) {
-          shouldShow = false;
-        }
-
-        if (shouldShow && entry.skipDates && entry.skipDates.includes(dayKey)) {
-          shouldShow = false;
-        }
-
-        if (shouldShow) {
-          repeatedEntries.push({
-            ...entry,
-            isRepeated: true,
-            repeatColor: getRepeatColor(entry.title, entry.time, entry.color),
-            originalDayKey: storedDayKey,
-            originalEntryIndex: entryIdx,
-          } as EntryWithMeta);
-        }
-      });
-    });
-
-    return [...directEntries, ...repeatedEntries];
-  };
-
-  const prepareEntriesForMutation = (
-    baseEntries: Record<string, ScheduleEntry[]>,
-    occurrenceDayKey: string,
-    fallbackIndex: number,
-    meta?: EntryMeta,
-    scope: "single" | "future" = "future"
-  ): EntryResolution => {
-    const originalDayKey = meta?.originalDayKey ?? occurrenceDayKey;
-    const originalEntryIndex =
-      meta?.originalEntryIndex ?? fallbackIndex;
-    const sourceEntries = baseEntries[originalDayKey];
-    const sourceEntry = sourceEntries?.[originalEntryIndex];
-
-    if (!sourceEntry) {
-      return {
-        entries: baseEntries,
-        targetDayKey: originalDayKey,
-        targetIndex: null as number | null,
-      };
-    }
-
-    if (originalDayKey === occurrenceDayKey) {
-      return {
-        entries: baseEntries,
-        targetDayKey: originalDayKey,
-        targetIndex: originalEntryIndex,
-      };
-    }
-
-    if (scope === "single") {
-      const updatedEntries = { ...baseEntries };
-      const updatedSourceEntries = [...(sourceEntries ?? [])];
-      const skipDateSet = new Set(sourceEntry.skipDates ?? []);
-      skipDateSet.add(occurrenceDayKey);
-      updatedSourceEntries[originalEntryIndex] = {
-        ...sourceEntry,
-        skipDates: Array.from(skipDateSet),
-      };
-      updatedEntries[originalDayKey] = updatedSourceEntries;
-
-      const dayEntries = [...(updatedEntries[occurrenceDayKey] ?? [])];
-      const clonedEntry: ScheduleEntry = {
-        ...sourceEntry,
-        repeat: undefined,
-        repeatUntil: null,
-        repeatDays: undefined,
-        skipDates: undefined,
-      };
-      dayEntries.push(clonedEntry);
-      const newIndex = dayEntries.length - 1;
-      updatedEntries[occurrenceDayKey] = dayEntries;
-
-      return {
-        entries: updatedEntries,
-        targetDayKey: occurrenceDayKey,
-        targetIndex: newIndex,
-      };
-    }
-
-    if (scope === "future") {
-      const updatedEntries = { ...baseEntries };
-      const updatedSourceEntries = [...(sourceEntries ?? [])];
-      const previousDayKey = getPreviousDayKey(occurrenceDayKey);
-      updatedSourceEntries[originalEntryIndex] = {
-        ...sourceEntry,
-        repeatUntil: previousDayKey ?? sourceEntry.repeatUntil ?? null,
-      };
-      updatedEntries[originalDayKey] = updatedSourceEntries;
-
-      const clonedEntry: ScheduleEntry = {
-        ...sourceEntry,
-        skipDates: sourceEntry.skipDates ? [...sourceEntry.skipDates] : undefined,
-      };
-      const dayEntries = [...(updatedEntries[occurrenceDayKey] ?? [])];
-      dayEntries.push(clonedEntry);
-      const newIndex = dayEntries.length - 1;
-      updatedEntries[occurrenceDayKey] = dayEntries;
-
-      return {
-        entries: updatedEntries,
-        targetDayKey: occurrenceDayKey,
-        targetIndex: newIndex,
-      };
-    }
-
-    return {
-      entries: baseEntries,
-      targetDayKey: originalDayKey,
-      targetIndex: originalEntryIndex,
-    };
-  };
-
-  const handleEntryDragStart = (
-    e: React.DragEvent,
-    occurrenceDayKey: string,
-    storageDayKey: string,
-    storageIndex: number,
-    entry: ScheduleEntry,
-    meta: EntryMeta
-  ) => {
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData(
-      "application/json",
-      JSON.stringify({ occurrenceDayKey, storageDayKey, storageIndex, entry, meta })
-    );
-    setDraggedEntry({ dayKey: storageDayKey, index: storageIndex });
-  };
-
-  const executeMoveEntry = (
-    occurrenceDayKey: string,
-    storageDayKey: string,
-    storageIndex: number,
-    targetDayKey: string,
-    entry: ScheduleEntry,
-    meta: EntryMeta,
-    scope: "single" | null
-  ) => {
-    let updatedEntries = { ...scheduleEntries };
-
-    if (scope === "single") {
-      // Recurring instance - use prepareEntriesForMutation with the occurrence day
-      const { entries: preparedEntries, targetDayKey: newDayKey, targetIndex } =
-        prepareEntriesForMutation(
-          updatedEntries,
-          occurrenceDayKey,
-          storageIndex,
-          meta,
-          scope
-        );
-
-      updatedEntries = preparedEntries;
-
-      // Now move the prepared entry
-      const entryToMove = targetIndex !== null ? updatedEntries[newDayKey]?.[targetIndex] : null;
-      if (entryToMove && targetIndex !== null) {
-        // Remove from source
-        updatedEntries[newDayKey] = updatedEntries[newDayKey]!.filter(
-          (_, i) => i !== targetIndex
-        );
-
-        // Strip recurring fields and add to target
-        const movedEntry: ScheduleEntry = {
-          time: entryToMove.time,
-          endTime: entryToMove.endTime,
-          title: entryToMove.title,
-          color: entryToMove.color,
-          // No repeat fields
-        };
-
-        updatedEntries[targetDayKey] = [
-          ...(updatedEntries[targetDayKey] || []),
-          movedEntry,
-        ];
-      }
-    } else {
-      // Non-recurring or original entry - direct move
-      const sourceEntries = updatedEntries[storageDayKey] || [];
-      const entryToMove = sourceEntries[storageIndex];
-
-      if (entryToMove) {
-        // Remove from source
-        updatedEntries[storageDayKey] = sourceEntries.filter(
-          (_, i) => i !== storageIndex
-        );
-
-        // Add to target (preserve all fields for original recurring entries)
-        updatedEntries[targetDayKey] = [
-          ...(updatedEntries[targetDayKey] || []),
-          entryToMove,
-        ];
-      }
-    }
-
-    setScheduleEntries(updatedEntries);
-  };
-
-  const handleDayDrop = (e: React.DragEvent, targetDayKey: string) => {
-    e.preventDefault();
-
-    const dragData = JSON.parse(
-      e.dataTransfer.getData("application/json")
-    ) as {
-      occurrenceDayKey: string;
-      storageDayKey: string;
-      storageIndex: number;
-      entry: ScheduleEntry;
-      meta: EntryMeta;
-    };
-
-    const { occurrenceDayKey, storageDayKey, storageIndex, entry, meta } = dragData;
-
-    // Don't move to same day
-    if (occurrenceDayKey === targetDayKey) {
-      setDraggedEntry(null);
-      return;
-    }
-
-    // Check if this is a repeated instance (not the original)
-    // If occurrence day differs from storage day, it's a repeated instance
-    const isRepeatedInstance = occurrenceDayKey !== storageDayKey;
-
-    // Auto-use "single" scope for repeated instances, otherwise direct move
-    const scope = isRepeatedInstance ? "single" : null;
-
-    // Pass occurrence day to executeMoveEntry so prepareEntriesForMutation knows which date to skip
-    executeMoveEntry(occurrenceDayKey, storageDayKey, storageIndex, targetDayKey, entry, meta, scope);
-    setDraggedEntry(null);
-  };
-
-  const activeEntryDate = activeEntry ? parseDayKey(activeEntry.dayKey) : null;
-  const activeEntryRepeatValue: RepeatFrequency =
-    activeEntry?.data.repeat ?? "none";
-  const activeEntryRepeatDays = activeEntry?.data.repeatDays ?? [];
-
-  return (
-    <div className="mx-auto w-full text-left">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-3xl font-light text-foreground">{weekRangeLabel}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 text-2xl font-light">
-            <button
-              type="button"
-              onClick={() => handleWeekNavigation(-1)}
-              className="rounded-full px-2 py-1 text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
-              aria-label="Previous week"
-            >
-              ‹
-            </button>
-            <div className="flex flex-col">
-              <input
-                type="week"
-                value={weekInputValue}
-                onChange={handleWeekPickerChange}
-                aria-label="Select week"
-                className="w-40 rounded-full border border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => handleWeekNavigation(1)}
-              className="rounded-full px-2 py-1 text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:text-foreground"
-              aria-label="Next week"
-            >
-              ›
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={() => goToWeek(new Date())}
-            className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-sm transition hover:border-foreground"
-          >
-            Today
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-7">
-        {weekDays.map((date) => {
-          const dayKey = formatDayKey(date);
-          const entries = getEntriesForDay(date);
-          const today = isToday(date);
-          const dayLabel = date.toLocaleDateString(undefined, {
-            weekday: "short",
-          });
-
-          return (
-            <div
-              key={dayKey}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-              }}
-              onDrop={(e) => handleDayDrop(e, dayKey)}
-              className={`group rounded-2xl py-4 transition ${
-                today
-                  ? "border-[#60a5fa] bg-transparent shadow-[0_8px_24px_rgba(96,165,250,0.25)]"
-                  : "bg-transparent"
-              }`}
-            >
-              <div className="mb-3 flex items-center justify-between px-4">
-                <div>
-                  <p
-                    className={`text-xs uppercase tracking-[0.2em] font-semibold ${
-                      today
-                        ? "text-[#1d4ed8]"
-                        : "text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]"
-                    }`}
-                  >
-                    {dayLabel}
-                  </p>
-                  <p
-                    className={`mt-1 text-lg font-semibold ${
-                      today
-                        ? "text-[#1d4ed8]"
-                        : "text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]"
-                    }`}
-                  >
-                    {date.getDate()}
-                  </p>
-                </div>
-                <div>
+            {activeGoalCardId ? (
+              <div className="mt-4 border-t border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] pt-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="text"
+                    value={newGoalTitle}
+                    onChange={(event) => setNewGoalTitle(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") addGoal();
+                    }}
+                    placeholder="Add an objective"
+                    className="min-w-60 flex-1 border-b border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
+                  />
                   <button
                     type="button"
-                    onClick={() => addEntry(dayKey)}
-                    className="flex h-6 w-6 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-xs opacity-0 transition hover:border-foreground group-hover:opacity-100"
-                    aria-label="Add task"
+                    onClick={addGoal}
+                    className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--foreground)_75%,transparent)] transition hover:border-foreground"
                   >
-                    +
+                    Add OKR
                   </button>
                 </div>
               </div>
-
-              <div className="space-y-2 px-2">
-                {entries
-                  .sort((a, b) => a.time.localeCompare(b.time))
-                  .map((entry, entryIdx) => {
-                    const repeatColor = "repeatColor" in entry ? entry.repeatColor : null;
-                    const originalDayKey =
-                      "originalDayKey" in entry ? (entry.originalDayKey as string) : dayKey;
-                    const originalEntryIndex =
-                      "originalEntryIndex" in entry ? (entry.originalEntryIndex as number) : entryIdx;
-                    const meta: EntryMeta = {
-                      originalDayKey,
-                      originalEntryIndex,
-                    };
-
-                    // Calculate duration in minutes for proportional height
-                    const calculateDuration = (start: string, end: string | undefined): number => {
-                      if (!end) return 60; // Default 1 hour if no end time
-                      const [startHour, startMin] = start.split(':').map(Number);
-                      const [endHour, endMin] = end.split(':').map(Number);
-                      const startMinutes = startHour * 60 + startMin;
-                      const endMinutes = endHour * 60 + endMin;
-                      return Math.max(30, endMinutes - startMinutes); // Minimum 30 minutes
-                    };
-
-                    const durationMinutes = calculateDuration(entry.time, entry.endTime);
-                    // Base height: 60px per hour, minimum 40px
-                    const heightPx = Math.max(40, (durationMinutes / 60) * 60);
-
-                    return (
-                      <div
-                        key={`${dayKey}-${entryIdx}`}
-                        className="group rounded-lg pb-0 pt-1"
-                        style={{
-                          backgroundColor: repeatColor
-                            ? `color-mix(in srgb, ${repeatColor} 12%, transparent)`
-                            : "color-mix(in srgb, var(--foreground) 3%, transparent)",
-                          minHeight: `${heightPx}px`,
-                        }}
-                      >
-                        <button
-                          type="button"
-                          draggable={true}
-                          onDragStart={(e) => handleEntryDragStart(e, dayKey, originalDayKey, originalEntryIndex, entry, meta)}
-                          onDragEnd={() => setDraggedEntry(null)}
-                          onClick={() => openEntryEditor(dayKey, entryIdx, meta, entry)}
-                          className={`flex h-full w-full flex-col justify-between rounded-md px-2 py-2 text-left transition hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] focus:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] focus:outline-none ${
-                            draggedEntry?.dayKey === originalDayKey && draggedEntry?.index === originalEntryIndex
-                              ? "opacity-50"
-                              : ""
-                          }`}
-                        >
-                          <div>
-                            <div className="mb-1 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
-                              {entry.time || "—"}
-                              {entry.endTime
-                                ? ` – ${entry.endTime}`
-                                : ""}
-                            </div>
-                            <p className="text-sm font-medium text-foreground">
-                              {entry.title || "Untitled task"}
-                            </p>
-                          </div>
-                        </button>
-                        <div className="flex justify-end px-2">
-                          <button
-                            type="button"
-                            onClick={() => removeEntry(dayKey, entryIdx, meta)}
-                            className="text-xs text-[color-mix(in_srgb,var(--foreground)_50%,transparent)] opacity-0 transition group-hover:opacity-100 hover:text-foreground"
-                            aria-label="Delete task"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+            ) : null}
+          </div>
+          </div>
+          <div className="okr-card border-none overflow-hidden px-0 py-0">
+            {showTemplateActions ? (
+              <div className="flex justify-end gap-3 px-5 pt-4 text-[10px] uppercase tracking-[0.25em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
+                <button
+                  type="button"
+                  onClick={applyWeeklyTemplate}
+                  className="transition hover:text-foreground"
+                >
+                  Use template
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsTemplateEditorVisible((current) => !current)}
+                  className="transition hover:text-foreground"
+                >
+                  Edit
+                </button>
               </div>
-
-              {entries.length === 0 && (
-                <p className="px-4 text-center text-xs text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]">
-                  No tasks
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {activeEntry && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
-          onClick={closeEntryEditor}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="w-full max-w-md rounded-3xl border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-background p-6 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]">
-                  Edit task
-                </p>
-                <p className="text-lg font-light text-foreground">
-                  {activeEntryDate
-                    ? activeEntryDate.toLocaleDateString(undefined, {
-                        weekday: "short",
-                        month: "long",
-                        day: "numeric",
-                      })
-                    : activeEntry.dayKey}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeEntryEditor}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
-              >
-                ✕
-              </button>
-            </div>
-
-            {activeEntry.canChooseScope && (
-              <div className="mb-4 rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)] px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                  Apply changes to
-                </p>
-                <div className="mt-3 space-y-2 text-sm">
-                  <label className="flex items-center gap-2 text-foreground">
-                    <input
-                      type="radio"
-                      name="entry-scope"
-                      value="single"
-                      checked={activeEntry.scope === "single"}
-                      onChange={() => handleScopeSelection("single")}
-                      className="h-4 w-4 accent-foreground"
-                    />
-                    This task only
-                  </label>
-                  <label className="flex items-center gap-2 text-foreground">
-                    <input
-                      type="radio"
-                      name="entry-scope"
-                      value="future"
-                      checked={activeEntry.scope === "future"}
-                      onChange={() => handleScopeSelection("future")}
-                      className="h-4 w-4 accent-foreground"
-                    />
-                    This and future tasks
-                  </label>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                  Start
-                  <input
-                    type="time"
-                    step={1800}
-                    list="time-select-options"
-                    value={activeEntry.data.time ?? TIME_OPTIONS[0]}
-                    onChange={(event) =>
-                      handleActiveFieldChange("time", event.target.value)
-                    }
-                    className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
-                  />
-                </label>
-                <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                  End
-                  <input
-                    type="time"
-                    step={1800}
-                    list="time-select-options"
-                    value={activeEntry.data.endTime ?? TIME_OPTIONS[0]}
-                    onChange={(event) =>
-                      handleActiveFieldChange("endTime", event.target.value)
-                    }
-                    className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
-                  />
-                </label>
-              </div>
-              <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                Title
-                <input
-                  type="text"
-                  value={activeEntry.data.title}
-                  onChange={(event) =>
-                    handleActiveFieldChange("title", event.target.value)
-                  }
-                  placeholder="Task title"
-                  className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
+            ) : null}
+            {isTemplateEditorVisible ? (
+              <div className="px-5 pb-3 pt-3">
+                <textarea
+                  value={weeklyGoalsTemplate}
+                  onChange={(event) => setWeeklyGoalsTemplate(event.target.value)}
+                  onBlur={() => {
+                    window.localStorage.setItem(storageKey("weekly-goals-template"), weeklyGoalsTemplate);
+                  }}
+                  className="min-h-28 w-full resize-y rounded-md border border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-transparent p-3 text-sm text-foreground outline-none focus:border-[color-mix(in_srgb,var(--foreground)_35%,transparent)]"
+                  aria-label="Weekly goals template"
                 />
-              </label>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                  Accent color
-                  <input
-                    type="color"
-                    value={activeEntry.data.color ?? "#8E7DBE"}
-                    onChange={(event) =>
-                      handleActiveFieldChange("color", event.target.value)
-                    }
-                    className="mt-1 h-10 w-full cursor-pointer rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-3 py-1.5"
-                  />
-                </label>
-                <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
-                  Repeat
-                  <select
-                    value={activeEntryRepeatValue}
-                    onChange={(event) =>
-                      handleActiveFieldChange("repeat", event.target.value)
-                    }
-                    className="mt-1 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm text-foreground outline-none focus:border-foreground"
-                  >
-                    <option value="none">Does not repeat</option>
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="biweekly">Every 2 weeks</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
-                  {activeEntryRepeatValue === "daily" && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {WEEKDAY_SHORT_LABELS.map((label, dayIndex) => {
-                        const index = dayIndex as WeekdayIndex;
-                        const isActive = activeEntryRepeatDays.includes(index);
-                        return (
-                          <button
-                            key={`repeat-day-${label}`}
-                            type="button"
-                            onClick={() => handleActiveRepeatDaysToggle(index)}
-                            className={`rounded-full border px-3 py-1 text-xs transition ${
-                              isActive
-                                ? "border-foreground text-foreground"
-                                : "border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]"
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </label>
               </div>
-            </div>
-
-            <div className="mt-6 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={handleDeleteActiveEntry}
-                className="text-sm text-[#f87171] transition hover:text-[#ef4444]"
-              >
-                Delete task
-              </button>
-              <button
-                type="button"
-                onClick={closeEntryEditor}
-                className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_30%,transparent)] px-4 py-2 text-sm transition hover:border-foreground"
-              >
-                Done
-              </button>
+            ) : null}
+            <div className="[&_.tox-tinymce]:!border-0 [&_.tox-tinymce]:!bg-transparent [&_.tox-tinymce]:!outline-none [&_.tox-tinymce]:!shadow-none [&_.tox-editor-container]:!bg-transparent [&_.tox-edit-area]:!bg-transparent [&_.tox-edit-area::before]:!border-0 [&_.tox-edit-area::before]:!shadow-none [&_.tox-edit-area__iframe]:!outline-none">
+              <TinyEditor
+                key={`pitch-week-editor-${activeWeekKey}-${theme}`}
+                tinymceScriptSrc={TINYMCE_CDN}
+                value={activeWeekEntry.content}
+                init={editorInit}
+                onEditorChange={updateCurrentWeekContent}
+              />
             </div>
           </div>
-        </div>
-      )}
+        </section>
+      </main>
     </div>
   );
-};
-const createWeeklyNoteEntry = (entry?: Partial<WeeklyNoteEntry>): WeeklyNoteEntry => ({
-  content: entry?.content ?? "",
-  dos: entry?.dos ?? "",
-  donts: entry?.donts ?? "",
-});
-
-const normalizeWeeklyNotes = (
-  notes: Record<string, Partial<WeeklyNoteEntry>> | undefined
-): Record<string, WeeklyNoteEntry> => {
-  const normalized: Record<string, WeeklyNoteEntry> = {};
-  if (!notes) {
-    return normalized;
-  }
-  Object.entries(notes).forEach(([key, entry]) => {
-    normalized[key] = createWeeklyNoteEntry(entry);
-  });
-  return normalized;
-};
-
-const buildDemoWeeklyNotes = (
-  year: number,
-  weekStartDay: WeekdayIndex
-): Record<string, Partial<WeeklyNoteEntry>> => {
-  const notes: Record<string, Partial<WeeklyNoteEntry>> = {};
-  const today = new Date();
-  const weeks = buildWeeksForYear(year, weekStartDay);
-  const currentWeekIndex = weeks.findIndex((week) =>
-    week.dayKeys.some((dayKey) => {
-      const [y, m, d] = dayKey.split("-").map(Number);
-      const keyDate = new Date(y!, m! - 1, d);
-      return (
-        keyDate.getFullYear() === today.getFullYear() &&
-        keyDate.getMonth() === today.getMonth() &&
-        keyDate.getDate() === today.getDate()
-      );
-    })
-  );
-
-  const januaryFirstWeekIndex = weeks.findIndex((week) =>
-    week.dayKeys.some((dayKey) => {
-      const [y, m, d] = dayKey.split("-").map(Number);
-      return y === year && m === 1 && d === 1;
-    })
-  );
-
-  if (januaryFirstWeekIndex !== -1) {
-    Object.entries(demoWeeklyStoryByWeekNumber).forEach(([weekNumber, script]) => {
-      const parsedWeekNumber = Number(weekNumber);
-      if (!Number.isFinite(parsedWeekNumber)) {
-        return;
-      }
-      const targetWeek = weeks[januaryFirstWeekIndex + parsedWeekNumber - 1];
-      if (!targetWeek) {
-        return;
-      }
-      const targetWeekIndex = januaryFirstWeekIndex + parsedWeekNumber - 1;
-      if (currentWeekIndex !== -1 && targetWeekIndex > currentWeekIndex) {
-        return;
-      }
-
-      const contentParagraphs = script.weeklyNote
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => `<p>${line}</p>`)
-        .join("");
-
-      notes[targetWeek.weekKey] = {
-        content:
-          `<p><strong>${script.title}</strong></p>${contentParagraphs}` +
-          `<p><strong>Carry Forward</strong>: ${script.carryForward}</p>`,
-        dos: script.dos.join("\n"),
-        donts: script.donts.join("\n"),
-      };
-    });
-  }
-
-  weeks.forEach((week) => {
-    // Check if this week contains today
-    const isCurrentWeek = week.dayKeys.some((dayKey) => {
-      const [y, m, d] = dayKey.split("-").map(Number);
-      const keyDate = new Date(y!, m! - 1, d);
-      return (
-        keyDate.getFullYear() === today.getFullYear() &&
-        keyDate.getMonth() === today.getMonth() &&
-        keyDate.getDate() === today.getDate()
-      );
-    });
-
-    // Only add demo content for the current week
-    if (isCurrentWeek && !notes[week.weekKey]) {
-      notes[week.weekKey] = demoWeeklyNoteTemplate;
-    }
-  });
-
-  return notes;
-};
-
-// Export for shared page
-export { ProductivityGrid, buildWeeksForYear, getWeekStart, formatWeekKey, parseWeekKey, formatDayKey, PRODUCTIVITY_SCALE_THREE, PRODUCTIVITY_SCALE_FOUR };
-export type { ProductivityGridProps, ProductivityScaleEntry, WeekMeta, WeekdayIndex, KeyResult, KeyResultStatus, Goal, WeeklyNoteEntry };
+}
