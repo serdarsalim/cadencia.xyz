@@ -149,46 +149,39 @@ function transformWeeklyNotesToDB(obj: Record<string, WeeklyNotePayload>): any[]
 
 export async function loadAllData() {
   try {
-    const [
-      goalsRes,
-      productivityRes,
-      weeklyNotesRes,
-      dayOffsRes,
-      sickDaysRes,
-      profileRes
-    ] = await Promise.all([
-      fetch('/api/goals'),
-      fetch('/api/productivity'),
-      fetch('/api/weekly-notes'),
-      fetch('/api/day-offs'),
-      fetch('/api/sick-days'),
-      fetch('/api/profile')
-    ])
+    const response = await fetch('/api/bootstrap')
 
-    const [
-      { goals },
-      { productivityRatings },
-      { weeklyNotes },
-      { dayOffs },
-      { sickDays },
-      { profile }
-    ] = await Promise.all([
-      goalsRes.json(),
-      productivityRes.json(),
-      weeklyNotesRes.json(),
-      dayOffsRes.json(),
-      sickDaysRes.json(),
-      profileRes.json()
-    ])
+    if (!response.ok) {
+      console.error('Error loading bootstrap data:', response.status, response.statusText)
+      return null
+    }
+
+    const data = await response.json()
+
+    if (!data?.authenticated) {
+      return {
+        authenticated: false,
+        userEmail: null,
+        goals: [],
+        scheduleEntries: {},
+        productivityRatings: {},
+        weeklyNotes: {},
+        dayOffs: {},
+        sickDays: {},
+        profile: null
+      }
+    }
 
     return {
-      goals: goals || [],
+      authenticated: true,
+      userEmail: data.userEmail || null,
+      goals: data.goals || [],
       scheduleEntries: {},
-      productivityRatings: transformProductivityFromDB(productivityRatings || []),
-      weeklyNotes: transformWeeklyNotesFromDB(weeklyNotes || []),
-      dayOffs: transformDayOffsFromDB(dayOffs || []),
-      sickDays: transformDayOffsFromDB(sickDays || []),
-      profile: profile || null
+      productivityRatings: transformProductivityFromDB(data.productivityRatings || []),
+      weeklyNotes: transformWeeklyNotesFromDB(data.weeklyNotes || []),
+      dayOffs: transformDayOffsFromDB(data.dayOffs || []),
+      sickDays: transformDayOffsFromDB(data.sickDays || []),
+      profile: data.profile || null
     }
   } catch (error) {
     console.error('Error loading data from API:', error)

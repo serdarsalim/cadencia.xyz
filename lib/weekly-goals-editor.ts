@@ -11,34 +11,64 @@ type WeeklyGoalsEditorInitOptions = {
   placeholder?: string;
   height?: number;
   minHeight?: number;
+  backgroundColor?: string;
+  textColor?: string;
+  fontFamily?: string;
+  bodyPadding?: string;
+  desktopBodyPadding?: string;
 };
 
-const buildWeeklyGoalsContentStyle = (theme: EditorTheme): string => `
-  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
+const buildWeeklyGoalsContentStyle = (
+  theme: EditorTheme,
+  options: WeeklyGoalsEditorInitOptions = {}
+): string => {
+  const backgroundColor =
+    options.backgroundColor ?? (theme === "dark" ? "#0a0a0a" : "#fdfcfb");
+  const textColor = options.textColor ?? (theme === "dark" ? "#d1d5db" : "#0f172a");
+  const fontFamily =
+    options.fontFamily ??
+    '"Inter", "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  const bodyPadding = options.bodyPadding ?? "8px 8px";
+  const desktopBodyPadding = options.desktopBodyPadding ?? "10px 25px";
+
+  return `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
   html {
-    background-color: ${theme === "dark" ? "#0a0a0a" : "#fdfcfb"} !important;
+    background-color: ${backgroundColor} !important;
   }
   body {
-    background-color: ${theme === "dark" ? "#0a0a0a" : "#fdfcfb"} !important;
-    color: ${theme === "dark" ? "#d1d5db" : "#0f172a"} !important;
-    font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background-color: ${backgroundColor} !important;
+    color: ${textColor} !important;
+    font-family: ${fontFamily};
     font-size: 14px;
     line-height: 1.55;
-    padding: 8px 8px;
+    padding: ${bodyPadding};
     margin: 0;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  .mce-content-body,
+  .mce-content-body:focus,
+  [contenteditable="true"],
+  [contenteditable="true"]:focus {
+    outline: none !important;
+    box-shadow: none !important;
   }
   .mce-content-body {
+    box-sizing: border-box !important;
     padding-left: 10px !important;
+    padding-right: 10px !important;
   }
   .mce-content-body:before {
     left: 10px !important;
   }
   @media (min-width: 640px) {
     body {
-      padding: 10px 25px;
+      padding: ${desktopBodyPadding};
     }
     .mce-content-body {
       padding-left: 22px !important;
+      padding-right: 22px !important;
     }
     .mce-content-body:before {
       left: 22px !important;
@@ -55,6 +85,7 @@ const buildWeeklyGoalsContentStyle = (theme: EditorTheme): string => `
     accent-color: ${theme === "dark" ? "#93c5fd" : "#1d4ed8"};
   }
 `;
+};
 
 const checklistPrefixPattern = /^\s*(?:\[\s*\]|\[\s*x\s*\])\s+/i;
 
@@ -140,7 +171,7 @@ export const createWeeklyGoalsEditorInit = (
       ? false
       : "bold italic bullist numlist link",
     quickbars_insert_toolbar: false,
-    content_style: buildWeeklyGoalsContentStyle(theme),
+    content_style: buildWeeklyGoalsContentStyle(theme, options),
     inline_styles: true,
     branding: false,
     placeholder,
@@ -152,7 +183,7 @@ export const createWeeklyGoalsEditorInit = (
           const style = doc.createElement("style");
           style.textContent = `
             html, body {
-              background-color: ${theme === "dark" ? "#0a0a0a" : "#fdfcfb"} !important;
+              background-color: ${options.backgroundColor ?? (theme === "dark" ? "#0a0a0a" : "#fdfcfb")} !important;
             }
           `;
           doc.head?.appendChild(style);
@@ -163,10 +194,10 @@ export const createWeeklyGoalsEditorInit = (
         const doc = editor.getDoc();
         if (doc && doc.documentElement) {
           doc.documentElement.style.backgroundColor =
-            theme === "dark" ? "#0a0a0a" : "#fdfcfb";
+            options.backgroundColor ?? (theme === "dark" ? "#0a0a0a" : "#fdfcfb");
           if (doc.body) {
             doc.body.style.backgroundColor =
-            theme === "dark" ? "#0a0a0a" : "#fdfcfb";
+            options.backgroundColor ?? (theme === "dark" ? "#0a0a0a" : "#fdfcfb");
           }
 
           if (!readonly) {

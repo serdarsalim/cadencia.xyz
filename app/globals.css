@@ -92,19 +92,19 @@ body {
 
 /* Productivity colors for dark mode */
 :root[data-theme="dark"] .productivity-low {
-  background-color: #ffebee !important;
+  background-color: #3a1f27 !important;
 }
 
 :root[data-theme="dark"] .productivity-medium {
-  background-color: #b3df8f !important;
+  background-color: #2d4726 !important;
 }
 
 :root[data-theme="dark"] .productivity-high {
-  background-color: #84c400 !important;
+  background-color: #365d16 !important;
 }
 
 :root[data-theme="dark"] .productivity-top {
-  background-color: #38b000 !important;
+  background-color: #236039 !important;
 }
 
 /* Day off color for dark mode */
@@ -195,8 +195,8 @@ body {
 }
 
 .kr-apple-font {
-  font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont,
-    "Segoe UI", "Helvetica Neue", sans-serif;
+  font-family: var(--font-geist-sans), "Inter", "SF Pro Display", "SF Pro Text", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
   letter-spacing: 0.015em;
 }
 

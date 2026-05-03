@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { UserInfo } from "../components/UserInfo";
@@ -345,6 +346,33 @@ const normalizeWeeklyGoalsTemplate = (template: string) => {
   return `<p><strong>${heading}</strong></p>${listBlock}`;
 };
 
+const readCachedText = (key: string) => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem(key);
+  } catch (error) {
+    console.error(`Failed to read cached text for ${key}`, error);
+    return null;
+  }
+};
+
+const readCachedJson = <T,>(key: string, fallback: T): T => {
+  const value = readCachedText(key);
+  if (!value) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch (error) {
+    console.error(`Failed to parse cached value for ${key}`, error);
+    return fallback;
+  }
+};
+
 
 const remapWeekKeys = <T,>(
   entries: Record<string, T>,
@@ -496,13 +524,32 @@ const buildWeeksForYear = (year: number, weekStartDay: WeekdayIndex): WeekMeta[]
 
 
 export default function Home() {
-  const [dateOfBirth, setDateOfBirth] = useState<string>("");
-  const [personName, setPersonName] = useState<string>("");
-  const [email, setEmail] = useState<string>("");
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const router = useRouter();
+  const initialTheme = readCachedText(storageKey("theme"));
+  const hasStoredThemePreference =
+    initialTheme === "dark" || initialTheme === "light";
+  const cachedProfile = readCachedJson<{
+    name?: string;
+    dateOfBirth?: string;
+    email?: string;
+    goalsSectionTitle?: string;
+  } | null>(storageKey("profile"), null);
+  const cachedGoalPayload = readCachedJson<Goal[]>(storageKey("goals"), []);
+  const cachedScheduleEntries = readCachedJson<Record<string, ScheduleEntry[]>>(
+    storageKey("schedule-entries"),
+    readCachedJson<Record<string, ScheduleEntry[]>>(legacyStorageKey("schedule-entries"), {})
+  );
+  const [dateOfBirth, setDateOfBirth] = useState<string>(cachedProfile?.dateOfBirth ?? "");
+  const [personName, setPersonName] = useState<string>(cachedProfile?.name ?? "");
+  const [email, setEmail] = useState<string>(cachedProfile?.email ?? "");
+  const [isEditingProfile, setIsEditingProfile] = useState(
+    () => readCachedText(storageKey("profile-modal-open")) === "true"
+  );
   const [isShareEditorVisible, setIsShareEditorVisible] = useState(false);
   const [isWeeklyTemplateEditorOpen, setIsWeeklyTemplateEditorOpen] = useState(false);
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setTheme] = useState<Theme>(
+    hasStoredThemePreference && initialTheme ? initialTheme : "light"
+  );
   const [recentYears, setRecentYears] = useState<string>("10");
   const [view, setView] = useState<ViewMode>(() => {
     // Initialize from localStorage if available
@@ -520,27 +567,41 @@ export default function Home() {
   const [productivityYear, setProductivityYear] = useState(() =>
     new Date().getFullYear()
   );
-  const [weekStartDay, setWeekStartDay] = useState<WeekdayIndex>(1);
+  const [weekStartDay, setWeekStartDay] = useState<WeekdayIndex>(() => {
+    const stored = Number(readCachedText(storageKey("week-start")));
+    return stored >= 0 && stored <= 6 ? (stored as WeekdayIndex) : 1;
+  });
   const weeksForYear = useMemo(
     () => buildWeeksForYear(productivityYear, weekStartDay),
     [productivityYear, weekStartDay]
   );
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isHydrated] = useState(true);
+  const [isAuthResolved, setIsAuthResolved] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(cachedProfile?.email ?? null);
   const [productivityRatings, setProductivityRatings] = useState<
     Record<string, number | null>
-  >({});
+  >(() => readCachedJson<Record<string, number | null>>(storageKey("productivity-ratings"), {}));
   const [productivityGoals, setProductivityGoals] = useState<
     Record<number, string>
-  >({});
-  const [showLegend, setShowLegend] = useState(true);
-  const [weeklyGoalsTemplate, setWeeklyGoalsTemplate] = useState(
-    "<p><strong>What I want to accomplish this week:</strong></p><ul><li>Monday</li><li>Tuesday</li><li>Wednesday</li><li>Thursday</li><li>Friday</li><li>Saturday</li><li>Sunday</li></ul>"
+  >(() => readCachedJson<Record<number, string>>(storageKey("productivity-goals"), {}));
+  const [showLegend, setShowLegend] = useState(() => {
+    const storedShowLegend = readCachedText(storageKey("show-legend"));
+    if (storedShowLegend === "true") return true;
+    if (storedShowLegend === "false") return false;
+    return readCachedText(legacyStorageKey("hide-legend")) === "true" ? false : true;
+  });
+  const [weeklyGoalsTemplate, setWeeklyGoalsTemplate] = useState(() =>
+    normalizeWeeklyGoalsTemplate(
+      readCachedText(storageKey("weekly-goals-template")) ??
+        "<p><strong>What I want to accomplish this week:</strong></p><ul><li>Monday</li><li>Tuesday</li><li>Wednesday</li><li>Thursday</li><li>Friday</li><li>Saturday</li><li>Sunday</li></ul>"
+    )
   );
   const [dayOffAllowance, setDayOffAllowance] = useState(15);
   const [workDays, setWorkDays] = useState<WeekdayIndex[]>([0, 1, 2, 3, 4, 5, 6]);
   const [autoMarkWeekendsOff, setAutoMarkWeekendsOff] = useState(false);
-  const [dayOffs, setDayOffs] = useState<Record<string, boolean>>({});
+  const [dayOffs, setDayOffs] = useState<Record<string, boolean>>(() =>
+    readCachedJson<Record<string, boolean>>(storageKey("day-offs"), {})
+  );
   const [sickDays, setSickDays] = useState<Record<string, boolean>>({});
   const [isDayOffMode, setIsDayOffMode] = useState(false);
   const [isSickDayMode, setIsSickDayMode] = useState(false);
@@ -601,11 +662,15 @@ export default function Home() {
   const dayOffsRemaining = Math.max(0, dayOffAllowance - dayOffsUsed);
   const [scheduleEntries, setScheduleEntries] = useState<
     Record<string, ScheduleEntry[]>
-  >({});
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [archivedGoals, setArchivedGoals] = useState<Goal[]>([]);
+  >(() => normalizeScheduleEntryColors(cachedScheduleEntries));
+  const [goals, setGoals] = useState<Goal[]>(() =>
+    normalizeGoalOrder(cachedGoalPayload.filter((goal) => !goal.archived))
+  );
+  const [archivedGoals, setArchivedGoals] = useState<Goal[]>(() =>
+    normalizeGoalOrder(cachedGoalPayload.filter((goal) => goal.archived))
+  );
   const [isViewingArchived, setIsViewingArchived] = useState(false);
-  const [goalsSectionTitle, setGoalsSectionTitle] = useState("2026 GOALS");
+  const [goalsSectionTitle, setGoalsSectionTitle] = useState(cachedProfile?.goalsSectionTitle ?? "2026 GOALS");
   const [isEditingGoalsSectionTitle, setIsEditingGoalsSectionTitle] = useState(false);
   const [newGoalTitle, setNewGoalTitle] = useState("");
   const [krDrafts, setKrDrafts] = useState<Record<string, { title: string }>>({});
@@ -631,12 +696,14 @@ export default function Home() {
   const [activeGoalCardId, setActiveGoalCardId] = useState<string | null>(null);
   const okrCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const calendarColumnRef = useRef<HTMLDivElement | null>(null);
-  const [weeklyNotes, setWeeklyNotes] = useState<Record<string, WeeklyNoteEntry>>({});
+  const [weeklyNotes, setWeeklyNotes] = useState<Record<string, WeeklyNoteEntry>>(() =>
+    readCachedJson<Record<string, WeeklyNoteEntry>>(storageKey("weekly-notes"), {})
+  );
   const [selectedWeekKey, setSelectedWeekKey] = useState<string | null>(null);
   const lastWeekStartDayRef = useRef<WeekdayIndex | null>(null);
   const dosTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const dontsTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(() => readCachedText(storageKey("demo-mode")) === "true");
   const goalsSectionRef = useRef<HTMLDivElement | null>(null);
   const lastProcessedScheduleRef = useRef<string | null>(null);
   const pendingScheduleRef = useRef<Record<string, ScheduleEntry[]>>({});
@@ -670,6 +737,8 @@ export default function Home() {
   const lastServerSavedSickDaysRef = useRef<string | null>(null);
   const lastServerSavedProfileRef = useRef<string | null>(null);
   const hasLoadedServerDataRef = useRef(false);
+  const goalsDirtyRef = useRef(false);
+  const weeklyNotesDirtyRef = useRef(false);
 
   const triggerScheduleSave = useCallback(() => {
     if (!userEmail || isDemoMode) {
@@ -999,6 +1068,7 @@ export default function Home() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(storageKey("theme"), theme);
   }, [theme]);
 
   useEffect(() => {
@@ -1141,15 +1211,10 @@ export default function Home() {
       let hasProfileLegend = false;
       let hasProfileWeeklyTemplate = false;
       try {
-        // Check session first
-        const sessionRes = await fetch("/api/auth/session");
-        const sessionContentType = sessionRes.headers.get("content-type") || "";
-        const session = sessionContentType.includes("application/json")
-          ? await sessionRes.json()
-          : null;
-
-        const isLoggedIn = !!session?.user?.email;
-        setUserEmail(session?.user?.email || null);
+        const data = await loadAllData();
+        const isLoggedIn = Boolean(data?.authenticated && data?.userEmail);
+        const nextUserEmail = data?.userEmail ?? null;
+        setUserEmail(nextUserEmail);
 
         if (isLoggedIn) {
           setIsDemoMode(false);
@@ -1161,8 +1226,6 @@ export default function Home() {
           // Logged in - load from database
           await migrateFromLocalStorage();
           cleanupOldScheduleEntries();
-
-          const data = await loadAllData();
 
           if (data) {
             // Remove duplicate goals (same title, case-insensitive)
@@ -1183,7 +1246,9 @@ export default function Home() {
               return acc;
             }, []);
             const normalizedGoals = normalizeGoalOrder(uniqueGoals);
-            setGoals(normalizedGoals);
+            if (!goalsDirtyRef.current) {
+              setGoals(normalizedGoals);
+            }
             const serializedGoals = JSON.stringify(normalizedGoals);
             lastProcessedGoalsRef.current = serializedGoals;
             lastServerSavedGoalsRef.current = serializedGoals;
@@ -1253,7 +1318,7 @@ export default function Home() {
                 nextProductivityScaleMode = profile.productivityScaleMode;
                 setProductivityScaleMode(nextProductivityScaleMode);
               }
-              if (profile.theme === "light" || profile.theme === "dark") {
+              if (!hasStoredThemePreference && (profile.theme === "light" || profile.theme === "dark")) {
                 setTheme(profile.theme);
               }
 
@@ -1263,7 +1328,7 @@ export default function Home() {
               setWeekStartDay(1);
             }
 
-            const migrationKey = storageKey(`weekkey-migration-done-${session?.user?.email ?? "unknown"}`);
+            const migrationKey = storageKey(`weekkey-migration-done-${nextUserEmail ?? "unknown"}`);
             const hasMigratedWeekKeys =
               window.localStorage.getItem(migrationKey) === "true";
 
@@ -1282,7 +1347,9 @@ export default function Home() {
               ? { migrated: weeklyNotesData, didMigrate: false }
               : migrateWeekKeys(weeklyNotesData, nextWeekStartDay);
             const normalizedWeekly = normalizeWeeklyNotes(migratedWeekly.migrated);
-            setWeeklyNotes(normalizedWeekly);
+            if (!weeklyNotesDirtyRef.current) {
+              setWeeklyNotes(normalizedWeekly);
+            }
             const serializedWeekly = JSON.stringify(normalizedWeekly);
             lastProcessedWeeklyNotesRef.current = migratedWeekly.didMigrate ? null : serializedWeekly;
             lastServerSavedWeeklyNotesByKeyRef.current = Object.fromEntries(
@@ -1423,15 +1490,15 @@ export default function Home() {
         }
 
         setIsEditingProfile(shouldOpenProfileModal ?? false);
-        setIsHydrated(true);
       } catch (error) {
         console.error("Failed to load data", error);
-        setIsHydrated(true);
+      } finally {
+        setIsAuthResolved(true);
       }
     }
 
     loadData();
-  }, []);
+  }, [hasStoredThemePreference]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
@@ -2018,6 +2085,7 @@ export default function Home() {
       sortOrder: goals.length,
       archived: false,
     };
+    goalsDirtyRef.current = true;
     setGoals((prev) => {
       const updatedGoals = normalizeGoalOrder([...prev, nextGoal]);
       saveGoalsNow(updatedGoals);
@@ -2028,6 +2096,7 @@ export default function Home() {
   };
 
   const handleRemoveGoal = (goalId: string) => {
+    goalsDirtyRef.current = true;
     setGoals((prev) => prev.filter((goal) => goal.id !== goalId));
     setKrDrafts((prev) => {
       if (!(goalId in prev)) {
@@ -2054,6 +2123,7 @@ export default function Home() {
     };
 
     // Optimistic update
+    goalsDirtyRef.current = true;
     setGoals((prev) => normalizeGoalOrder(prev.filter((goal) => goal.id !== goalId)));
     setArchivedGoals((prev) => [...prev, updatedGoal]);
 
@@ -2091,6 +2161,7 @@ export default function Home() {
 
     // Optimistic update
     setArchivedGoals((prev) => normalizeGoalOrder(prev.filter((goal) => goal.id !== goalId)));
+    goalsDirtyRef.current = true;
     setGoals((prev) => normalizeGoalOrder([...prev, updatedGoal]));
 
     try {
@@ -2127,6 +2198,7 @@ export default function Home() {
   };
 
   const moveGoal = (goalId: string, direction: "up" | "down") => {
+    goalsDirtyRef.current = true;
     setGoals((prev) => {
       const currentIndex = prev.findIndex((goal) => goal.id === goalId);
       if (currentIndex === -1) {
@@ -2180,6 +2252,7 @@ const handleKrDraftChange = (goalId: string, value: string) => {
     updates: Partial<WeeklyNoteEntry>,
     options?: { persistNow?: boolean }
   ) => {
+    weeklyNotesDirtyRef.current = true;
     setWeeklyNotes((prev) => {
       const existing = prev[weekKey] ?? createWeeklyNoteEntry();
       const nextEntry = createWeeklyNoteEntry({
@@ -2258,6 +2331,7 @@ const handleKrDraftChange = (goalId: string, value: string) => {
       cancelGoalFieldEdit(goalId, field);
       return;
     }
+    goalsDirtyRef.current = true;
     setGoals((prev) =>
       prev.map((goal) =>
         goal.id === goalId
@@ -2357,6 +2431,7 @@ const beginKrFieldEdit = (
       cancelKrFieldEdit(goalId, krId, field);
       return;
     }
+    goalsDirtyRef.current = true;
     setGoals((prev) =>
       prev.map((goal) =>
       goal.id === goalId
@@ -2440,6 +2515,7 @@ const beginKrFieldEdit = (
       sortOrder: 0,
       status: "started",
     };
+    goalsDirtyRef.current = true;
     setGoals((prev) => {
       const updatedGoals = prev.map((goal) =>
         goal.id === goalId
@@ -2462,6 +2538,7 @@ const beginKrFieldEdit = (
   };
 
   const handleRemoveKeyResult = (goalId: string, krId: string) => {
+    goalsDirtyRef.current = true;
     setGoals((prev) => {
       const updatedGoals = prev.map((goal) =>
         goal.id === goalId
@@ -2478,6 +2555,7 @@ const beginKrFieldEdit = (
   };
 
   const moveKeyResult = (goalId: string, krId: string, direction: "up" | "down") => {
+    goalsDirtyRef.current = true;
     setGoals((prev) => {
       const updatedGoals = prev.map((goal) => {
         if (goal.id !== goalId) {
@@ -2505,6 +2583,7 @@ const beginKrFieldEdit = (
 
   const cycleKeyResultStatus = (goalId: string, krId: string) => {
     const order: KeyResultStatus[] = ["on-hold", "started", "completed"];
+    goalsDirtyRef.current = true;
     setGoals((prev) =>
       prev.map((goal) =>
         goal.id === goalId
@@ -2539,6 +2618,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
 
   const cycleGoalStatusOverride = (goalId: string) => {
     const order: KeyResultStatus[] = ["on-hold", "started", "completed"];
+    goalsDirtyRef.current = true;
     setGoals((prev) =>
       prev.map((goal) => {
         if (goal.id !== goalId) {
@@ -3332,94 +3412,22 @@ const goalStatusBadge = (status: KeyResultStatus) => {
     );
   }
 
-  if (!userEmail && !showGuestDemo) {
+  if (!isAuthResolved && !userEmail && !showGuestDemo) {
     return (
-      <div className="app-shell relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 text-foreground">
-        <button
-          type="button"
-          onClick={() => signIn("google", { callbackUrl: "/365" })}
-          className="absolute right-6 top-6 z-20 rounded-full border border-[color-mix(in_srgb,var(--foreground)_35%,transparent)] bg-[color-mix(in_srgb,var(--background)_78%,transparent)] px-5 py-2 text-sm font-semibold text-foreground transition hover:border-[color-mix(in_srgb,var(--foreground)_55%,transparent)]"
-        >
-          Sign in
-        </button>
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_12%,color-mix(in_srgb,var(--foreground)_20%,transparent),transparent_42%),radial-gradient(circle_at_15%_20%,rgba(59,130,246,0.16),transparent_35%),radial-gradient(circle_at_82%_18%,rgba(14,165,233,0.14),transparent_34%)]" />
-        <div className="pointer-events-none absolute inset-0 opacity-70">
-          <span className="absolute left-[8%] top-[14%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_55%,transparent)]" />
-          <span className="absolute left-[18%] top-[32%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_45%,transparent)]" />
-          <span className="absolute left-[32%] top-[20%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]" />
-          <span className="absolute left-[64%] top-[16%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_45%,transparent)]" />
-          <span className="absolute left-[74%] top-[28%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_40%,transparent)]" />
-          <span className="absolute left-[88%] top-[18%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]" />
-          <span className="absolute left-[12%] top-[58%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]" />
-          <span className="absolute left-[78%] top-[62%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_45%,transparent)]" />
-          <span className="absolute left-[90%] top-[54%] h-1 w-1 rounded-full bg-[color-mix(in_srgb,var(--foreground)_35%,transparent)]" />
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-foreground border-r-transparent"></div>
+          <p className="text-sm text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+            Loading...
+          </p>
         </div>
-        <main className="relative z-10 w-full max-w-5xl text-center">
-          <img
-            src="/cadencia-app-logo.png"
-            alt="Cadencia"
-            className="mx-auto h-16 w-auto sm:h-20 drop-shadow-[0_0_24px_rgba(59,130,246,0.35)]"
-          />
-          <h1 className="mt-5 text-6xl sm:text-7xl font-black tracking-[-0.03em] text-[color-mix(in_srgb,#60a5fa_72%,#0ea5e9_28%)]">
-            Cadencia
-          </h1>
-          <p className="mt-4 text-sm sm:text-base uppercase tracking-[0.24em] text-[color-mix(in_srgb,#60a5fa_82%,#0ea5e9_18%)]">
-            You keep drifting through life? Stop and use Cadencia.
-          </p>
-          <p className="mx-auto mt-7 max-w-4xl text-base sm:text-2xl leading-relaxed text-[color-mix(in_srgb,var(--foreground)_78%,transparent)]">
-            Built for goal tracking, personal accountability, mentor check-ins, and lightweight team visibility
-            without micromanagement.
-          </p>
-          <p className="mx-auto mt-2 max-w-4xl text-xs sm:text-sm text-[color-mix(in_srgb,var(--foreground)_62%,transparent)]">
-            Inspired by GitHub&apos;s productivity heatmap.
-          </p>
-          <p className="mx-auto mt-4 max-w-3xl text-sm sm:text-base text-[color-mix(in_srgb,var(--foreground)_68%,transparent)]">
-            Free to use. Open source on{" "}
-            <a
-              href="https://github.com/serdarsalim/cadencia.xyz"
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2 hover:opacity-80"
-            >
-              GitHub
-            </a>
-            .
-          </p>
-          <p className="mx-auto mt-2 max-w-3xl text-sm sm:text-base text-[color-mix(in_srgb,var(--foreground)_68%,transparent)]">
-            Built by{" "}
-            <a
-              href="https://serdarsalim.com"
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2 hover:opacity-80"
-            >
-              Serdar Salim
-            </a>
-            .
-          </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <button
-              type="button"
-              onClick={() => {
-                setProductivityMode("day");
-                setView("productivity");
-                setShowGuestDemo(true);
-              }}
-              className="rounded-full bg-[color-mix(in_srgb,#60a5fa_70%,#0ea5e9_30%)] px-8 py-3 text-sm font-semibold text-white transition hover:brightness-105"
-            >
-              Demo
-            </button>
-            <button
-              type="button"
-              onClick={() => signIn("google", { callbackUrl: "/365" })}
-              className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_35%,transparent)] bg-[color-mix(in_srgb,var(--background)_78%,transparent)] px-8 py-3 text-sm font-semibold text-foreground transition hover:border-[color-mix(in_srgb,var(--foreground)_55%,transparent)]"
-            >
-              Sign up
-            </button>
-          </div>
-        </main>
       </div>
     );
+  }
+
+  if (isAuthResolved && !userEmail && !showGuestDemo) {
+    router.replace("/");
+    return null;
   }
 
   return (

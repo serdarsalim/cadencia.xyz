@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { signIn } from "next-auth/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { loadAllData, saveDayOffs, saveGoals, saveProductivity, saveWeeklyNoteForWeek } from "@/lib/api";
 import { storageKey } from "@/lib/branding";
 import { demoDayOffs, demoGoals, demoProductivityRatings, demoProfile } from "@/lib/demo-data";
@@ -16,6 +16,7 @@ type ProductivityScaleEntry = {
   value: number;
   label: string;
   color: string;
+  percent: number;
 };
 
 type KeyResultStatus = "on-hold" | "started" | "completed";
@@ -56,17 +57,44 @@ const DEFAULT_WEEKLY_TEMPLATE =
   "<p><strong>What I want to accomplish this week:</strong></p><ul><li>Monday</li><li>Tuesday</li><li>Wednesday</li><li>Thursday</li><li>Friday</li><li>Saturday</li><li>Sunday</li></ul>";
 
 const PRODUCTIVITY_SCALE_THREE: ProductivityScaleEntry[] = [
-  { value: 0, label: "<25%", color: "productivity-low" },
-  { value: 1, label: "25-50%", color: "productivity-medium" },
-  { value: 2, label: ">50%", color: "productivity-high" },
+  { value: 0, label: "<25%", color: "productivity-low", percent: 12.5 },
+  { value: 1, label: "25-50%", color: "productivity-medium", percent: 37.5 },
+  { value: 2, label: ">50%", color: "productivity-high", percent: 75 },
 ];
 
 const PRODUCTIVITY_SCALE_FOUR: ProductivityScaleEntry[] = [
-  { value: 0, label: "<25%", color: "productivity-low" },
-  { value: 1, label: "25-50%", color: "productivity-medium" },
-  { value: 2, label: "50-75%", color: "productivity-high" },
-  { value: 3, label: ">75%", color: "productivity-top" },
+  { value: 0, label: "<25%", color: "productivity-low", percent: 12.5 },
+  { value: 1, label: "25-50%", color: "productivity-medium", percent: 37.5 },
+  { value: 2, label: "50-75%", color: "productivity-high", percent: 62.5 },
+  { value: 3, label: ">75%", color: "productivity-top", percent: 87.5 },
 ];
+
+const readCachedJson = <T,>(key: string, fallback: T): T => {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  try {
+    const value = window.localStorage.getItem(key);
+    return value ? (JSON.parse(value) as T) : fallback;
+  } catch (error) {
+    console.error(`Failed to parse cached value for ${key}`, error);
+    return fallback;
+  }
+};
+
+const readCachedText = (key: string) => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem(key);
+  } catch (error) {
+    console.error(`Failed to read cached text for ${key}`, error);
+    return null;
+  }
+};
 
 const formatDayKey = (date: Date) =>
   `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
@@ -83,6 +111,14 @@ const getWeekStart = (date: Date, weekStartDay: WeekdayIndex = 1) => {
 const formatWeekKey = (weekStart: Date, weekStartDay: WeekdayIndex) =>
   `week-${weekStartDay}-${formatDayKey(weekStart)}`;
 
+const parseWeekKey = (weekKey: string) => {
+  const parts = weekKey.split("-");
+  const year = Number(parts[2]);
+  const month = Number(parts[3]);
+  const day = Number(parts[4]);
+  return new Date(year, month - 1, day);
+};
+
 const getDaysInMonth = (year: number, monthIndex: number) =>
   new Date(year, monthIndex + 1, 0).getDate();
 
@@ -96,6 +132,34 @@ const getMonthDays = (year: number, monthIndex: number) =>
       weekday: date.toLocaleDateString(undefined, { weekday: "short" }),
     };
   });
+
+const getWeekDays = (weekStart: Date) =>
+  Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setDate(weekStart.getDate() + index);
+    return {
+      date,
+      key: formatDayKey(date),
+      dayOfMonth: date.getDate(),
+      weekday: date.toLocaleDateString(undefined, { weekday: "short" }),
+    };
+  });
+
+const formatWeekRangeLabel = (weekStart: Date) => {
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+
+  const startLabel = weekStart.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  const endLabel = weekEnd.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+
+  return `${startLabel} - ${endLabel}`;
+};
 
 const isWeekend = (date: Date, workDays: WeekdayIndex[]) =>
   !workDays.includes(date.getDay() as WeekdayIndex);
@@ -152,7 +216,12 @@ export default function PitchPage() {
   const [monthCursor, setMonthCursor] = useState(
     () => new Date(initialDate.getFullYear(), initialDate.getMonth(), 1)
   );
-  const [isHydrated, setIsHydrated] = useState(false);
+  const [isHydrated] = useState(true);
+  const hasMounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>("light");
   const [ratings, setRatings] = useState<Record<string, number | null>>({});
@@ -164,6 +233,7 @@ export default function PitchPage() {
   const [scaleMode, setScaleMode] = useState<"3" | "4">("3");
   const [weeklyGoalsTemplate, setWeeklyGoalsTemplate] = useState(DEFAULT_WEEKLY_TEMPLATE);
   const [isTemplateEditorVisible, setIsTemplateEditorVisible] = useState(false);
+  const [isRulesMenuOpen, setIsRulesMenuOpen] = useState(false);
   const [newGoalTitle, setNewGoalTitle] = useState("");
   const [krDrafts, setKrDrafts] = useState<Record<string, string>>({});
   const [activeGoalCardId, setActiveGoalCardId] = useState<string | null>(null);
@@ -178,6 +248,11 @@ export default function PitchPage() {
   const saveGoalsTimeout = useRef<number | null>(null);
   const saveWeeklyNoteTimeout = useRef<number | null>(null);
   const goalsSectionRef = useRef<HTMLElement | null>(null);
+  const rulesMenuRef = useRef<HTMLDivElement | null>(null);
+  const ratingsDirtyRef = useRef(false);
+  const dayOffsDirtyRef = useRef(false);
+  const goalsDirtyRef = useRef(false);
+  const weeklyNotesDirtyRef = useRef(false);
 
   const scale = scaleMode === "4" ? PRODUCTIVITY_SCALE_FOUR : PRODUCTIVITY_SCALE_THREE;
   const monthDays = useMemo(
@@ -194,6 +269,9 @@ export default function PitchPage() {
     [initialDate, weekStartDay]
   );
   const activeWeekKey = selectedWeekKey ?? currentWeekKey;
+  const activeWeekStart = useMemo(() => parseWeekKey(activeWeekKey), [activeWeekKey]);
+  const mobileWeekDays = useMemo(() => getWeekDays(activeWeekStart), [activeWeekStart]);
+  const mobileWeekLabel = useMemo(() => formatWeekRangeLabel(activeWeekStart), [activeWeekStart]);
   const activeWeekEntry = useMemo(
     () => weeklyNotes[activeWeekKey] ?? { content: "", dos: "", donts: "" },
     [weeklyNotes, activeWeekKey]
@@ -207,74 +285,74 @@ export default function PitchPage() {
         height: 360,
         minHeight: 240,
         placeholder: "What matters this week?",
+        backgroundColor: theme === "dark" ? "#0b1328" : "rgba(238, 245, 255, 0.66)",
+        fontFamily:
+          '"Inter", "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        bodyPadding: "18px 30px",
+        desktopBodyPadding: "18px 30px",
       }),
-      content_style: `
-        html, body {
-          background-color: ${theme === "dark" ? "rgba(37, 99, 235, 0.14)" : "rgba(238, 245, 255, 0.66)"} !important;
-        }
-        body {
-          color: ${theme === "dark" ? "#d1d5db" : "#0f172a"} !important;
-          font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-          font-size: 14px;
-          line-height: 1.55;
-          padding: 18px 30px;
-          margin: 0;
-          outline: none !important;
-          box-shadow: none !important;
-        }
-        .mce-content-body,
-        .mce-content-body:focus,
-        [contenteditable="true"],
-        [contenteditable="true"]:focus {
-          outline: none !important;
-          box-shadow: none !important;
-        }
-        .mce-content-body {
-          box-sizing: border-box !important;
-          padding-left: 30px !important;
-          padding-right: 30px !important;
-        }
-        .mce-content-body:before {
-          left: 30px !important;
-        }
-        * { background-color: transparent !important; }
-        input.task-checkbox {
-          width: 14px;
-          height: 14px;
-          margin-right: 8px;
-          vertical-align: -1px;
-          accent-color: ${theme === "dark" ? "#93c5fd" : "#1d4ed8"};
-        }
-      `,
     }),
     [theme]
   );
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(storageKey("theme"), theme);
   }, [theme]);
 
   useEffect(() => {
     async function loadPitchData() {
       try {
-        const sessionRes = await fetch("/api/auth/session");
-        const session = sessionRes.headers
-          .get("content-type")
-          ?.includes("application/json")
-          ? await sessionRes.json()
-          : null;
-        const email = session?.user?.email ?? null;
-        setUserEmail(email);
+        const cachedTheme = readCachedText(storageKey("theme"));
+        const cachedRatings = readCachedJson<Record<string, number | null>>(storageKey("productivity-ratings"), {});
+        const cachedDayOffs = readCachedJson<Record<string, boolean>>(storageKey("day-offs"), {});
+        const cachedGoals = readCachedJson<Goal[]>(storageKey("goals"), []);
+        const cachedWeeklyNotes = readCachedJson<Record<string, WeeklyNoteEntry>>(storageKey("weekly-notes"), {});
+        const cachedWeeklyTemplate = readCachedText(storageKey("weekly-goals-template"));
+        const cachedShowLegend = readCachedText(storageKey("show-legend"));
+        const hasCachedTheme = cachedTheme === "dark" || cachedTheme === "light";
 
-        if (email) {
+        if (hasCachedTheme) {
+          setTheme(cachedTheme);
+        }
+        if (!ratingsDirtyRef.current) {
+          setRatings(cachedRatings);
+        }
+        if (!dayOffsDirtyRef.current) {
+          setDayOffs(cachedDayOffs);
+        }
+        if (!goalsDirtyRef.current) {
+          setGoals(normalizeGoalOrder(cachedGoals.filter((goal) => !goal.archived)));
+        }
+        if (!weeklyNotesDirtyRef.current) {
+          setWeeklyNotes(cachedWeeklyNotes);
+        }
+        if (cachedWeeklyTemplate) {
+          setWeeklyGoalsTemplate(cachedWeeklyTemplate);
+        }
+        if (cachedShowLegend === "true" || cachedShowLegend === "false") {
+          setShowLegend(cachedShowLegend === "true");
+        }
+
+        const data = await loadAllData();
+
+        if (data?.authenticated) {
+          setUserEmail(data.userEmail ?? null);
           setIsDemoMode(false);
-          const data = await loadAllData();
           const profile = data?.profile;
-          setRatings(data?.productivityRatings ?? {});
-          setDayOffs(data?.dayOffs ?? {});
-          setGoals(normalizeGoalOrder((data?.goals ?? []).filter((goal: Goal) => !goal.archived)));
-          setWeeklyNotes(data?.weeklyNotes ?? {});
-          if (profile?.theme === "light" || profile?.theme === "dark") {
+          if (!ratingsDirtyRef.current) {
+            setRatings(data?.productivityRatings ?? {});
+          }
+          if (!dayOffsDirtyRef.current) {
+            setDayOffs(data?.dayOffs ?? {});
+          }
+          if (!goalsDirtyRef.current) {
+            setGoals(normalizeGoalOrder((data?.goals ?? []).filter((goal: Goal) => !goal.archived)));
+          }
+          if (!weeklyNotesDirtyRef.current) {
+            setWeeklyNotes(data?.weeklyNotes ?? {});
+          }
+          if (!hasCachedTheme && (profile?.theme === "light" || profile?.theme === "dark")) {
             setTheme(profile.theme);
           }
           if (profile?.weekStartDay !== undefined) {
@@ -300,27 +378,26 @@ export default function PitchPage() {
             setWorkDays(parsed.length > 0 ? parsed : [0, 1, 2, 3, 4, 5, 6]);
           }
         } else {
+          setUserEmail(null);
           setIsDemoMode(true);
-          const cachedRatings = window.localStorage.getItem(storageKey("productivity-ratings"));
-          const cachedDayOffs = window.localStorage.getItem(storageKey("day-offs"));
-          setRatings(cachedRatings ? JSON.parse(cachedRatings) : demoProductivityRatings);
-          setDayOffs(cachedDayOffs ? JSON.parse(cachedDayOffs) : demoDayOffs);
-          const cachedGoals = window.localStorage.getItem(storageKey("goals"));
-          const cachedWeeklyNotes = window.localStorage.getItem(storageKey("weekly-notes"));
-          const cachedWeeklyTemplate = window.localStorage.getItem(storageKey("weekly-goals-template"));
-          setGoals(
-            normalizeGoalOrder(
-              cachedGoals
-                ? (JSON.parse(cachedGoals) as Goal[]).filter((goal) => !goal.archived)
-                : (demoGoals as Goal[]).filter((goal) => !goal.archived)
-            )
-          );
-          setWeeklyNotes(cachedWeeklyNotes ? JSON.parse(cachedWeeklyNotes) : {});
-          setWeeklyGoalsTemplate(cachedWeeklyTemplate || demoProfile.weeklyGoalsTemplate || DEFAULT_WEEKLY_TEMPLATE);
-          const cachedShowLegend = window.localStorage.getItem(storageKey("show-legend"));
-          if (cachedShowLegend === "true" || cachedShowLegend === "false") {
-            setShowLegend(cachedShowLegend === "true");
-          } else {
+          if (Object.keys(cachedRatings).length === 0) {
+            setRatings(demoProductivityRatings);
+          }
+          if (Object.keys(cachedDayOffs).length === 0) {
+            setDayOffs(demoDayOffs);
+          }
+          if (cachedGoals.length === 0) {
+            setGoals(normalizeGoalOrder((demoGoals as Goal[]).filter((goal) => !goal.archived)));
+          }
+          if (Object.keys(cachedWeeklyNotes).length === 0) {
+            setWeeklyNotes({});
+          }
+          if (!cachedWeeklyTemplate) {
+            setWeeklyGoalsTemplate(
+              demoProfile.weeklyGoalsTemplate || DEFAULT_WEEKLY_TEMPLATE
+            );
+          }
+          if (cachedShowLegend !== "true" && cachedShowLegend !== "false") {
             setShowLegend(demoProfile.showLegend ?? true);
           }
           setScaleMode((demoProfile.productivityScaleMode as "3" | "4") ?? "3");
@@ -334,8 +411,6 @@ export default function PitchPage() {
         }
       } catch (error) {
         console.error("Failed to load pitch data", error);
-      } finally {
-        setIsHydrated(true);
       }
     }
 
@@ -345,8 +420,9 @@ export default function PitchPage() {
   useEffect(() => {
     if (!isHydrated) return;
 
+    window.localStorage.setItem(storageKey("productivity-ratings"), JSON.stringify(ratings));
+
     if (!userEmail || isDemoMode) {
-      window.localStorage.setItem(storageKey("productivity-ratings"), JSON.stringify(ratings));
       return;
     }
 
@@ -367,8 +443,9 @@ export default function PitchPage() {
   useEffect(() => {
     if (!isHydrated) return;
 
+    window.localStorage.setItem(storageKey("day-offs"), JSON.stringify(dayOffs));
+
     if (!userEmail || isDemoMode) {
-      window.localStorage.setItem(storageKey("day-offs"), JSON.stringify(dayOffs));
       return;
     }
 
@@ -389,8 +466,9 @@ export default function PitchPage() {
   useEffect(() => {
     if (!isHydrated) return;
 
+    window.localStorage.setItem(storageKey("goals"), JSON.stringify(goals));
+
     if (!userEmail || isDemoMode) {
-      window.localStorage.setItem(storageKey("goals"), JSON.stringify(goals));
       return;
     }
 
@@ -411,8 +489,9 @@ export default function PitchPage() {
   useEffect(() => {
     if (!isHydrated) return;
 
+    window.localStorage.setItem(storageKey("weekly-notes"), JSON.stringify(weeklyNotes));
+
     if (!userEmail || isDemoMode) {
-      window.localStorage.setItem(storageKey("weekly-notes"), JSON.stringify(weeklyNotes));
       return;
     }
 
@@ -450,12 +529,51 @@ export default function PitchPage() {
     };
   }, [activeGoalCardId]);
 
+  useEffect(() => {
+    if (!isRulesMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        rulesMenuRef.current &&
+        event.target instanceof Node &&
+        !rulesMenuRef.current.contains(event.target)
+      ) {
+        setIsRulesMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsRulesMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isRulesMenuOpen]);
+
   const shiftMonth = (direction: -1 | 1) => {
     setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() + direction, 1));
   };
 
   const resetToCurrentMonth = () => {
     setMonthCursor(new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
+  };
+
+  const shiftWeek = (direction: -1 | 1) => {
+    const nextWeekStart = new Date(activeWeekStart);
+    nextWeekStart.setDate(activeWeekStart.getDate() + direction * 7);
+    setSelectedWeekKey(formatWeekKey(nextWeekStart, weekStartDay));
+    setSelectedDayKey(null);
+  };
+
+  const resetToCurrentWeek = () => {
+    setSelectedWeekKey(currentWeekKey);
+    setSelectedDayKey(todayKey);
   };
 
   const isDayOffComputed = (date: Date, key: string) => {
@@ -477,6 +595,7 @@ export default function PitchPage() {
     }
 
     if (isDayOffMode) {
+      dayOffsDirtyRef.current = true;
       setDayOffs((previous) => {
         const next = { ...previous };
         const hasRating = ratings[key] !== null && ratings[key] !== undefined;
@@ -498,6 +617,7 @@ export default function PitchPage() {
       return;
     }
 
+    ratingsDirtyRef.current = true;
     setRatings((previous) => {
       const current = previous[key];
       const nextValue =
@@ -512,6 +632,7 @@ export default function PitchPage() {
 
   const cycleKeyResultStatus = (goalId: string, krId: string) => {
     const order: KeyResultStatus[] = ["on-hold", "started", "completed"];
+    goalsDirtyRef.current = true;
     setGoals((previous) =>
       normalizeGoalOrder(
         previous.map((goal) =>
@@ -531,6 +652,7 @@ export default function PitchPage() {
   };
 
   const updateGoalTitle = (goalId: string, title: string) => {
+    goalsDirtyRef.current = true;
     setGoals((previous) =>
       normalizeGoalOrder(
         previous.map((goal) => (goal.id === goalId ? { ...goal, title } : goal))
@@ -539,12 +661,14 @@ export default function PitchPage() {
   };
 
   const removeGoal = (goalId: string) => {
+    goalsDirtyRef.current = true;
     setGoals((previous) => normalizeGoalOrder(previous.filter((goal) => goal.id !== goalId)));
   };
 
   const addGoal = () => {
     const title = newGoalTitle.trim();
     if (!title) return;
+    goalsDirtyRef.current = true;
     setGoals((previous) =>
       normalizeGoalOrder([
         ...previous,
@@ -561,6 +685,7 @@ export default function PitchPage() {
   };
 
   const updateKeyResultTitle = (goalId: string, krId: string, title: string) => {
+    goalsDirtyRef.current = true;
     setGoals((previous) =>
       normalizeGoalOrder(
         previous.map((goal) =>
@@ -578,6 +703,7 @@ export default function PitchPage() {
   };
 
   const removeKeyResult = (goalId: string, krId: string) => {
+    goalsDirtyRef.current = true;
     setGoals((previous) =>
       normalizeGoalOrder(
         previous.map((goal) =>
@@ -595,6 +721,7 @@ export default function PitchPage() {
   const addKeyResult = (goalId: string) => {
     const title = krDrafts[goalId]?.trim();
     if (!title) return;
+    goalsDirtyRef.current = true;
     setGoals((previous) =>
       normalizeGoalOrder(
         previous.map((goal) =>
@@ -618,6 +745,7 @@ export default function PitchPage() {
   };
 
   const updateCurrentWeekContent = (content: string) => {
+    weeklyNotesDirtyRef.current = true;
     setWeeklyNotes((previous) => ({
       ...previous,
       [activeWeekKey]: {
@@ -627,27 +755,54 @@ export default function PitchPage() {
     }));
   };
 
+  const updateCurrentWeekField = (field: "dos" | "donts", value: string) => {
+    weeklyNotesDirtyRef.current = true;
+    setWeeklyNotes((previous) => ({
+      ...previous,
+      [activeWeekKey]: {
+        ...activeWeekEntry,
+        [field]: value,
+      },
+    }));
+  };
+
   const applyWeeklyTemplate = () => {
     updateCurrentWeekContent(weeklyGoalsTemplate);
   };
 
+  const clearDayScore = (key: string) => {
+    ratingsDirtyRef.current = true;
+    setRatings((previous) => ({ ...previous, [key]: null }));
+  };
+
   const monthStats = monthDays.reduce(
     (stats, day) => {
-      const value = ratings[day.key];
-      if (value !== null && value !== undefined) {
-        stats.logged += 1;
-        stats.total += Math.min(value, scale.length - 1);
-      }
-      if (isDayOffComputed(day.date, day.key)) {
+      const storedValue = ratings[day.key];
+      const hasValue = storedValue !== null && storedValue !== undefined;
+      const isDayOff = isDayOffComputed(day.date, day.key);
+      const isEligibleDay = !isDayOff || hasValue;
+
+      if (isDayOff) {
         stats.daysOff += 1;
       }
+
+      if (!isEligibleDay) {
+        return stats;
+      }
+
+      stats.eligible += 1;
+
+      if (hasValue) {
+        const scaleEntry = scale[Math.min(storedValue!, scale.length - 1)];
+        stats.logged += 1;
+        stats.totalPercent += scaleEntry?.percent ?? 0;
+      }
+
       return stats;
     },
-    { logged: 0, total: 0, daysOff: 0 }
+    { logged: 0, eligible: 0, totalPercent: 0, daysOff: 0 }
   );
-  const maxScore = Math.max(1, scale.length - 1);
-  const averageScore =
-    monthStats.logged > 0 ? Math.round((monthStats.total / (monthStats.logged * maxScore)) * 100) : 0;
+  const averageScore = monthStats.eligible > 0 ? Math.round(monthStats.totalPercent / monthStats.eligible) : 0;
 
   if (!isHydrated) {
     return (
@@ -659,7 +814,7 @@ export default function PitchPage() {
 
   return (
     <div className="app-shell min-h-screen text-foreground">
-      {!userEmail ? (
+      {isDemoMode ? (
         <div className="w-full bg-[#d8c06c] px-4 py-3 text-center text-sm font-semibold text-[#2c2410]">
           Demo data.{" "}
           <button
@@ -672,16 +827,70 @@ export default function PitchPage() {
         </div>
       ) : null}
 
-      <header className="sticky top-0 z-40 w-full bg-slate-900 text-white">
+      <header className="sticky top-0 z-40 w-full border-b border-slate-200/70 bg-white/72 text-slate-900 backdrop-blur-xl">
         <div className="flex h-14 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2">
             <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-5 sm:h-6" />
-            <span className="hidden text-[20px] font-semibold sm:inline">Cadencia</span>
+            <span className="hidden text-[20px] font-semibold text-slate-900 sm:inline">Cadencia</span>
           </Link>
           <div className="flex items-center gap-1">
+            <div ref={rulesMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setIsRulesMenuOpen((current) => !current)}
+                className={`rounded-full px-3 py-2 text-sm transition ${
+                  isRulesMenuOpen
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-900/6 hover:text-slate-900"
+                }`}
+                aria-haspopup="dialog"
+                aria-expanded={isRulesMenuOpen}
+              >
+                Rules
+              </button>
+
+              {isRulesMenuOpen ? (
+                <>
+                  <div className="fixed inset-x-0 bottom-0 top-14 z-40 bg-slate-950/18 backdrop-blur-[2px]" aria-hidden="true" />
+                  <div
+                    className="fixed inset-x-3 top-[4.25rem] z-50 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+10px)] sm:max-h-[min(80vh,42rem)] sm:w-[min(92vw,42rem)]"
+                    role="dialog"
+                    aria-label="Weekly rules"
+                  >
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div className="min-w-0">
+                      <div className="dos-label-color text-[11px] font-semibold uppercase tracking-[0.24em]">
+                        Do
+                      </div>
+                      <textarea
+                        value={activeWeekEntry.dos ?? ""}
+                        onChange={(event) => updateCurrentWeekField("dos", event.target.value)}
+                        placeholder={"- Front-load the week\n- Protect focus blocks\n- Ship one real output"}
+                        className="mt-3 min-h-40 w-full resize-none overflow-hidden border-none bg-transparent px-0 py-0 text-sm leading-7 text-slate-900 outline-none placeholder:text-slate-400 sm:min-h-36"
+                        aria-label="Weekly dos"
+                      />
+                    </div>
+
+                    <div className="min-w-0 border-t border-slate-200/80 pt-5 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+                      <div className="donts-label-color text-[11px] font-semibold uppercase tracking-[0.24em]">
+                        Don&apos;t
+                      </div>
+                      <textarea
+                        value={activeWeekEntry.donts ?? ""}
+                        onChange={(event) => updateCurrentWeekField("donts", event.target.value)}
+                        placeholder={"- No low-impact tasks\n- No unscheduled work\n- No context switching for dopamine"}
+                        className="mt-3 min-h-40 w-full resize-none overflow-hidden border-none bg-transparent px-0 py-0 text-sm leading-7 text-slate-900 outline-none placeholder:text-slate-400 sm:min-h-36"
+                        aria-label="Weekly donts"
+                      />
+                    </div>
+                  </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
             <Link
               href="/365"
-              className="flex items-center rounded-full px-2 py-1.5 text-xs text-white/70 transition hover:bg-white/10 hover:text-white sm:px-3 sm:py-2 sm:text-sm"
+              className="flex items-center rounded-full px-2 py-1.5 text-xs text-slate-600 transition hover:bg-slate-900/6 hover:text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
               aria-label="Open sharing in main app"
             >
               🔗
@@ -689,7 +898,7 @@ export default function PitchPage() {
             <button
               type="button"
               onClick={() => window.print()}
-              className="flex items-center rounded-full px-2 py-1.5 text-xs text-white/70 transition hover:bg-white/10 hover:text-white sm:px-3 sm:py-2 sm:text-sm"
+              className="flex items-center rounded-full px-2 py-1.5 text-xs text-slate-600 transition hover:bg-slate-900/6 hover:text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
               aria-label="Print"
             >
               <span role="img" aria-hidden="true">
@@ -698,21 +907,21 @@ export default function PitchPage() {
             </button>
             <Link
               href="/365"
-              className="flex items-center rounded-full px-2 py-1.5 text-xs text-white/70 transition hover:bg-white/10 hover:text-white sm:px-3 sm:py-2 sm:text-sm"
+              className="flex items-center rounded-full px-2 py-1.5 text-xs text-slate-600 transition hover:bg-slate-900/6 hover:text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
               aria-label="Open profile settings in main app"
             >
               ⚙️
             </Link>
             <Link
               href="/365"
-              className="rounded-full px-3 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+              className="rounded-full px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-900/6 hover:text-slate-900"
             >
               365
             </Link>
             <button
               type="button"
               onClick={() => setTheme((current) => (current === "light" ? "dark" : "light"))}
-              className="flex items-center rounded-full px-2 py-1.5 text-xs text-white/70 transition hover:bg-white/10 hover:text-white sm:px-3 sm:py-2 sm:text-sm"
+              className="flex items-center rounded-full px-2 py-1.5 text-xs text-slate-600 transition hover:bg-slate-900/6 hover:text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
               aria-label="Toggle theme"
             >
               {theme === "light" ? (
@@ -731,7 +940,7 @@ export default function PitchPage() {
 
       <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
         <section className="okr-card border-none px-4 py-3 sm:px-5 sm:py-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="hidden flex-col gap-4 sm:flex lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="flex items-center gap-2">
                 <button
@@ -762,10 +971,13 @@ export default function PitchPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
-              <span className="font-semibold text-[color-mix(in_srgb,var(--foreground)_75%,transparent)]">
+              <span
+                suppressHydrationWarning
+                className="font-semibold text-[color-mix(in_srgb,var(--foreground)_75%,transparent)]"
+              >
                 Score {averageScore}%
               </span>
-              {showLegend ? (
+              {hasMounted && showLegend ? (
                 <>
                   {scale.map((item) => (
                     <span key={item.value} className="flex items-center gap-1.5">
@@ -793,7 +1005,73 @@ export default function PitchPage() {
             </div>
           </div>
 
-          <div className="mt-5 overflow-x-auto pb-2">
+          <div className="flex flex-col gap-4 sm:hidden">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => shiftWeek(-1)}
+                  className="rounded-full px-2 py-1 text-lg text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+                  aria-label="Previous week"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  onClick={resetToCurrentWeek}
+                  className="min-w-0 flex-1 rounded-md px-2 py-1 text-left text-lg font-bold tracking-normal transition hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
+                  aria-label="Return to current week"
+                >
+                  {mobileWeekLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => shiftWeek(1)}
+                  className="rounded-full px-2 py-1 text-lg text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+                  aria-label="Next week"
+                >
+                  ›
+                </button>
+              </div>
+
+              <span
+                suppressHydrationWarning
+                className="ml-auto shrink-0 whitespace-nowrap text-xs font-semibold text-[color-mix(in_srgb,var(--foreground)_75%,transparent)]"
+              >
+                Score {averageScore}%
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
+              {hasMounted && showLegend ? (
+                <>
+                  {scale.map((item) => (
+                    <span key={item.value} className="flex items-center gap-1.5">
+                      <span
+                        className={`h-2.5 w-2.5 rounded ${item.color} border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]`}
+                      />
+                      {item.label}
+                    </span>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setIsDayOffMode((current) => !current)}
+                    className={`flex items-center gap-1.5 rounded-full border px-2 py-1 font-semibold transition ${
+                      isDayOffMode
+                        ? "border-[#8dc8e6] bg-[#eef7fc] text-[#3f6f88]"
+                        : "border-transparent hover:border-[color-mix(in_srgb,var(--foreground)_20%,transparent)]"
+                    }`}
+                    aria-pressed={isDayOffMode}
+                  >
+                    <span className="h-2.5 w-2.5 rounded day-off-bg border border-[color-mix(in_srgb,var(--foreground)_15%,transparent)]" />
+                    Day off
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-5 hidden overflow-x-auto pb-2 sm:block">
             <div
               className="grid min-w-[980px] gap-1"
               style={{ gridTemplateColumns: `repeat(${monthDays.length}, minmax(28px, 1fr))` }}
@@ -812,6 +1090,12 @@ export default function PitchPage() {
                     key={day.key}
                     type="button"
                     onClick={() => handleDayClick(day.date, day.key)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Delete" || event.key === "Backspace") {
+                        event.preventDefault();
+                        clearDayScore(day.key);
+                      }
+                    }}
                     className={`group relative flex h-14 flex-col items-center justify-center gap-1 rounded-md border px-1.5 py-1 text-center transition hover:border-orange-500 ${
                       hasValue
                         ? `${scaleEntry.color} border-[color-mix(in_srgb,var(--foreground)_18%,transparent)]`
@@ -831,9 +1115,56 @@ export default function PitchPage() {
               })}
             </div>
           </div>
+
+          <div className="mt-5 sm:hidden">
+            <div className="grid grid-cols-7 gap-1">
+              {mobileWeekDays.map((day) => {
+                const storedValue = ratings[day.key];
+                const hasValue = storedValue !== null && storedValue !== undefined;
+                const currentValue = hasValue ? Math.min(storedValue!, scale.length - 1) : 0;
+                const scaleEntry = scale[currentValue];
+                const dayOff = isDayOffComputed(day.date, day.key);
+                const isToday = day.key === todayKey;
+                const isSelectedDay = day.key === selectedDayKey;
+
+                return (
+                  <button
+                    key={day.key}
+                    type="button"
+                    onClick={() => handleDayClick(day.date, day.key)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Delete" || event.key === "Backspace") {
+                        event.preventDefault();
+                        clearDayScore(day.key);
+                      }
+                    }}
+                    className={`group relative flex h-14 flex-col items-center justify-center gap-1 rounded-md border px-1 py-1 text-center transition hover:border-orange-500 ${
+                      hasValue
+                        ? `${scaleEntry.color} border-[color-mix(in_srgb,var(--foreground)_18%,transparent)]`
+                        : dayOff
+                          ? "day-off-bg border-[color-mix(in_srgb,var(--foreground)_14%,transparent)]"
+                          : "border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_3%,transparent)]"
+                    } ${isToday ? "ring-2 ring-inset ring-red-500" : isSelectedDay ? "ring-2 ring-inset ring-slate-700" : ""}`}
+                    aria-label={day.date.toLocaleDateString(undefined, {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                    title={`${day.weekday}, ${day.dayOfMonth}`}
+                  >
+                    <span className="text-[10px] font-semibold uppercase text-[color-mix(in_srgb,var(--foreground)_58%,transparent)]">
+                      {day.weekday}
+                    </span>
+                    <span className="text-lg font-bold leading-none text-foreground">{day.dayOfMonth}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </section>
 
-        <section className="mt-5 grid w-full gap-5 text-left lg:grid-cols-[minmax(0,42rem)_minmax(0,1fr)]">
+        <section className="mt-5 grid w-full gap-5 text-left lg:grid-cols-2">
           <div ref={goalsSectionRef} className="w-full">
           <div className="okr-card border-none px-5 py-5">
             <div>
@@ -852,11 +1183,11 @@ export default function PitchPage() {
                           type="text"
                           value={goal.title}
                           onChange={(event) => updateGoalTitle(goal.id, event.target.value)}
-                          className="kr-apple-font min-w-0 flex-1 border-b border-transparent bg-transparent text-left text-base font-light text-foreground outline-none transition focus:border-foreground sm:text-2xl"
+                          className="kr-apple-font min-w-0 flex-1 border-b border-transparent bg-transparent text-left text-base font-light text-foreground outline-none transition focus:border-foreground sm:text-xl"
                           aria-label="Goal title"
                         />
                       ) : (
-                        <h2 className="kr-apple-font min-w-0 flex-1 text-left text-base font-light text-foreground sm:text-2xl">
+                        <h2 className="kr-apple-font min-w-0 flex-1 text-left text-base font-light text-foreground sm:text-xl">
                           {goal.title}
                         </h2>
                       )}
@@ -1013,6 +1344,7 @@ export default function PitchPage() {
             </div>
           </div>
         </section>
+
       </main>
     </div>
   );
