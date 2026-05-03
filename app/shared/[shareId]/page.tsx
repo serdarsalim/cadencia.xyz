@@ -17,7 +17,7 @@ import {
   type Goal,
   type KeyResult,
   type WeeklyNoteEntry,
-} from "@/app/page";
+} from "@/app/365/page";
 import {
   createWeeklyGoalsEditorInit,
   type EditorTheme,

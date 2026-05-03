@@ -247,7 +247,7 @@ export default function PitchPage() {
   const saveDayOffsTimeout = useRef<number | null>(null);
   const saveGoalsTimeout = useRef<number | null>(null);
   const saveWeeklyNoteTimeout = useRef<number | null>(null);
-  const goalsSectionRef = useRef<HTMLElement | null>(null);
+  const goalsSectionRef = useRef<HTMLDivElement | null>(null);
   const rulesMenuRef = useRef<HTMLDivElement | null>(null);
   const ratingsDirtyRef = useRef(false);
   const dayOffsDirtyRef = useRef(false);
