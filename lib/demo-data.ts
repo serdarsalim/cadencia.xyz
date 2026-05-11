@@ -185,7 +185,7 @@ export const demoGoals = [
       {
         id: "kr2",
         title:
-          "Ship one client-facing deliverable every week and log what shipped by June 2026",
+          "Ship one client-facing deliverable every by June 2026",
         status: "started" as const,
       },
       {
@@ -407,8 +407,10 @@ export const demoProfile = {
   showLegend: true,
   dayOffAllowance: 15,
   productivityScaleMode: "4", // 4-point scale
+  scoreLabels: '["Low","Partial","Good","Excellent"]',
+  scoreDisplayMode: "percentage",
   autoMarkWeekendsOff: true, // Auto-mark weekends as day-off
   workDays: "1,2,3,4,5", // Monday-Friday (0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat)
   weeklyGoalsTemplate:
-    "<p><strong>What I want to accomplish this week:</strong></p><ul><li>Monday</li><li>Tuesday</li><li>Wednesday</li><li>Thursday</li><li>Friday</li><li>Saturday</li><li>Sunday</li></ul>",
+    "<p><strong>What I want to accomplish this week:</strong></p><p>Monday</p><p>Tuesday</p><p>Wednesday</p><p>Thursday</p><p>Friday</p><p>Saturday</p><p>Sunday</p>",
 };

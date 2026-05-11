@@ -7,6 +7,12 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { loadAllData, saveDayOffs, saveGoals, saveProductivity, saveWeeklyNoteForWeek } from "@/lib/api";
 import { storageKey } from "@/lib/branding";
 import { demoDayOffs, demoGoals, demoProductivityRatings, demoProfile } from "@/lib/demo-data";
+import {
+  DEFAULT_SCORE_LABELS,
+  normalizeScoreDisplayMode,
+  normalizeScoreLabels,
+  type ScoreDisplayMode,
+} from "@/lib/score-settings";
 import { createWeeklyGoalsEditorInit } from "@/lib/weekly-goals-editor";
 
 type Theme = "light" | "dark";
@@ -54,7 +60,7 @@ const TINYMCE_CDN =
   "https://cdnjs.cloudflare.com/ajax/libs/tinymce/8.1.2/tinymce.min.js";
 
 const DEFAULT_WEEKLY_TEMPLATE =
-  "<p><strong>What I want to accomplish this week:</strong></p><ul><li>Monday</li><li>Tuesday</li><li>Wednesday</li><li>Thursday</li><li>Friday</li><li>Saturday</li><li>Sunday</li></ul>";
+  "<p><strong>What I want to accomplish this week:</strong></p><p>Monday</p><p>Tuesday</p><p>Wednesday</p><p>Thursday</p><p>Friday</p><p>Saturday</p><p>Sunday</p>";
 
 const PRODUCTIVITY_SCALE_THREE: ProductivityScaleEntry[] = [
   { value: 0, label: "<25%", color: "productivity-low", percent: 12.5 },
@@ -164,15 +170,22 @@ const formatWeekRangeLabel = (weekStart: Date) => {
 const isWeekend = (date: Date, workDays: WeekdayIndex[]) =>
   !workDays.includes(date.getDay() as WeekdayIndex);
 
-const normalizeGoalOrder = (goalList: Goal[]) =>
-  goalList.map((goal, index) => ({
-    ...goal,
-    sortOrder: index,
-    keyResults: goal.keyResults.map((kr, krIndex) => ({
-      ...kr,
-      sortOrder: krIndex,
-    })),
-  }));
+const normalizeGoalOrder = (goalList: Goal[]) => {
+  const normalizeGroup = (group: Goal[]) =>
+    group.map((goal, index) => ({
+      ...goal,
+      sortOrder: index,
+      keyResults: goal.keyResults.map((kr, krIndex) => ({
+        ...kr,
+        sortOrder: krIndex,
+      })),
+    }));
+
+  return [
+    ...normalizeGroup(goalList.filter((goal) => !goal.archived)),
+    ...normalizeGroup(goalList.filter((goal) => goal.archived)),
+  ];
+};
 
 const goalStatusBadge = (status: KeyResultStatus) => {
   switch (status) {
@@ -231,9 +244,13 @@ export default function PitchPage() {
   const [isDayOffMode, setIsDayOffMode] = useState(false);
   const [showLegend, setShowLegend] = useState(true);
   const [scaleMode, setScaleMode] = useState<"3" | "4">("3");
+  const [scoreLabels, setScoreLabels] = useState(() => DEFAULT_SCORE_LABELS);
+  const [scoreDisplayMode, setScoreDisplayMode] =
+    useState<ScoreDisplayMode>("percentage");
   const [weeklyGoalsTemplate, setWeeklyGoalsTemplate] = useState(DEFAULT_WEEKLY_TEMPLATE);
   const [isTemplateEditorVisible, setIsTemplateEditorVisible] = useState(false);
   const [isRulesMenuOpen, setIsRulesMenuOpen] = useState(false);
+  const [isViewingArchivedGoals, setIsViewingArchivedGoals] = useState(false);
   const [newGoalTitle, setNewGoalTitle] = useState("");
   const [krDrafts, setKrDrafts] = useState<Record<string, string>>({});
   const [activeGoalCardId, setActiveGoalCardId] = useState<string | null>(null);
@@ -254,7 +271,16 @@ export default function PitchPage() {
   const goalsDirtyRef = useRef(false);
   const weeklyNotesDirtyRef = useRef(false);
 
-  const scale = scaleMode === "4" ? PRODUCTIVITY_SCALE_FOUR : PRODUCTIVITY_SCALE_THREE;
+  const scale = useMemo(
+    () =>
+      (scaleMode === "4" ? PRODUCTIVITY_SCALE_FOUR : PRODUCTIVITY_SCALE_THREE).map(
+        (entry, index) => ({
+          ...entry,
+          label: scoreLabels[index]?.trim() || DEFAULT_SCORE_LABELS[index] || entry.label,
+        })
+      ),
+    [scaleMode, scoreLabels]
+  );
   const monthDays = useMemo(
     () => getMonthDays(monthCursor.getFullYear(), monthCursor.getMonth()),
     [monthCursor]
@@ -310,6 +336,8 @@ export default function PitchPage() {
         const cachedWeeklyNotes = readCachedJson<Record<string, WeeklyNoteEntry>>(storageKey("weekly-notes"), {});
         const cachedWeeklyTemplate = readCachedText(storageKey("weekly-goals-template"));
         const cachedShowLegend = readCachedText(storageKey("show-legend"));
+        const cachedScoreLabels = readCachedText(storageKey("score-labels"));
+        const cachedScoreDisplayMode = readCachedText(storageKey("score-display-mode"));
         const hasCachedTheme = cachedTheme === "dark" || cachedTheme === "light";
 
         if (hasCachedTheme) {
@@ -322,7 +350,7 @@ export default function PitchPage() {
           setDayOffs(cachedDayOffs);
         }
         if (!goalsDirtyRef.current) {
-          setGoals(normalizeGoalOrder(cachedGoals.filter((goal) => !goal.archived)));
+          setGoals(normalizeGoalOrder(cachedGoals));
         }
         if (!weeklyNotesDirtyRef.current) {
           setWeeklyNotes(cachedWeeklyNotes);
@@ -332,6 +360,12 @@ export default function PitchPage() {
         }
         if (cachedShowLegend === "true" || cachedShowLegend === "false") {
           setShowLegend(cachedShowLegend === "true");
+        }
+        if (cachedScoreLabels) {
+          setScoreLabels(normalizeScoreLabels(cachedScoreLabels));
+        }
+        if (cachedScoreDisplayMode) {
+          setScoreDisplayMode(normalizeScoreDisplayMode(cachedScoreDisplayMode));
         }
 
         const data = await loadAllData();
@@ -347,7 +381,18 @@ export default function PitchPage() {
             setDayOffs(data?.dayOffs ?? {});
           }
           if (!goalsDirtyRef.current) {
-            setGoals(normalizeGoalOrder((data?.goals ?? []).filter((goal: Goal) => !goal.archived)));
+            let archivedGoals: Goal[] = [];
+            try {
+              const archivedResponse = await fetch("/api/goals/archive");
+              if (archivedResponse.ok) {
+                const archivedData = await archivedResponse.json();
+                archivedGoals = Array.isArray(archivedData?.goals) ? archivedData.goals : [];
+              }
+            } catch (error) {
+              console.error("Failed to load archived goals", error);
+            }
+
+            setGoals(normalizeGoalOrder([...(data?.goals ?? []), ...archivedGoals]));
           }
           if (!weeklyNotesDirtyRef.current) {
             setWeeklyNotes(data?.weeklyNotes ?? {});
@@ -366,6 +411,12 @@ export default function PitchPage() {
           }
           if (profile?.productivityScaleMode === "3" || profile?.productivityScaleMode === "4") {
             setScaleMode(profile.productivityScaleMode);
+          }
+          if (profile?.scoreLabels) {
+            setScoreLabels(normalizeScoreLabels(profile.scoreLabels));
+          }
+          if (profile?.scoreDisplayMode) {
+            setScoreDisplayMode(normalizeScoreDisplayMode(profile.scoreDisplayMode));
           }
           if (profile?.autoMarkWeekendsOff !== undefined) {
             setAutoMarkWeekendsOff(Boolean(profile.autoMarkWeekendsOff));
@@ -387,7 +438,7 @@ export default function PitchPage() {
             setDayOffs(demoDayOffs);
           }
           if (cachedGoals.length === 0) {
-            setGoals(normalizeGoalOrder((demoGoals as Goal[]).filter((goal) => !goal.archived)));
+            setGoals(normalizeGoalOrder(demoGoals as Goal[]));
           }
           if (Object.keys(cachedWeeklyNotes).length === 0) {
             setWeeklyNotes({});
@@ -401,6 +452,8 @@ export default function PitchPage() {
             setShowLegend(demoProfile.showLegend ?? true);
           }
           setScaleMode((demoProfile.productivityScaleMode as "3" | "4") ?? "3");
+          setScoreLabels(normalizeScoreLabels(demoProfile.scoreLabels));
+          setScoreDisplayMode(normalizeScoreDisplayMode(demoProfile.scoreDisplayMode));
           setWeekStartDay(demoProfile.weekStartDay as WeekdayIndex);
           setAutoMarkWeekendsOff(demoProfile.autoMarkWeekendsOff ?? false);
           setWorkDays(
@@ -660,9 +713,73 @@ export default function PitchPage() {
     );
   };
 
-  const removeGoal = (goalId: string) => {
+  const setGoalArchived = (goalId: string, archived: boolean) => {
     goalsDirtyRef.current = true;
-    setGoals((previous) => normalizeGoalOrder(previous.filter((goal) => goal.id !== goalId)));
+    setGoals((previous) =>
+      normalizeGoalOrder(
+        previous.map((goal) =>
+          goal.id === goalId
+            ? {
+                ...goal,
+                archived,
+              }
+            : goal
+        )
+      )
+    );
+    setActiveGoalCardId(null);
+  };
+
+  const moveGoal = (goalId: string, direction: "up" | "down") => {
+    goalsDirtyRef.current = true;
+    setGoals((previous) => {
+      const active = previous.filter((goal) => !goal.archived);
+      const archived = previous.filter((goal) => goal.archived);
+      const currentIndex = active.findIndex((goal) => goal.id === goalId);
+
+      if (currentIndex === -1) {
+        return previous;
+      }
+
+      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= active.length) {
+        return previous;
+      }
+
+      const reordered = [...active];
+      const [movedGoal] = reordered.splice(currentIndex, 1);
+      reordered.splice(targetIndex, 0, movedGoal!);
+      return normalizeGoalOrder([...reordered, ...archived]);
+    });
+  };
+
+  const moveKeyResult = (goalId: string, krId: string, direction: "up" | "down") => {
+    goalsDirtyRef.current = true;
+    setGoals((previous) =>
+      normalizeGoalOrder(
+        previous.map((goal) => {
+          if (goal.id !== goalId || goal.archived) {
+            return goal;
+          }
+
+          const currentIndex = goal.keyResults.findIndex((kr) => kr.id === krId);
+          if (currentIndex === -1) {
+            return goal;
+          }
+
+          const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+          if (targetIndex < 0 || targetIndex >= goal.keyResults.length) {
+            return goal;
+          }
+
+          const reorderedKeyResults = [...goal.keyResults];
+          const [movedKr] = reorderedKeyResults.splice(currentIndex, 1);
+          reorderedKeyResults.splice(targetIndex, 0, movedKr!);
+
+          return { ...goal, keyResults: reorderedKeyResults };
+        })
+      )
+    );
   };
 
   const addGoal = () => {
@@ -770,13 +887,35 @@ export default function PitchPage() {
     updateCurrentWeekContent(weeklyGoalsTemplate);
   };
 
-  const clearDayScore = (key: string) => {
+  const setDayScore = (key: string, value: number | null) => {
     ratingsDirtyRef.current = true;
-    setRatings((previous) => ({ ...previous, [key]: null }));
+    setRatings((previous) => ({ ...previous, [key]: value }));
   };
+
+  const clearDayScore = (key: string) => {
+    setDayScore(key, null);
+  };
+
+  const todayDate = new Date(initialDate);
+  todayDate.setHours(0, 0, 0, 0);
+  const monthStartDate = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
+  const monthEndDate = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
+  const scoreCutoffDate =
+    monthCursor.getFullYear() === todayDate.getFullYear() &&
+    monthCursor.getMonth() === todayDate.getMonth()
+      ? todayDate
+      : monthEndDate < todayDate
+        ? monthEndDate
+        : monthStartDate < todayDate
+          ? todayDate
+          : null;
 
   const monthStats = monthDays.reduce(
     (stats, day) => {
+      if (!scoreCutoffDate || day.date > scoreCutoffDate) {
+        return stats;
+      }
+
       const storedValue = ratings[day.key];
       const hasValue = storedValue !== null && storedValue !== undefined;
       const isDayOff = isDayOffComputed(day.date, day.key);
@@ -803,6 +942,19 @@ export default function PitchPage() {
     { logged: 0, eligible: 0, totalPercent: 0, daysOff: 0 }
   );
   const averageScore = monthStats.eligible > 0 ? Math.round(monthStats.totalPercent / monthStats.eligible) : 0;
+  const averageOutOfScale = monthStats.eligible > 0 ? (averageScore / 100) * scale.length : 0;
+  const scoreLabelIndex =
+    averageScore > 0
+      ? Math.min(scale.length - 1, Math.max(0, Math.ceil((averageScore / 100) * scale.length) - 1))
+      : 0;
+  const monthScoreLabel = scale[scoreLabelIndex]?.label ?? DEFAULT_SCORE_LABELS[scoreLabelIndex] ?? "Low";
+  const monthScoreDetail =
+    scoreDisplayMode === "average"
+      ? `${averageOutOfScale.toFixed(1)} / ${scale.length}`
+      : `${averageScore}%`;
+  const activeGoals = goals.filter((goal) => !goal.archived);
+  const archivedGoals = goals.filter((goal) => goal.archived);
+  const visibleGoals = isViewingArchivedGoals ? archivedGoals : activeGoals;
 
   if (!isHydrated) {
     return (
@@ -827,11 +979,11 @@ export default function PitchPage() {
         </div>
       ) : null}
 
-      <header className="sticky top-0 z-40 w-full border-b border-slate-200/70 bg-white/72 text-slate-900 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 w-full border-b border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] bg-[color-mix(in_srgb,var(--background)_82%,transparent)] text-foreground backdrop-blur-xl">
         <div className="flex h-14 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2">
             <img src="/cadencia-app-logo.png" alt="Cadencia" className="h-5 sm:h-6" />
-            <span className="hidden text-[20px] font-semibold text-slate-900 sm:inline">Cadencia</span>
+            <span className="hidden text-[20px] font-semibold text-foreground sm:inline">Cadencia</span>
           </Link>
           <div className="flex items-center gap-1">
             <div ref={rulesMenuRef} className="relative">
@@ -840,8 +992,8 @@ export default function PitchPage() {
                 onClick={() => setIsRulesMenuOpen((current) => !current)}
                 className={`rounded-full px-3 py-2 text-sm transition ${
                   isRulesMenuOpen
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-slate-900/6 hover:text-slate-900"
+                    ? "bg-foreground text-background"
+                    : "text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
                 }`}
                 aria-haspopup="dialog"
                 aria-expanded={isRulesMenuOpen}
@@ -853,7 +1005,7 @@ export default function PitchPage() {
                 <>
                   <div className="fixed inset-x-0 bottom-0 top-14 z-40 bg-slate-950/18 backdrop-blur-[2px]" aria-hidden="true" />
                   <div
-                    className="fixed inset-x-3 top-[4.25rem] z-50 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+10px)] sm:max-h-[min(80vh,42rem)] sm:w-[min(92vw,42rem)]"
+                    className="fixed inset-x-3 top-[4.25rem] z-50 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-2xl border border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] bg-background p-5 text-foreground shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+10px)] sm:max-h-[min(80vh,42rem)] sm:w-[min(92vw,42rem)]"
                     role="dialog"
                     aria-label="Weekly rules"
                   >
@@ -866,12 +1018,12 @@ export default function PitchPage() {
                         value={activeWeekEntry.dos ?? ""}
                         onChange={(event) => updateCurrentWeekField("dos", event.target.value)}
                         placeholder={"- Front-load the week\n- Protect focus blocks\n- Ship one real output"}
-                        className="mt-3 min-h-40 w-full resize-none overflow-hidden border-none bg-transparent px-0 py-0 text-sm leading-7 text-slate-900 outline-none placeholder:text-slate-400 sm:min-h-36"
+                        className="mt-3 min-h-40 w-full resize-none overflow-hidden border-none bg-transparent px-0 py-0 text-sm leading-7 text-foreground outline-none placeholder:text-[color-mix(in_srgb,var(--foreground)_38%,transparent)] sm:min-h-36"
                         aria-label="Weekly dos"
                       />
                     </div>
 
-                    <div className="min-w-0 border-t border-slate-200/80 pt-5 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+                    <div className="min-w-0 border-t border-[color-mix(in_srgb,var(--foreground)_12%,transparent)] pt-5 md:border-l md:border-t-0 md:pl-5 md:pt-0">
                       <div className="donts-label-color text-[11px] font-semibold uppercase tracking-[0.24em]">
                         Don&apos;t
                       </div>
@@ -879,7 +1031,7 @@ export default function PitchPage() {
                         value={activeWeekEntry.donts ?? ""}
                         onChange={(event) => updateCurrentWeekField("donts", event.target.value)}
                         placeholder={"- No low-impact tasks\n- No unscheduled work\n- No context switching for dopamine"}
-                        className="mt-3 min-h-40 w-full resize-none overflow-hidden border-none bg-transparent px-0 py-0 text-sm leading-7 text-slate-900 outline-none placeholder:text-slate-400 sm:min-h-36"
+                        className="mt-3 min-h-40 w-full resize-none overflow-hidden border-none bg-transparent px-0 py-0 text-sm leading-7 text-foreground outline-none placeholder:text-[color-mix(in_srgb,var(--foreground)_38%,transparent)] sm:min-h-36"
                         aria-label="Weekly donts"
                       />
                     </div>
@@ -890,7 +1042,7 @@ export default function PitchPage() {
             </div>
             <Link
               href="/365"
-              className="flex items-center rounded-full px-2 py-1.5 text-xs text-slate-600 transition hover:bg-slate-900/6 hover:text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
+              className="flex items-center rounded-full px-2 py-1.5 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground sm:px-3 sm:py-2 sm:text-sm"
               aria-label="Open sharing in main app"
             >
               🔗
@@ -898,7 +1050,7 @@ export default function PitchPage() {
             <button
               type="button"
               onClick={() => window.print()}
-              className="flex items-center rounded-full px-2 py-1.5 text-xs text-slate-600 transition hover:bg-slate-900/6 hover:text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
+              className="flex items-center rounded-full px-2 py-1.5 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground sm:px-3 sm:py-2 sm:text-sm"
               aria-label="Print"
             >
               <span role="img" aria-hidden="true">
@@ -907,21 +1059,25 @@ export default function PitchPage() {
             </button>
             <Link
               href="/365"
-              className="flex items-center rounded-full px-2 py-1.5 text-xs text-slate-600 transition hover:bg-slate-900/6 hover:text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
+              className="flex items-center rounded-full px-2 py-1.5 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground sm:px-3 sm:py-2 sm:text-sm"
               aria-label="Open profile settings in main app"
             >
               ⚙️
             </Link>
             <Link
               href="/365"
-              className="rounded-full px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-900/6 hover:text-slate-900"
+              className="flex items-center rounded-full px-2 py-1.5 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground sm:px-3 sm:py-2 sm:text-sm"
+              aria-label="Open yearly calendar view"
+              title="Year view"
             >
-              365
+              <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5h16M7 3v4m10-4v4M5 9h14v11H5zM8 12h2m3 0h2m3 0h2M8 16h2m3 0h2m3 0h2" />
+              </svg>
             </Link>
             <button
               type="button"
               onClick={() => setTheme((current) => (current === "light" ? "dark" : "light"))}
-              className="flex items-center rounded-full px-2 py-1.5 text-xs text-slate-600 transition hover:bg-slate-900/6 hover:text-slate-900 sm:px-3 sm:py-2 sm:text-sm"
+              className="flex items-center rounded-full px-2 py-1.5 text-xs text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground sm:px-3 sm:py-2 sm:text-sm"
               aria-label="Toggle theme"
             >
               {theme === "light" ? (
@@ -938,8 +1094,8 @@ export default function PitchPage() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
-        <section className="okr-card border-none px-4 py-3 sm:px-5 sm:py-4">
+      <main className="mx-auto w-full max-w-[1500px] px-4 pb-6 pt-0 sm:px-6 lg:px-8">
+        <section className="okr-card month-card border-none px-4 py-3 sm:px-5 sm:py-4">
           <div className="hidden flex-col gap-4 sm:flex lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="flex items-center gap-2">
@@ -975,7 +1131,7 @@ export default function PitchPage() {
                 suppressHydrationWarning
                 className="font-semibold text-[color-mix(in_srgb,var(--foreground)_75%,transparent)]"
               >
-                Score {averageScore}%
+                {monthScoreLabel} {monthScoreDetail}
               </span>
               {hasMounted && showLegend ? (
                 <>
@@ -1038,7 +1194,7 @@ export default function PitchPage() {
                 suppressHydrationWarning
                 className="ml-auto shrink-0 whitespace-nowrap text-xs font-semibold text-[color-mix(in_srgb,var(--foreground)_75%,transparent)]"
               >
-                Score {averageScore}%
+                {monthScoreLabel} {monthScoreDetail}
               </span>
             </div>
 
@@ -1094,6 +1250,13 @@ export default function PitchPage() {
                       if (event.key === "Delete" || event.key === "Backspace") {
                         event.preventDefault();
                         clearDayScore(day.key);
+                        return;
+                      }
+
+                      const scoreKey = Number(event.key);
+                      if (Number.isInteger(scoreKey) && scoreKey >= 1 && scoreKey <= scale.length) {
+                        event.preventDefault();
+                        setDayScore(day.key, scoreKey - 1);
                       }
                     }}
                     className={`group relative flex h-14 flex-col items-center justify-center gap-1 rounded-md border px-1.5 py-1 text-center transition hover:border-orange-500 ${
@@ -1136,6 +1299,13 @@ export default function PitchPage() {
                       if (event.key === "Delete" || event.key === "Backspace") {
                         event.preventDefault();
                         clearDayScore(day.key);
+                        return;
+                      }
+
+                      const scoreKey = Number(event.key);
+                      if (Number.isInteger(scoreKey) && scoreKey >= 1 && scoreKey <= scale.length) {
+                        event.preventDefault();
+                        setDayScore(day.key, scoreKey - 1);
                       }
                     }}
                     className={`group relative flex h-14 flex-col items-center justify-center gap-1 rounded-md border px-1 py-1 text-center transition hover:border-orange-500 ${
@@ -1168,7 +1338,12 @@ export default function PitchPage() {
           <div ref={goalsSectionRef} className="w-full">
           <div className="okr-card border-none px-5 py-5">
             <div>
-              {goals.map((goal) => {
+              {visibleGoals.length === 0 ? (
+                <p className="py-6 text-sm text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]">
+                  {isViewingArchivedGoals ? "No archived goals." : "No active goals."}
+                </p>
+              ) : null}
+              {visibleGoals.map((goal) => {
                 const isActiveGoal = activeGoalCardId === goal.id;
                 return (
                   <div
@@ -1192,18 +1367,54 @@ export default function PitchPage() {
                         </h2>
                       )}
                       {isActiveGoal ? (
+                        !goal.archived ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                moveGoal(goal.id, "up");
+                              }}
+                              className="text-xs text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                              aria-label="Move goal up"
+                              disabled={visibleGoals.findIndex((item) => item.id === goal.id) === 0}
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                moveGoal(goal.id, "down");
+                              }}
+                              className="text-xs text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                              aria-label="Move goal down"
+                              disabled={
+                                visibleGoals.findIndex((item) => item.id === goal.id) ===
+                                visibleGoals.length - 1
+                              }
+                            >
+                              ↓
+                            </button>
+                          </>
+                        ) : null
+                      ) : null}
+                      {isActiveGoal ? (
                         <button
                           type="button"
-                          onClick={() => removeGoal(goal.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setGoalArchived(goal.id, !goal.archived);
+                          }}
                           className="text-xs text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] transition hover:text-foreground"
-                          aria-label="Remove goal"
+                          aria-label={goal.archived ? "Unarchive goal" : "Archive goal"}
                         >
-                          ✕
+                          {goal.archived ? "Unarchive" : "Archive"}
                         </button>
                       ) : null}
                     </div>
                     <div className="mt-2 space-y-0">
-                      {goal.keyResults.map((kr) => (
+                      {goal.keyResults.map((kr, krIndex) => (
                         <div key={kr.id} className="rounded-2xl px-3 py-0.5">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             {isActiveGoal ? (
@@ -1235,10 +1446,41 @@ export default function PitchPage() {
                             >
                               <StatusIcon status={kr.status} />
                             </button>
-                            {isActiveGoal ? (
+                            {isActiveGoal && !goal.archived ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    moveKeyResult(goal.id, kr.id, "up");
+                                  }}
+                                  className="text-xs text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                                  aria-label="Move key result up"
+                                  disabled={krIndex === 0}
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    moveKeyResult(goal.id, kr.id, "down");
+                                  }}
+                                  className="text-xs text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                                  aria-label="Move key result down"
+                                  disabled={krIndex === goal.keyResults.length - 1}
+                                >
+                                  ↓
+                                </button>
+                              </>
+                            ) : null}
+                            {isActiveGoal && !goal.archived ? (
                               <button
                                 type="button"
-                                onClick={() => removeKeyResult(goal.id, kr.id)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  removeKeyResult(goal.id, kr.id);
+                                }}
                                 className="text-xs text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] transition hover:text-foreground"
                                 aria-label="Remove key result"
                               >
@@ -1277,25 +1519,59 @@ export default function PitchPage() {
               })}
             </div>
             {activeGoalCardId ? (
-              <div className="mt-4 border-t border-[color-mix(in_srgb,var(--foreground)_10%,transparent)] pt-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  <input
-                    type="text"
-                    value={newGoalTitle}
-                    onChange={(event) => setNewGoalTitle(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") addGoal();
-                    }}
-                    placeholder="Add an objective"
-                    className="min-w-60 flex-1 border-b border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
-                  />
-                  <button
-                    type="button"
-                    onClick={addGoal}
-                    className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--foreground)_75%,transparent)] transition hover:border-foreground"
-                  >
-                    Add OKR
-                  </button>
+              <div className="mt-4 pt-4">
+                <div className="flex flex-col gap-4">
+                  {!isViewingArchivedGoals ? (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <input
+                        type="text"
+                        value={newGoalTitle}
+                        onChange={(event) => setNewGoalTitle(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") addGoal();
+                        }}
+                        placeholder="Add an objective"
+                        className="min-w-60 flex-1 border-b border-[color-mix(in_srgb,var(--foreground)_20%,transparent)] bg-transparent pb-1 text-sm text-foreground outline-none focus:border-foreground"
+                      />
+                      <button
+                        type="button"
+                        onClick={addGoal}
+                        className="rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2 text-xs uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--foreground)_75%,transparent)] transition hover:border-foreground"
+                      >
+                        Add OKR
+                      </button>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-center">
+                    <div className="flex rounded-full bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] p-1 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsViewingArchivedGoals(false);
+                        }}
+                        className={`rounded-full px-3 py-1.5 transition ${
+                          !isViewingArchivedGoals
+                            ? "bg-foreground text-background"
+                            : "text-[color-mix(in_srgb,var(--foreground)_62%,transparent)] hover:text-foreground"
+                        }`}
+                      >
+                        Active {activeGoals.length}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsViewingArchivedGoals(true);
+                        }}
+                        className={`rounded-full px-3 py-1.5 transition ${
+                          isViewingArchivedGoals
+                            ? "bg-foreground text-background"
+                            : "text-[color-mix(in_srgb,var(--foreground)_62%,transparent)] hover:text-foreground"
+                        }`}
+                      >
+                        Archived {archivedGoals.length}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : null}

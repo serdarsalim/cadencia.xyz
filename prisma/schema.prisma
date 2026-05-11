@@ -75,6 +75,8 @@ model UserProfile {
   productivityViewMode  String   @default("day")
   productivityScaleMode String   @default("3")
   showLegend            Boolean  @default(true)
+  scoreLabels           String   @default("[\"Low\",\"Partial\",\"Good\",\"Excellent\"]")
+  scoreDisplayMode      String   @default("percentage")
   weeklyGoalsTemplate   String   @default("")
   dayOffAllowance       Int      @default(15)
   workDays              String   @default("0,1,2,3,4,5,6")

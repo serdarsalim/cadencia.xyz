@@ -51,8 +51,13 @@ export const profileSchema = z.object({
   productivityViewMode: z.enum(['day', 'week']).optional(),
   productivityScaleMode: z.enum(['3', '4']).optional(),
   showLegend: z.boolean().optional(),
+  scoreLabels: z.string().max(500).optional(),
+  scoreDisplayMode: z.enum(['percentage', 'average']).optional(),
   weeklyGoalsTemplate: z.string().max(4000).optional(),
-  dayOffAllowance: z.number().min(0).max(365).optional()
+  dayOffAllowance: z.number().min(0).max(365).optional(),
+  workDays: z.string().max(20).optional(),
+  autoMarkWeekendsOff: z.boolean().optional(),
+  theme: z.enum(['light', 'dark']).optional()
 })
 
 // Type exports

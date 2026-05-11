@@ -34,6 +34,13 @@ import {
   demoProfile,
   demoDayOffs,
 } from "@/lib/demo-data";
+import {
+  DEFAULT_SCORE_LABELS,
+  normalizeScoreDisplayMode,
+  normalizeScoreLabels,
+  serializeScoreLabels,
+  type ScoreDisplayMode,
+} from "@/lib/score-settings";
 import { createWeeklyGoalsEditorInit } from "@/lib/weekly-goals-editor";
 
 type Theme = "light" | "dark";
@@ -336,14 +343,16 @@ const normalizeWeeklyGoalsTemplate = (template: string) => {
     .replace(/\s*-\s*/g, "\n- ")
     .trim();
   const heading = "What I want to accomplish this week:";
-  const lines = normalized ? normalized.split(/\r?\n/) : [];
-  const listItems = lines
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith("- "))
-    .map((line) => `<li>${line.slice(2).trim()}</li>`)
+  const lines = normalized
+    ? normalized
+        .split(/\r?\n/)
+        .map((line) => line.trim().replace(/^- /, ""))
+        .filter(Boolean)
+    : [];
+  const lineBlock = lines
+    .map((line) => `<p>${line}</p>`)
     .join("");
-  const listBlock = listItems ? `<ul>${listItems}</ul>` : "";
-  return `<p><strong>${heading}</strong></p>${listBlock}`;
+  return `<p><strong>${heading}</strong></p>${lineBlock}`;
 };
 
 const readCachedText = (key: string) => {
@@ -533,6 +542,8 @@ export default function Home() {
     dateOfBirth?: string;
     email?: string;
     goalsSectionTitle?: string;
+    scoreLabels?: string;
+    scoreDisplayMode?: ScoreDisplayMode;
   } | null>(storageKey("profile"), null);
   const cachedGoalPayload = readCachedJson<Goal[]>(storageKey("goals"), []);
   const cachedScheduleEntries = readCachedJson<Record<string, ScheduleEntry[]>>(
@@ -590,10 +601,18 @@ export default function Home() {
     if (storedShowLegend === "false") return false;
     return readCachedText(legacyStorageKey("hide-legend")) === "true" ? false : true;
   });
+  const [scoreLabels, setScoreLabels] = useState(() =>
+    normalizeScoreLabels(cachedProfile?.scoreLabels ?? readCachedText(storageKey("score-labels")))
+  );
+  const [scoreDisplayMode, setScoreDisplayMode] = useState<ScoreDisplayMode>(() =>
+    normalizeScoreDisplayMode(
+      cachedProfile?.scoreDisplayMode ?? readCachedText(storageKey("score-display-mode"))
+    )
+  );
   const [weeklyGoalsTemplate, setWeeklyGoalsTemplate] = useState(() =>
     normalizeWeeklyGoalsTemplate(
       readCachedText(storageKey("weekly-goals-template")) ??
-        "<p><strong>What I want to accomplish this week:</strong></p><ul><li>Monday</li><li>Tuesday</li><li>Wednesday</li><li>Thursday</li><li>Friday</li><li>Saturday</li><li>Sunday</li></ul>"
+        "<p><strong>What I want to accomplish this week:</strong></p><p>Monday</p><p>Tuesday</p><p>Wednesday</p><p>Thursday</p><p>Friday</p><p>Saturday</p><p>Sunday</p>"
     )
   );
   const [dayOffAllowance, setDayOffAllowance] = useState(15);
@@ -636,8 +655,14 @@ export default function Home() {
   const [productivityScaleMode, setProductivityScaleMode] =
     useState<"3" | "4">("3");
   const productivityScale = useMemo(
-    () => (productivityScaleMode === "4" ? PRODUCTIVITY_SCALE_FOUR : PRODUCTIVITY_SCALE_THREE),
-    [productivityScaleMode]
+    () =>
+      (productivityScaleMode === "4" ? PRODUCTIVITY_SCALE_FOUR : PRODUCTIVITY_SCALE_THREE).map(
+        (entry, index) => ({
+          ...entry,
+          label: scoreLabels[index]?.trim() || DEFAULT_SCORE_LABELS[index] || entry.label,
+        })
+      ),
+    [productivityScaleMode, scoreLabels]
   );
   const dayOffsUsed = useMemo(() => {
     return Object.keys(dayOffs).reduce((count, key) => {
@@ -1217,6 +1242,7 @@ export default function Home() {
         setUserEmail(nextUserEmail);
 
         if (isLoggedIn) {
+          setShowGuestDemo(false);
           setIsDemoMode(false);
           try {
             window.localStorage.setItem(storageKey("demo-mode"), "false");
@@ -1270,6 +1296,8 @@ export default function Home() {
             let nextDateOfBirth = "";
             let nextProductivityScaleMode: "3" | "4" = productivityScaleMode;
             let nextShowLegend = showLegend;
+            let nextScoreLabels = scoreLabels;
+            let nextScoreDisplayMode = scoreDisplayMode;
             let nextWeeklyGoalsTemplate = weeklyGoalsTemplate;
             let nextDayOffAllowance = dayOffAllowance;
 
@@ -1286,6 +1314,14 @@ export default function Home() {
                 nextShowLegend = Boolean(profile.showLegend);
                 setShowLegend(nextShowLegend);
                 hasProfileLegend = true;
+              }
+              if (profile.scoreLabels) {
+                nextScoreLabels = normalizeScoreLabels(profile.scoreLabels);
+                setScoreLabels(nextScoreLabels);
+              }
+              if (profile.scoreDisplayMode) {
+                nextScoreDisplayMode = normalizeScoreDisplayMode(profile.scoreDisplayMode);
+                setScoreDisplayMode(nextScoreDisplayMode);
               }
               if (profile.weeklyGoalsTemplate) {
                 nextWeeklyGoalsTemplate = normalizeWeeklyGoalsTemplate(profile.weeklyGoalsTemplate);
@@ -1386,6 +1422,8 @@ export default function Home() {
               goalsSectionTitle: nextGoalsSectionTitle,
               productivityScaleMode: nextProductivityScaleMode,
               showLegend: nextShowLegend,
+              scoreLabels: serializeScoreLabels(nextScoreLabels),
+              scoreDisplayMode: nextScoreDisplayMode,
               weeklyGoalsTemplate: nextWeeklyGoalsTemplate,
               dayOffAllowance: nextDayOffAllowance,
               workDays: [0, 1, 2, 3, 4, 5, 6].join(',')
@@ -1394,6 +1432,7 @@ export default function Home() {
           }
           hasLoadedServerDataRef.current = true;
         } else {
+          setShowGuestDemo(true);
           setIsDemoMode(true);
           try {
             window.localStorage.setItem(storageKey("demo-mode"), "true");
@@ -1415,6 +1454,8 @@ export default function Home() {
           setRecentYears(demoProfile.recentYears);
           setGoalsSectionTitle(demoProfile.goalsSectionTitle ?? "2026 Goals");
           setShowLegend(demoProfile.showLegend ?? true);
+          setScoreLabels(normalizeScoreLabels(demoProfile.scoreLabels));
+          setScoreDisplayMode(normalizeScoreDisplayMode(demoProfile.scoreDisplayMode));
           setDayOffAllowance(demoProfile.dayOffAllowance ?? 15);
           setDayOffs(demoDayOffs);
           setSickDays(demoSickDays);
@@ -1458,6 +1499,17 @@ export default function Home() {
             if (storedLegendHidden === "true") {
               setShowLegend(false);
             }
+          }
+        }
+
+        if (!isLoggedIn) {
+          const storedScoreLabels = window.localStorage.getItem(storageKey("score-labels"));
+          const storedScoreDisplayMode = window.localStorage.getItem(storageKey("score-display-mode"));
+          if (storedScoreLabels) {
+            setScoreLabels(normalizeScoreLabels(storedScoreLabels));
+          }
+          if (storedScoreDisplayMode) {
+            setScoreDisplayMode(normalizeScoreDisplayMode(storedScoreDisplayMode));
           }
         }
 
@@ -1527,6 +1579,8 @@ export default function Home() {
           dateOfBirth,
           email,
           goalsSectionTitle,
+          scoreLabels: serializeScoreLabels(scoreLabels),
+          scoreDisplayMode,
         })
       );
     } catch (error) {
@@ -1545,6 +1599,8 @@ export default function Home() {
       goalsSectionTitle,
       productivityScaleMode,
       showLegend,
+      scoreLabels: serializeScoreLabels(scoreLabels),
+      scoreDisplayMode,
       weeklyGoalsTemplate,
       dayOffAllowance,
       workDays: workDays.join(','),
@@ -1565,7 +1621,7 @@ export default function Home() {
         console.error("Failed to save profile", error);
       }
     })();
-  }, [personName, dateOfBirth, email, weekStartDay, recentYears, goalsSectionTitle, productivityScaleMode, showLegend, weeklyGoalsTemplate, dayOffAllowance, workDays, productivityMode, autoMarkWeekendsOff, theme, isHydrated, userEmail, isDemoMode]);
+  }, [personName, dateOfBirth, email, weekStartDay, recentYears, goalsSectionTitle, productivityScaleMode, showLegend, scoreLabels, scoreDisplayMode, weeklyGoalsTemplate, dayOffAllowance, workDays, productivityMode, autoMarkWeekendsOff, theme, isHydrated, userEmail, isDemoMode]);
 
   useEffect(() => {
     try {
@@ -1706,6 +1762,24 @@ export default function Home() {
       console.error("Failed to cache legend preference", error);
     }
   }, [showLegend, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      window.localStorage.setItem(storageKey("score-labels"), serializeScoreLabels(scoreLabels));
+    } catch (error) {
+      console.error("Failed to cache score labels", error);
+    }
+  }, [scoreLabels, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      window.localStorage.setItem(storageKey("score-display-mode"), scoreDisplayMode);
+    } catch (error) {
+      console.error("Failed to cache score display mode", error);
+    }
+  }, [scoreDisplayMode, isHydrated]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -1945,7 +2019,7 @@ export default function Home() {
     if (currentIndex === -1) {
       currentIndex = 0;
     }
-    let targetIndex = currentIndex + direction;
+    const targetIndex = currentIndex + direction;
     if (targetIndex < 0 || targetIndex >= weeksForYear.length) {
       const nextYear = productivityYear + (direction === 1 ? 1 : -1);
       const nextWeeks = buildWeeksForYear(nextYear, weekStartDay);
@@ -3489,8 +3563,12 @@ const goalStatusBadge = (status: KeyResultStatus) => {
             <Link
               href="/"
               className="flex items-center rounded-full px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] transition hover:bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] hover:text-foreground"
+              aria-label="Open monthly view"
+              title="Month view"
             >
-              Month
+              <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5h16M7 3v4m10-4v4M5 9h14v11H5zM8 13h8M8 17h5" />
+              </svg>
             </Link>
             <button
               type="button"
@@ -3759,6 +3837,48 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                   />
                 </div>
               </label>
+              <div className="flex flex-col gap-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                  Score display
+                </span>
+                <div className="flex rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] p-1">
+                  {(["percentage", "average"] as ScoreDisplayMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setScoreDisplayMode(mode)}
+                      className={`flex-1 rounded-full px-3 py-1.5 text-xs font-semibold normal-case tracking-normal transition ${
+                        scoreDisplayMode === mode
+                          ? "bg-foreground text-background"
+                          : "text-[color-mix(in_srgb,var(--foreground)_70%,transparent)] hover:text-foreground"
+                      }`}
+                    >
+                      {mode === "percentage" ? "Percentage" : "1-4 avg"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] lg:col-span-2">
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
+                  Score labels
+                </span>
+                <div className="grid gap-2 sm:grid-cols-4">
+                  {scoreLabels.map((label, index) => (
+                    <input
+                      key={index}
+                      type="text"
+                      value={label}
+                      onChange={(event) => {
+                        const nextLabels = [...scoreLabels];
+                        nextLabels[index] = event.target.value;
+                        setScoreLabels(nextLabels);
+                      }}
+                      aria-label={`Score ${index + 1} label`}
+                      className="min-w-0 rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] bg-transparent px-4 py-1.5 text-sm normal-case tracking-normal text-foreground outline-none focus:border-foreground"
+                    />
+                  ))}
+                </div>
+              </div>
               <label className="flex flex-col text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)]">
                 <div className="mt-1 flex items-center justify-between rounded-full border border-[color-mix(in_srgb,var(--foreground)_25%,transparent)] px-4 py-2">
                   <span className="text-sm normal-case tracking-normal text-foreground">
@@ -3968,7 +4088,7 @@ const goalStatusBadge = (status: KeyResultStatus) => {
                 {sharedByMe.length > 0 && (
                   <div className="space-y-2 text-xs normal-case tracking-normal text-[color-mix(in_srgb,var(--foreground)_70%,transparent)]">
                     <span className="block text-[11px] uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]">
-                      Goals you're sharing
+                      Goals you&apos;re sharing
                     </span>
                         {sharedByMe.map((share) => (
                           <div key={share.id} className="flex flex-wrap items-center gap-2">
